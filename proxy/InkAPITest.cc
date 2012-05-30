@@ -7554,6 +7554,7 @@ const char *SDK_Overridable_Configs[] = {
   "proxy.config.http.server_tcp_init_cwnd",
   "proxy.config.http.send_http11_requests",
   "proxy.config.http.cache.http",
+  "proxy.config.http.cache.cluster_cache_local",
   "proxy.config.http.cache.ignore_client_no_cache",
   "proxy.config.http.cache.ignore_client_cc_max_age",
   "proxy.config.http.cache.ims_on_client_no_cache",
