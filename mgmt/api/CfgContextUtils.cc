@@ -821,6 +821,9 @@ pdest_sspec_to_string(TSPrimeDestT pd, char *pd_val, TSSspec * sspec)
     case TS_PD_URL_REGEX:
       psize = snprintf(buf, sizeof(buf), "url_regex=%s ", pd_val);
       break;
+    case TS_PD_URL:
+      psize = snprintf(buf, sizeof(buf), "url=%s ", pd_val);
+      break;
     default:
       psize = 0;
       // Handled here:
@@ -996,6 +999,8 @@ string_to_pdss_format(const char *str, TSPdSsFormat * pdss)
     pdss->pd_type = TS_PD_IP;
   } else if (strcmp(tokens[1], "url_regex") == 0) {
     pdss->pd_type = TS_PD_URL_REGEX;
+  } else if (strcmp(tokens[1], "url") == 0) {
+    pdss->pd_type = TS_PD_URL;
   } else {
     goto Lerror;
   }
@@ -1560,6 +1565,8 @@ tokens_to_pdss_format(TokenList * tokens, Token * first_tok, TSPdSsFormat * pdss
     pdss->pd_type = TS_PD_IP;
   } else if (strcmp(first_tok->name, "url_regex") == 0) {
     pdss->pd_type = TS_PD_URL_REGEX;
+  } else if (strcmp(first_tok->name, "url") == 0) {
+    pdss->pd_type = TS_PD_URL;
   } else {
     return NULL;                //INVALID primary destination specifier
   }
