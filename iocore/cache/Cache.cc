@@ -79,6 +79,9 @@ int cache_config_alt_rewrite_max_size = 4096;
 int cache_config_read_while_writer = 0;
 char cache_system_config_directory[PATH_NAME_MAX + 1];
 int cache_config_mutex_retry_delay = 2;
+#ifdef HTTP_CACHE
+int enable_cache_empty_http_doc = 0;
+#endif
 
 // Globals
 
@@ -396,6 +399,15 @@ CacheVC::set_http_info(CacheHTTPInfo *ainfo)
     ainfo->object_key_set(earliest_key);
     // don't know the total len yet
   }
+  if (enable_cache_empty_http_doc) {
+    MIMEField *field = ainfo->m_alt->m_response_hdr.
+      field_find(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
+    if (field && !field->value_get_int64()) 
+      f.force_empty = 1;
+    else
+      f.force_empty = 0;
+  } else 
+    f.force_empty = 0;
   alternate.copy_shallow(ainfo);
   ainfo->clear();
 }
@@ -2722,6 +2734,7 @@ ink_cache_init(ModuleVersion v)
   //  # 1 - MMH hash
   IOCORE_EstablishStaticConfigInt32(url_hash_method, "proxy.config.cache.url_hash_method");
   Debug("cache_init", "proxy.config.cache.url_hash_method = %d", url_hash_method);
+  IOCORE_EstablishStaticConfigInt32(enable_cache_empty_http_doc, "proxy.config.cache.enable_empty_http_doc");
 #endif
 
   IOCORE_EstablishStaticConfigInt32(cache_config_max_disk_errors, "proxy.config.cache.max_disk_errors");

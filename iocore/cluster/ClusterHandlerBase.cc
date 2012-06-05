@@ -182,7 +182,7 @@ OutgoingControl::alloc()
 }
 
 OutgoingControl::OutgoingControl()
-:ch(NULL), submit_time(0)
+:ch(NULL), submit_time(0), zero_body(false)
 {
 }
 

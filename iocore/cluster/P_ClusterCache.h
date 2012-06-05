@@ -639,7 +639,7 @@ struct ClusterProcessor
                          void *data, int data_len,
                          IOBufferBlock * buf,
                          int logical_channel, ClusterVCToken * token,
-                         void (*bufdata_free) (void *), void *bufdata_free_arg, int options = CLUSTER_OPT_STEAL);
+                         void (*bufdata_free) (void *), void *bufdata_free_arg, int options = CLUSTER_OPT_STEAL, bool zero_body = false);
 
   // Pass the data in as a malloc'ed block to be freed by callee
   int invoke_remote_malloced(ClusterHandler *ch, ClusterRemoteDataHeader * data, int len /* including header */ )
@@ -696,7 +696,7 @@ struct ClusterProcessor
   void send_machine_list(ClusterMachine * m);
   void compute_cluster_mode();
   // Internal invoke_remote interface
-  int internal_invoke_remote(ClusterHandler * m, int cluster_fn, void *data, int len, int options, void *cmsg);
+  int internal_invoke_remote(ClusterHandler * m, int cluster_fn, void *data, int len, int options, void *cmsg, bool zero_body = false, void *cc = NULL);
 };
 
 inkcoreapi extern ClusterProcessor clusterProcessor;

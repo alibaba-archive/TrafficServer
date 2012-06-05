@@ -53,7 +53,7 @@ ClusterProcessor::~ClusterProcessor()
 
 int
 ClusterProcessor::internal_invoke_remote(ClusterHandler *ch, int cluster_fn,
-                                         void *data, int len, int options, void *cmsg)
+                                         void *data, int len, int options, void *cmsg, bool zero_body, void *cc)
 {
   EThread *thread = this_ethread();
   ProxyMutex *mutex = thread->mutex;
@@ -94,6 +94,10 @@ ClusterProcessor::internal_invoke_remote(ClusterHandler *ch, int cluster_fn,
   }
   CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CTRL_MSGS_SENT_STAT);
   c->submit_time = ink_get_hrtime();
+  if ((c->zero_body = zero_body)) {
+    c->free_proc = &CacheContinuation::disposeOfDataBuffer; 
+    c->free_proc_arg = cc;
+  }
 
   if (malloced) {
     c->set_data((char *) data, len);
@@ -160,11 +164,11 @@ ClusterProcessor::invoke_remote_data(ClusterHandler *ch, int cluster_fn,
                                      void *data, int data_len,
                                      IOBufferBlock * buf,
                                      int dest_channel, ClusterVCToken * token,
-                                     void (*bufdata_free_proc) (void *), void *bufdata_free_proc_arg, int options)
+                                     void (*bufdata_free_proc) (void *), void *bufdata_free_proc_arg, int options,  bool zero_body)
 {
   if (!buf) {
     // No buffer data, translate this into a invoke_remote() request
-    return internal_invoke_remote(ch, cluster_fn, data, data_len, options, (void *) NULL);
+    return internal_invoke_remote(ch, cluster_fn, data, data_len, options, (void *) NULL, zero_body, bufdata_free_proc_arg);
   }
   ink_assert(data);
   ink_assert(data_len);

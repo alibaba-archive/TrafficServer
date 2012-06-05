@@ -230,6 +230,9 @@ extern int cache_config_hit_evacuate_size_limit;
 extern int cache_config_force_sector_size;
 extern int cache_config_target_fragment_size;
 extern int cache_config_mutex_retry_delay;
+#ifdef HTTP_CACHE
+extern int enable_cache_empty_http_doc;
+#endif
 
 // CacheVC
 struct CacheVC: public CacheVConnection
@@ -485,6 +488,9 @@ struct CacheVC: public CacheVConnection
       unsigned int doc_from_ram_cache:1;
 #ifdef HIT_EVACUATE
       unsigned int hit_evacuate:1;
+#endif
+#ifdef HTTP_CACHE
+      unsigned int force_empty:1; // used for cache empty http document
 #endif
     } f;
   };

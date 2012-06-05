@@ -1511,14 +1511,17 @@ CacheContinuation::VCdataRead(int event, VIO * target_vio)
 
   VConnection *vc = target_vio->vc_server;
   int reply = CACHE_EVENT_OPEN_READ;
-  int32_t object_size;
+  int32_t object_size = -1;
 
   switch (event) {
   case VC_EVENT_EOS:
     {
       if (!target_vio->ndone) {
+        if (!enable_cache_empty_http_doc || (object_size = getObjectSize(vc, request_opcode, &cache_vc_info)))
         // Doc with zero byte body, handle as read failure
-        goto read_failed;
+          goto read_failed;
+        else
+          zero_body = true;
       }
       // Fall through
     }
@@ -1531,7 +1534,7 @@ CacheContinuation::VCdataRead(int event, VIO * target_vio)
       ink_assert(current_ndone);
       ink_assert(current_ndone <= readahead_reader->read_avail());
 
-      object_size = getObjectSize(vc, request_opcode, &cache_vc_info);
+      object_size = (object_size == -1) ? getObjectSize(vc, request_opcode, &cache_vc_info) : object_size;
       have_all_data = ((object_size <= caller_buf_freebytes) && (object_size == current_ndone));
 
       // Use no more than the caller's max buffer limit
@@ -1547,6 +1550,7 @@ CacheContinuation::VCdataRead(int event, VIO * target_vio)
       IOBufferBlock *tail;
       readahead_data = clone_IOBufferBlockList(readahead_reader->get_current_block(),
                                                readahead_reader->start_offset, clone_bytes, &tail);
+      zero_body = zero_body && !readahead_data;
 
       if (have_all_data) {
         // Close VC, since no more data and also to avoid VC_EVENT_EOS
@@ -1790,7 +1794,7 @@ CacheContinuation::replyOpEvent(int event, VConnection * cvc)
                                           (void *) msg, (flen + len),
                                           readahead_data,
                                           cluster_vc_channel, &token,
-                                          &CacheContinuation::disposeOfDataBuffer, (void *) this, CLUSTER_OPT_STEAL);
+                                          &CacheContinuation::disposeOfDataBuffer, (void *) this, CLUSTER_OPT_STEAL, zero_body);
     } else {
       Debug("cache_proto", "Sending reply seqno=%d, (this=%p)", seq_number, this);
       clusterProcessor.invoke_remote(ch, CACHE_OP_RESULT_CLUSTER_FUNCTION,
@@ -2320,7 +2324,7 @@ retry:
         bool read_op = ((request_opcode == CACHE_OPEN_READ)
                         || (request_opcode == CACHE_OPEN_READ_LONG));
         if (read_op) {
-          ink_release_assert(read_cluster_vc->pending_remote_fill > 1);
+          ink_release_assert(read_cluster_vc->pending_remote_fill > 1 || (enable_cache_empty_http_doc && !ic_new_info.object_size_get()));
           read_cluster_vc->pending_remote_fill = 0;
 
           have_all_data = pToken->is_clear();   // no conn implies all data
@@ -2333,7 +2337,7 @@ retry:
           read_cluster_vc->marshal_buf = this->getMsgBufferIOBData();
           read_cluster_vc->alternate = this->ic_new_info;
           this->ic_new_info.clear();
-          ink_release_assert(read_cluster_vc->alternate.object_size_get());
+          ink_release_assert(read_cluster_vc->alternate.object_size_get() || enable_cache_empty_http_doc);
 
           if (!action.cancelled) {
             ClusterVConnection *target_vc = read_cluster_vc;
@@ -2749,7 +2753,7 @@ int32_t CacheContinuation::getObjectSize(VConnection * vc, int opcode, CacheHTTP
     new_ci.m_alt->m_writeable = 1;
     ret_ci->copy_shallow(&new_ci);
   }
-  ink_release_assert(object_size);
+  ink_release_assert(object_size || enable_cache_empty_http_doc);
   return object_size;
 }
 

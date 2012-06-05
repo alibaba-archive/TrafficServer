@@ -149,6 +149,7 @@ struct CacheContinuation:public Continuation
   IOBufferReader *readahead_reader;
     Ptr<IOBufferBlock> readahead_data;
   bool have_all_data;           // all object data in response
+  bool zero_body;
 
   CacheHTTPInfo cache_vc_info;
   OneWayTunnel *tunnel;
@@ -302,6 +303,7 @@ CacheContinuation():
     readahead_vio(0),
     readahead_reader(0),
     have_all_data(false),
+    zero_body(false),
     cache_vc_info(),
     tunnel(0),
     tunnel_cont(0),

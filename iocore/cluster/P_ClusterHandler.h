@@ -85,6 +85,7 @@ struct OutgoingControl: public ClusterControl
 {
   ClusterHandler *ch;
   ink_hrtime submit_time;
+  bool zero_body;
 
   static OutgoingControl *alloc();
 
