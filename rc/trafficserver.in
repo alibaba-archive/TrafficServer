@@ -15,13 +15,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Template from /etc/init.d/skeleton on Ubuntu
+# trafficserver    Startup/shutdown script for the Apache Traffic Server
+#
+# chkconfig: - 90 10
+# description: TApache Traffic Server is fast, scalable and extensible  \
+#	       HTTP/1.1 compliant caching proxy server.
+# processname: traffic_cop traffic_manager traffic_server
+# config: /etc/trafficserver
+# config: /etc/sysconfig/trafficserver
+# pidfile: /var/run/trafficserver/cop.pid
 #
 ### BEGIN INIT INFO
 # Provides:          Traffic Server
 # Required-Start:    $local_fs $remote_fs
 # Required-Stop:     $local_fs $remote_fs
-# Default-Start:     2 3 4 5
+# Default-Start:     -
 # Default-Stop:      S 0 1 6
 # Short-Description: Startup/shutdown script for the Apache Traffic Server
 # Description:       Apache Traffic Server is fast, scalable and extensible
@@ -41,6 +49,33 @@ TS_PACKAGE_VERSION="@PACKAGE_VERSION@"
 TS_PACKAGE_BUGREPORT="@PACKAGE_BUGREPORT@"
 UNAME_S=$(uname -s)
 
+# Ubuntu: Do NOT "set -e"
+#         PATH should only include /usr/* if it runs after the mountnfs.sh
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+DESC="start/stop Traffic Server"
+NAME=trafficserver
+
+TC_NAME=${TC_NAME:-traffic_cop}
+TM_NAME=${TM_NAME:-traffic_manager}
+TS_NAME=${TS_NAME:-traffic_server}
+TC_DAEMON=${TC_DAEMON:-@exp_bindir@/${TC_NAME}}
+TC_DAEMON_ARGS=""
+TM_DAEMON=${TM_DAEMON:-@exp_bindir@/${TM_NAME}}
+TM_DAEMON_ARGS=""
+TS_DAEMON=${TS_DAEMON:-@exp_bindir@/${TS_NAME}}
+TS_DAEMON_ARGS=""
+TC_PIDFILE=${TC_PIDFILE:-@exp_runtimedir@/cop.lock}
+TM_PIDFILE=${TM_PIDFILE:-@exp_runtimedir@/manager.lock}
+TS_PIDFILE=${TS_PIDFILE:-@exp_runtimedir@/server.lock}
+LOCKFILE=${LOCKFILE-/var/lock/subsys/trafficserver}
+# number of times to retry check on pid lock file
+PIDFILE_CHECK_RETRIES=${PIDFILE_CHECK_RETRIES:-30}
+
+HEAD=/usr/bin/head
+test -x $HEAD || HEAD=head
+ESED=/usr/bin/sed
+test -x $ESED || ESED=sed
+
 if [ -e /etc/SuSE-release ]; then
     DISTRIB_ID="suse"
 elif [ -e /etc/fedora-release ]; then
@@ -48,6 +83,8 @@ elif [ -e /etc/fedora-release ]; then
 elif [ -e /etc/redhat-release ]; then
     DISTRIB_ID="redhat" # also exists on Fedora
 elif [ -e /etc/lsb-release ]; then
+    ## TODO: here is a trap for other distributions
+    ##       should use /usr/bin/lsb_release -i -s
     DISTRIB_ID="ubuntu"
 elif [ -e /etc/debian_version ]; then
     DISTRIB_ID="debian" # also exists on Ubuntu
@@ -57,6 +94,9 @@ elif [ "$UNAME_S" = "Darwin" ]; then
     DISTRIB_ID="Darwin"
 elif [ "$UNAME_S" = "FreeBSD" ]; then
     DISTRIB_ID="FreeBSD"
+else
+    echo "This script needs to be ported to this OS"
+    exit 1
 fi
 
 # We might want to move over to use /etc/system-release for more distros?
@@ -71,55 +111,25 @@ if [ "" = "$DISTRIB_ID" -a -e /etc/system-release ]; then
     esac
 fi
 
-# /usr/bin/lsb_release -rd # Ubuntu release & description info
-
-HEAD=/usr/bin/head
-test -x $HEAD || HEAD=head
-ESED=/usr/bin/sed
-test -x $ESED || ESED=sed
-
-# Ubuntu: Do NOT "set -e"
-
-#Ubuntu:PATH should only include /usr/* if it runs after the mountnfs.sh script
-PATH=/usr/sbin:/usr/bin:/sbin:/bin
-DESC="start/stop Traffic Server"
-NAME=trafficserver
-SLEEP_TIME=5
-TS_PREFIX="@prefix@"
-
-TS_ROOT=${TS_ROOT:-$TS_PREFIX}
-# TS_BASE is offset inside the file system from where the layout starts
-# For standard installations TS_BASE will be empty
-eval TS_BASE="`echo $TS_ROOT | ${ESED} -e 's;@prefix@$;;'`"
-
-TC_NAME=${TC_NAME:-traffic_cop}
-TM_NAME=${TM_NAME:-traffic_manager}
-TS_NAME=${TS_NAME:-traffic_server}
-TL_NAME=${TL_NAME:-traffic_line}
-TC_DAEMON=${TC_DAEMON:-$TS_BASE@exp_bindir@/traffic_cop}
-TC_DAEMON_ARGS=""
-TM_DAEMON=${TM_DAEMON:-$TS_BASE@exp_bindir@/traffic_manager}
-TM_DAEMON_ARGS=""
-TS_DAEMON=${TS_DAEMON:-$TS_BASE@exp_bindir@/traffic_server}
-TS_DAEMON_ARGS=""
-TC_PIDFILE=${TC_PIDFILE:-$TS_BASE@exp_runtimedir@/cop.lock}
-TM_PIDFILE=${TM_PIDFILE:-$TS_BASE@exp_runtimedir@/manager.lock}
-TS_PIDFILE=${TS_PIDFILE:-$TS_BASE@exp_runtimedir@/server.lock}
-# number of times to retry check on pid lock file
-PIDFILE_CHECK_RETRIES=${PIDFILE_CHECK_RETRIES:-30}
-# stdout file of executable
-STDOUTLOG=${STDOUTLOG:-$TS_BASE@exp_logdir@/traffic_server.stdout}
-# stderr file of executable
-STDERRLOG=${STDERRLOG:-$TS_BASE@exp_logdir@/traffic_server.stderr}
-
 if [ -d /etc/rc.d/init.d ]; then
-    SCRIPTNAME=/etc/rc.d/init.d/$NAME # Fedora
+    # Fedora & Redhat
+    SCRIPTNAME=/etc/rc.d/init.d/$NAME
+    test -f /etc/rc.d/init.d/functions && . /etc/rc.d/init.d/functions
+    test -r /etc/sysconfig/$NAME && . /etc/sysconfig/$NAME
 elif [ -d /etc/init.d ]; then
-    SCRIPTNAME=/etc/init.d/$NAME # Ubuntu
+    # Ubuntu & Debian
+    SCRIPTNAME=/etc/init.d/$NAME
+    test -r /etc/default/$NAME && . /etc/default/$NAME
+    test -f /etc/default/rcS && . /etc/default/rcS
+    # Ubuntu: Define LSB log_* functions.
+    #         Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
+    test -f /lib/lsb/init-functions && . /lib/lsb/init-functions
 elif [ "$DISTRIB_ID" = "Darwin" ]; then
-    SCRIPTNAME=$0 # Darwin
+    # Darwin
+    SCRIPTNAME=$0
 elif [ "$DISTRIB_ID" = "FreeBSD" ]; then
-    SCRIPTNAME=$0 # FreeBSD 
+    # FreeBSD
+    SCRIPTNAME=$0
 else
     echo "This script needs to be ported to this OS"
     exit 1
@@ -132,27 +142,6 @@ if [ ! -x "$TS_DAEMON" ]; then
     exit 0
 fi
 
-# Ubuntu: Read configuration variable file if it is present
-test -r /etc/default/$NAME && . /etc/default/$NAME
-
-# Ubuntu: Load the VERBOSE setting and other rcS variables
-test -f /etc/default/rcS && . /etc/default/rcS
-
-# Suse: load rc.status
-test -f /etc/rc.status && . /etc/rc.status
-
-# Fedora: make avail helper functions 'action', 'killproc', 'status', etc
-test -f /etc/rc.d/init.d/functions && . /etc/rc.d/init.d/functions
-
-# Ubuntu: Define LSB log_* functions.
-#         Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
-test -f /lib/lsb/init-functions && . /lib/lsb/init-functions
-
-# FreeBSD
-# NB: FreeBSD's ports system installs a run script in /usr/local/etc/rc.d/ 
-# with native OS rc.subr(8) features.
-test -f /etc/rc.subr && . /etc/rc.subr
-
 if [ ! -d @exp_runtimedir@ ]
 then
 	mkdir -p @exp_runtimedir@
@@ -163,22 +152,21 @@ fi
 # Fedora:
 #  launches $* in the background
 #  and checks if program creates its own pid lock file
-#  redirects stdout and stderr to files
 #  this function is meant to substitute 'daemon'
 #  because 'daemon' expects $1 to fork itself
 forkdaemon()
 {
     local i=0
 
-    # launch in background, i.e. fork
-    # and redirect stdout and stderr to files
-    $* >> $STDOUTLOG 2>> $STDERRLOG &
+    # launch in background, cop will redirect STDIN STDOUT to /dev/null
+    $* &
 
     while (( $i < $PIDFILE_CHECK_RETRIES ))
     do
         # check for regular file and size greater than 0
         if [[ -f $TC_PIDFILE ]] && [[ -s $TC_PIDFILE ]]
         then
+            touch $LOCKFILE
             success
             return 0
         fi
@@ -268,7 +256,7 @@ case "$1" in
         elif [ "$DISTRIB_ID" = "Darwin" ]; then
             echo "Starting ${TS_PACKAGE_NAME}"
             launchctl list $TC_NAME > /dev/null 2>&1 && exit 0
-            launchctl submit -l $TC_NAME -p $TC_DAEMON -o $STDOUTLOG -e $STDERRLOG -- $TC_DAEMON_ARGS
+            launchctl submit -l $TC_NAME -p $TC_DAEMON -o /dev/null -e /dev/null -- $TC_DAEMON_ARGS
         elif [ "$DISTRIB_ID" = "FreeBSD" ]; then
             echo "Starting ${TS_PACKAGE_NAME}"
             name="$TC_NAME"
@@ -293,6 +281,7 @@ case "$1" in
             action "Stopping ${TC_NAME}:" killproc -p $TC_PIDFILE $TC_DAEMON
             action "Stopping ${TM_NAME}:" killproc -p $TM_PIDFILE $TM_DAEMON
             action "Stopping ${TS_NAME}:" killproc -p $TS_PIDFILE $TS_DAEMON
+            rm -f $LOCKFILE
         elif [ "$DISTRIB_ID" = "suse" ]; then
             echo -n "Stopping ${TC_NAME}"
             killproc -p $TC_PIDFILE $TC_DAEMON
