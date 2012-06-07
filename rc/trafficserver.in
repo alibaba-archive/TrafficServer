@@ -192,6 +192,8 @@ forkdaemon()
     return 1
 }
 
+# (de)activate is for http_status
+test -f /etc/rc.d/init.d/http_status.functions && . /etc/rc.d/init.d/http_status.functions
 
 #
 # Ubuntu: Function that starts the daemon/service
@@ -427,11 +429,17 @@ case "$1" in
             exit 1
         fi
         ;;
+    activate)
+        activate $NAME
+        ;;
+    deactivate)
+        deactivate $NAME
+        ;;
     *)
         if [ "$DISTRIB_ID" = "ubuntu" -o "$DISTRIB_ID" = "debian" ] ; then
             echo "Usage: $SCRIPTNAME {start|stop|restart}" >&2
         elif [ "$DISTRIB_ID" = "fedora" -o "$DISTRIB_ID" = "redhat" ]; then
-            echo "Usage: $0 {start|stop|status|restart|condrestart}"
+            echo "Usage: $0 {start|stop|status|restart|condrestart|(de)activate}"
         elif [ "$DISTRIB_ID" = "suse" ]; then
             echo "Usage: $0 {start|stop|restart|status}"
         elif [ "$DISTRIB_ID" = "Darwin" ]; then
