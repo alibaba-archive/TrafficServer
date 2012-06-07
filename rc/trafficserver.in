@@ -55,6 +55,8 @@ PATH=/usr/sbin:/usr/bin:/sbin:/bin
 DESC="start/stop Traffic Server"
 NAME=trafficserver
 
+SLEEP_TIME=5
+
 TC_NAME=${TC_NAME:-traffic_cop}
 TM_NAME=${TM_NAME:-traffic_manager}
 TS_NAME=${TS_NAME:-traffic_server}
