@@ -1093,6 +1093,20 @@ RecordElement RecordsConfig[] = {
   {RECT_CONFIG, "proxy.config.cache.hostdb.sync_frequency", RECD_INT, "60", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
 
+  //##############################################################################
+  //#
+  //# Health Check
+  //#
+  //##############################################################################
+  {RECT_CONFIG, "proxy.config.http.healthcheck.filename", RECD_STRING, "health_check.config", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.http.healthcheck.enabled", RECD_INT, "0", RECU_RESTART_TS, RR_NULL, RECC_INT, "[0-1]", RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.http.healthcheck.default_interval", RECD_INT, "10", RECU_DYNAMIC, RR_NULL, RECC_INT, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.http.healthcheck.serve_stale_for", RECD_INT, "0", RECU_DYNAMIC, RR_NULL, RECC_INT, NULL, RECA_NULL}
+  ,
+
   //##########################################################################
   //#
   //# HTTP

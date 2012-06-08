@@ -1,0 +1,32 @@
+#
+# 
+# The purpose of this file is to specify the layer 7 health check
+# setting for each origin host.
+#
+# Each line consists of a set of tag value pairs.  The pairs are 
+#   in the format  <tag>=<value>
+#
+# Multiple tags in one line must be separated by ";".
+# 
+# Each directive may have the following tags:
+#   hostname: hostname to set health check, use Origin Server name here
+#   port: checking tcp port, default to http port 80
+#   interval: check interval in seconds, default to 5s
+#   request_method: http method for url query, default to GET
+#   request_path: the http request path to send to the origin server, default to /status.html
+#   request_host: the http request HOST: header, default to hostname
+#
+# The "hostname" tag indicate the start of one config directive.
+#
+# For example:
+#
+# hostname=trafficserver.apache.org;request_path=/status.html
+#
+# hostname=trafficserver.apache.org;port=80
+# request_path=/status.html
+#
+# hostname=trafficserver.apache.org
+# port=80
+# interval=200
+# request_path=/status.html;request_host=trafficserver.apache.org
+#

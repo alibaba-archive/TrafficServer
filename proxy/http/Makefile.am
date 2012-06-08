@@ -16,7 +16,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-SUBDIRS = remap
+SUBDIRS = remap healthcheck
 
 AM_CPPFLAGS = \
   $(iocore_include_dirs) \
@@ -31,6 +31,7 @@ AM_CPPFLAGS = \
   -I$(top_srcdir)/mgmt/utils \
   -I$(top_srcdir)/proxy/hdrs \
   -I$(top_srcdir)/proxy/http/remap \
+  -I$(top_srcdir)/proxy/http/healthcheck \
   -I$(top_srcdir)/proxy/logging
 
 noinst_HEADERS = HttpProxyServerMain.h

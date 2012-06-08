@@ -286,6 +286,177 @@ HostDBRoundRobin::select_best_http(sockaddr const* client_ip, ink_time_t now, in
   }
 }
 
+inline HostDBInfo *
+HostDBRoundRobin::select_best_http_with_hc(sockaddr const* client_ip, time_t now, int32_t fail_window, bool *state)
+{
+  bool bad = (n <= 0 || n > HOST_DB_MAX_ROUND_ROBIN_INFO || good <= 0 || good > HOST_DB_MAX_ROUND_ROBIN_INFO);
+  if (bad) {
+    ink_assert(!"bad round robin size");
+    return NULL;
+  }
+
+  int best_any = 0;
+  int best_up = -1;
+
+  int fresh[good], stale_in[good], stale_out[good], fail[good];
+  for (int i = 0; i < good; ++i) {
+    fresh[i] = stale_in[i] = stale_out[i] = fail[i] = -1;
+  }
+  for (int i = 0, i_fresh = 0, i_stale_in = 0, i_stale_out = 0, i_fail = 0; i < good; ++i) {
+    if (false == info[i].hc_state) {
+      fail[i_fail++] = i;
+    } else if(!info[i].is_hc_stale()) {
+      fresh[i_fresh++] = i;
+    } else if(info[i].hc_stale_in_validate_time()) {
+      stale_in[i_stale_in++] = i;
+    } else {
+      stale_out[i_stale_out++] = i;
+    }
+  }
+
+  *state = true;
+  if (HostDBProcessor::hostdb_strict_round_robin) {
+    int stale_out_beg = -1, stale_in_beg = -1, fail_beg = -1;
+    int tmp = -1, i = 0;
+    int stale_out = -1, stale_in = -1, fail = -1;
+    for (i = 0; i < good; ++i) {
+      tmp = current % good;
+      if (false == info[tmp].hc_state) {
+        ++current;
+        if (-1 == fail_beg) {
+          fail_beg = current;
+        }
+      } else if (!info[tmp].is_hc_stale()) {
+        ++current;
+        return &info[tmp];
+      } else if (info[tmp].hc_stale_in_validate_time()) {
+        stale_in = tmp;
+        ++current;
+        if (-1 == stale_in_beg) {
+          stale_in_beg = current;
+        }
+      } else {
+        stale_out = tmp;
+        ++current;
+        if (-1 == stale_out_beg) {
+          stale_out_beg = current;
+        }
+      }
+    }
+    if (-1 != stale_in) {
+      best_up = stale_in;
+      current = stale_in_beg;
+    } else if (-1 != stale_out) {
+      best_up = stale_out;
+      current = stale_out_beg;
+      if (-1 == fail) {
+        *state = false;
+      }
+    } else {
+      *state = false;
+      best_up = fail;
+      current = fail_beg;
+    }
+  } else {
+    unsigned int best_hash_any = 0;
+    unsigned int best_hash_up = 0;
+    sockaddr const* ip;
+    if(-1 != fresh[0]){
+      for (int i = 0; i< good && fresh[i] != -1; ++i) {
+        ip = info[fresh[i]].ip();
+        unsigned int h = HOSTDB_CLIENT_IP_HASH(client_ip, ip);
+        if (best_hash_any <= h) {
+          best_any = fresh[i];
+          best_hash_any = h;
+        }
+        if (0 == info[fresh[i]].app.http_data.last_failure ||
+            (unsigned int) (now - fail_window) > info[fresh[i]].app.http_data.last_failure) {
+          if (best_hash_up <= h) {
+            best_up = fresh[i];
+            best_hash_up = h;
+          }
+        } else {
+          if (now + fail_window < (int32_t) (info[fresh[i]].app.http_data.last_failure)) {
+            info[fresh[i]].app.http_data.last_failure = 0;
+          }
+        }
+      }
+    } else if (-1 != stale_in[0]) {
+      for (int i = 0; i< good && stale_in[i] != -1; ++i) {
+        ip = info[stale_in[i]].ip();
+        unsigned int h = HOSTDB_CLIENT_IP_HASH(client_ip, ip);
+        if (best_hash_any <= h) {
+          best_any = stale_in[i];
+          best_hash_any = h;
+        }
+        if (0 == info[stale_in[i]].app.http_data.last_failure ||
+            (unsigned int) (now - fail_window) > info[stale_in[i]].app.http_data.last_failure) {
+          if (best_hash_up <= h) {
+            best_up = stale_in[i];
+            best_hash_up = h;
+          }
+        } else {
+          if (now + fail_window < (int32_t) (info[stale_in[i]].app.http_data.last_failure)) {
+            info[stale_in[i]].app.http_data.last_failure = 0;
+          }
+        }
+      }
+    } else if (-1 != stale_out[0]) {
+      for (int i = 0; i < good && stale_out[i] != -1; ++i) {
+        ip = info[stale_out[i]].ip();
+        unsigned int h = HOSTDB_CLIENT_IP_HASH(client_ip, ip);
+        if (best_hash_any <= h) {
+          best_any = stale_out[i];
+          best_hash_any = h;
+        }
+        if (0 == info[stale_out[i]].app.http_data.last_failure ||
+            (unsigned int) (now - fail_window) > info[stale_out[i]].app.http_data.last_failure) {
+          if (best_hash_up <= h) {
+            best_up = stale_out[i];
+            best_hash_up = h;
+          }
+        } else {
+          if (now + fail_window < (int32_t) (info[stale_out[i]].app.http_data.last_failure)) {
+            info[stale_out[i]].app.http_data.last_failure = 0;
+          }
+        }
+      }
+      if (-1 == fail[0]) {
+        *state = false;
+      }
+    } else {
+      for (int i = 0; i < good && fail[i] != -1; ++i) {
+        ip = info[fail[i]].ip();
+        unsigned int h = HOSTDB_CLIENT_IP_HASH(client_ip, ip);
+        if (best_hash_any <= h) {
+          best_any = fail[i];
+          best_hash_any = h;
+        }
+        if (0 == info[fail[i]].app.http_data.last_failure ||
+            (unsigned int) (now - fail_window) > info[fail[i]].app.http_data.last_failure) {
+          if (best_hash_up <= h) {
+            best_up = fail[i];
+            best_hash_up = h;
+          }
+        } else {
+          if (now + fail_window < (int32_t) (info[fail[i]].app.http_data.last_failure)) {
+            info[fail[i]].app.http_data.last_failure = 0;
+          }
+        }
+      }
+      *state = false;
+    }
+  }
+
+  if (best_up != -1) {
+    ink_assert(best_up >= 0 && best_up < good);
+    return &info[best_up];
+  } else {
+    ink_assert(best_any >= 0 && best_any < good);
+    return &info[best_any];
+  }
+}
+
 //
 // Types
 //

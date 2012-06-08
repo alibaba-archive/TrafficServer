@@ -36,6 +36,8 @@
 #include "HttpSM.h"
 #include "HttpDebugNames.h"
 
+#include "HCSM.h"
+
 #define FIRST_LEVEL_HASH(x)   ats_ip_hash(x) % HSM_LEVEL1_BUCKETS
 #define SECOND_LEVEL_HASH(x)  ats_ip_hash(x) % HSM_LEVEL2_BUCKETS
 
@@ -144,6 +146,46 @@ SessionBucket::session_handler(int event, void *data)
   return 0;
 }
 
+HttpServerSession*
+HttpSessionManager::acquire_session_hc(sockaddr const* ip, const char *hostname, HCSM *hcsm)
+{
+  int l1_index = FIRST_LEVEL_HASH(ip);
+  ink_assert(l1_index < HSM_LEVEL1_BUCKETS);
+
+  EThread *ethread = this_ethread();
+  SessionBucket *bucket;
+  bool condition = false;
+
+  if (2 == hcsm->txn_conf.share_server_sessions) {
+    ink_assert(ethread->l1_hash);
+    bucket = ethread->l1_hash + l1_index;
+    condition = true;
+  } else {
+    bucket = g_l1_hash + l1_index;
+    MUTEX_TRY_LOCK(lock, bucket->mutex, ethread);
+    if (lock)
+      condition = true;
+  }
+  if (!condition)
+    return NULL;
+  INK_MD5 hostname_hash;
+  ink_code_MMH((unsigned char *) hostname, strlen(hostname), (unsigned char *) &hostname_hash);
+  int l2_index = SECOND_LEVEL_HASH(ip);
+  ink_assert(l2_index < HSM_LEVEL2_BUCKETS);
+  HttpServerSession *b = bucket->l2_hash[l2_index].head;
+  while (b != NULL) {
+    if (memcmp(&b->server_ip.sa, ip, sizeof(sockaddr)) && hostname_hash == b->hostname_hash) {
+      bucket->lru_list.remove(b);
+      bucket->l2_hash[l2_index].remove(b);
+      b->state = HSS_ACTIVE;
+      Debug("http_ss", "[%" PRId64 "] [acquire session] " "return session from shared pool", b->con_id);
+      return b;
+    }
+    b = b->hash_link.next;
+  }
+
+  return NULL;
+}
 
 void
 HttpSessionManager::init()

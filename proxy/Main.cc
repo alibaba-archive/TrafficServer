@@ -87,6 +87,7 @@ extern "C" int plock(int);
 #include "XmlUtils.h"
 #include "I_Tasks.h"
 
+#include "HCProcessor.h"
 #include <ts/ink_cap.h>
 
 #if TS_HAS_PROFILER
@@ -1797,6 +1798,9 @@ main(int argc, char **argv)
     // Initialize Scheduled Update subsystem
     ///////////////////////////////////////////
     updateManager.start();
+
+    // Http Health checking processor
+    hcProcessor.start();
 
     void *mgmt_restart_shutdown_callback(void *, char *, int data_len);
 

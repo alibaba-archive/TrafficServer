@@ -486,7 +486,6 @@ make_md5(INK_MD5 & md5, const char *hostname, int len, int port, char *pDNSServe
 #endif
 }
 
-
 static bool
 reply_to_cont(Continuation * cont, HostDBInfo * ar)
 {
@@ -636,6 +635,12 @@ HostDBContinuation::insert(unsigned int attl)
     attl = HOST_DB_MAX_TTL;
   r->ip_timeout_interval = attl;
   r->ip_timestamp = hostdb_current_interval;
+
+  r->hc_ttl = healthcheck_default_ttl;
+  r->hc_timestamp = hostdb_current_interval;
+  r->hc_switch = false;
+  r->hc_state = false;
+
   Debug("hostdb", "inserting for: %s: (md5: %"PRIx64") now: %u timeout: %u ttl: %u", name, folded_md5, r->ip_timestamp,
         r->ip_timeout_interval, attl);
   return r;
@@ -939,6 +944,56 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
   return &c->action;
 }
 
+Action *
+HostDBProcessor::getbyname_imm_use_cache(Continuation * cont, process_hostdb_info_pfn process_hostdb_info, char *hostname, int len, int port)
+{
+  INK_MD5 md5;
+  void *pDS = 0;
+  ProxyMutex *mutex = this_ethread()->mutex;
+  HOSTDB_INCREMENT_DYN_STAT(hostdb_total_lookups_stat);
+
+  if (!hostdb_enable || !hostname || !*hostname) {
+    (cont->*process_hostdb_info) (NULL);
+    return ACTION_RESULT_DONE;
+  }
+  if (!len)
+    len = strlen(hostname);
+#ifdef SPLIT_DNS
+  if (SplitDNSConfig::isSplitDNSEnabled()) {
+    char *scan = hostname;
+    char *pServerLine = 0;
+    for (; *scan != '\0' && (ParseRules::is_digit(*scan) || '.' == *scan); scan++);
+    if ('\0' != *scan) {
+      void *pSD = (void *) SplitDNSConfig::acquire();
+      if (0 != pSD) {
+        pDS = ((SplitDNS *) pSD)->getDNSRecord(hostname);
+        if (0 != pDS) {
+          pServerLine = ((DNSServer *) pDS)->x_dns_ip_line;
+        }
+      }
+      SplitDNSConfig::release((SplitDNS *) pSD);
+    }
+    make_md5(md5, hostname, len, port, pServerLine);
+  }
+  else
+#endif // SPLIT_DNS
+    make_md5(md5, hostname, len, port, 0);
+  ProxyMutex *bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5) % hostDB.buckets));
+  MUTEX_TRY_LOCK(lock, bucket_mutex, this_ethread());
+
+  if (lock) {
+    HostDBInfo *r = probe(bucket_mutex, md5, hostname, len, 0, pDS);
+    if (r) {
+      Debug("healthcheck", "get answer for %s", hostname);
+      HOSTDB_INCREMENT_DYN_STAT(hostdb_total_hits_stat);
+      (cont->*process_hostdb_info)(r);
+      return ACTION_RESULT_DONE;
+    }
+  }
+  Debug("healthcheck", "get no answer for %s", hostname);
+  (cont->*process_hostdb_info)(NULL);
+  return ACTION_RESULT_DONE;
+}
 
 static void
 do_setby(HostDBInfo * r, HostDBApplicationInfo * app, const char *hostname, sockaddr const* ip)

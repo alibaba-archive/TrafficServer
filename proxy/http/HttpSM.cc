@@ -45,6 +45,9 @@
 //#include "HttpAuthParams.h"
 #include "congest/Congestion.h"
 
+#include "HCUtil.h"
+#include "HCSM.h"
+
 #define DEFAULT_RESPONSE_BUFFER_SIZE_INDEX    6 // 8K
 #define DEFAULT_REQUEST_BUFFER_SIZE_INDEX    6  // 8K
 #define MIN_CONFIG_BUFFER_SIZE_INDEX          5 // 4K
@@ -2002,22 +2005,36 @@ void
 HttpSM::process_hostdb_info(HostDBInfo * r)
 {
   if (r) {
-    HostDBInfo *rr = NULL;
+    HostDBInfo *ret = NULL;
     t_state.dns_info.lookup_success = true;
 
     if (r->round_robin) {
       // Since the time elapsed between current time and client_request_time
       // may be very large, we cannot use client_request_time to approximate
       // current time when calling select_best_http().
-      rr = r->rr()->select_best_http(&t_state.client_info.addr.sa, ink_cluster_time(), (int) t_state.txn_conf->down_server_timeout);
       t_state.dns_info.round_robin = true;
+      HostDBRoundRobin *rr = r->rr();
+      if (healthcheck_enabled == 1 && rr->info[0].hc_switch == true) {
+        bool state = true;
+        ret = rr->select_best_http_with_hc(&t_state.client_info.addr.sa, ink_cluster_time(), (int) t_state.txn_conf->down_server_timeout, &state);
+        if (state == false) {
+          const char *hostname = t_state.request_data.hostname_str;
+          HCEntry *entry = find_entry(hostname);
+          for (int i = 0; i < rr->good; ++i) {
+            HCSM *hcsm = HCSM::allocate();
+            hcsm->init(entry, &rr->info[i]);
+            eventProcessor.schedule_imm(hcsm, ET_TASK);
+          }
+        }
+      } else {
+        ret = rr->select_best_http(&t_state.client_info.addr.sa, ink_cluster_time(), (int) t_state.txn_conf->down_server_timeout);
+      }
     } else {
-      rr = r;
+      ret = r;
       t_state.dns_info.round_robin = false;
     }
-    if (rr) {
-//                  m_s.host_db_info = m_updated_host_db_info = *rr;
-      t_state.host_db_info = *rr;
+    if (ret) {
+      t_state.host_db_info = *ret;
       ink_release_assert(!t_state.host_db_info.reverse_dns);
       ink_release_assert(ats_is_ip(t_state.host_db_info.ip()));
     }

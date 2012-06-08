@@ -27,6 +27,8 @@
 #include "I_EventSystem.h"
 #include "SRV.h"
 
+#include "HCUtil.h"
+
 // Event returned on a lookup
 #define EVENT_HOST_DB_LOOKUP                 (HOSTDB_EVENT_EVENTS_START+0)
 #define EVENT_HOST_DB_IP_REMOVED             (HOSTDB_EVENT_EVENTS_START+1)
@@ -210,6 +212,32 @@ struct HostDBInfo
     return false;
   }
 
+  void refresh_hc()
+  {
+    hc_timestamp = hostdb_current_interval;
+  }
+
+  bool is_hc_stale()
+  {
+    return hc_interval() >= hc_ttl;
+  }
+
+  unsigned int hc_interval()
+  {
+    return (hostdb_current_interval - hc_timestamp) & 0x7FFFFFFF;
+  }
+
+  bool hc_stale_in_validate_time()
+  {
+    if (healthcheck_serve_stale_but_revalidate <= 0)
+      return false;
+    if ((hc_ttl + healthcheck_serve_stale_but_revalidate) > hc_interval()) {
+      Debug("healthcheck", "serving stale entry %d | %d | %d as requested by config", hc_ttl, healthcheck_serve_stale_but_revalidate, hc_interval());
+      return true;
+    }
+
+    return false;
+  }
 
   /**
     These are the only fields which will be inserted into the
@@ -223,6 +251,9 @@ struct HostDBInfo
     ip_timeout_interval = that.ip_timeout_interval;
     round_robin = that.round_robin;
     reverse_dns = that.reverse_dns;
+    hc_timestamp = that.hc_timestamp;
+    hc_state = that.hc_state;
+    hc_ttl = that.hc_ttl;
     app.allotment.application1 = that.app.allotment.application1;
     app.allotment.application2 = that.app.allotment.application2;
   }
@@ -246,6 +277,11 @@ struct HostDBInfo
   unsigned int ip_timestamp;
   // limited to 0x1FFFFF (24 days)
   unsigned int ip_timeout_interval;
+
+  unsigned int hc_timestamp;
+  unsigned int hc_ttl;
+  bool hc_state;
+  bool hc_switch;
 
   unsigned int full:1;
   unsigned int backed:1;        // duplicated in lower level
@@ -321,6 +357,7 @@ HostDBInfo()
   , is_srv(0)
   , ip_timestamp(0)
   , ip_timeout_interval(0)
+  , hc_timestamp(0), hc_ttl(0), hc_state(false), hc_switch(false)
   , full(0)
   , backed(0)
   , deleted(0)
@@ -374,6 +411,7 @@ struct HostDBRoundRobin
   HostDBInfo *find_ip(sockaddr const* addr);
   HostDBInfo *select_best(sockaddr const* client_ip, HostDBInfo * r = NULL);
   HostDBInfo *select_best_http(sockaddr const* client_ip, ink_time_t now, int32_t fail_window);
+  HostDBInfo *select_best_http_with_hc(sockaddr const* client_ip, time_t now, int32_t fail_window, bool *state);
 
   HostDBInfo *increment_round_robin()
   {
@@ -441,6 +479,7 @@ struct HostDBProcessor: public Processor
     int timeout = 0
   );
 
+  Action *getbyname_imm_use_cache(Continuation *cont, process_hostdb_info_pfn process_hostdb_info, char *hostname, int len = 0, int port = 0);
 
   /** Lookup Hostinfo by addr */
   Action *getbyaddr_re(Continuation * cont, sockaddr const* aip)

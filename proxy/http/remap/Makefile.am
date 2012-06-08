@@ -28,7 +28,8 @@ AM_CPPFLAGS = \
   -I$(top_srcdir)/mgmt/preparse \
   -I$(top_srcdir)/mgmt/utils \
   -I$(top_srcdir)/proxy/hdrs \
-  -I$(top_srcdir)/proxy/http
+  -I$(top_srcdir)/proxy/http \
+  -I$(top_srcdir)/proxy/http/healthcheck
 
 noinst_LIBRARIES = libhttp_remap.a
 

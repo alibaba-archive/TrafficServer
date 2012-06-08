@@ -38,6 +38,7 @@ AM_CPPFLAGS = \
   -I$(srcdir)/http \
   -I$(srcdir)/logging \
   -I$(srcdir)/http/remap  \
+  -I$(srcdir)/http/healthcheck \
   -I$(srcdir)/hdrs \
   -I$(top_srcdir)/mgmt \
   -I$(top_srcdir)/mgmt/preparse \
@@ -142,6 +143,7 @@ traffic_server_LDFLAGS = @EXTRA_CXX_LDFLAGS@ @LIBTOOL_LINK_FLAGS@
 traffic_server_LDADD = \
   http/libhttp.a \
   http/remap/libhttp_remap.a \
+  http/healthcheck/libhttp_healthcheck.a \
   congest/libCongestionControl.a \
   logging/liblogging.a \
   logging/liblogcollation.a \
@@ -173,6 +175,9 @@ traffic_logcat_LDFLAGS = @EXTRA_CXX_LDFLAGS@ @LIBTOOL_LINK_FLAGS@
 traffic_logcat_LDADD = \
   signals.o \
   InkXml.o \
+  http/libhttp.a \
+  http/remap/libhttp_remap.a \
+  http/healthcheck/libhttp_healthcheck.a \
   DiagsConfig.o \
   UglyLogStubs.o \
   logging/liblogging.a \
@@ -191,6 +196,9 @@ traffic_logstats_LDFLAGS = @EXTRA_CXX_LDFLAGS@ @LIBTOOL_LINK_FLAGS@
 traffic_logstats_LDADD = \
   signals.o \
   InkXml.o \
+  http/libhttp.a \
+  http/remap/libhttp_remap.a \
+  http/healthcheck/libhttp_healthcheck.a \
   DiagsConfig.o \
   UglyLogStubs.o \
   logging/liblogging.a \
@@ -237,6 +245,7 @@ traffic_sac_LDADD = \
   InkXml.o \
   http/libhttp.a \
   http/remap/libhttp_remap.a \
+  http/healthcheck/libhttp_healthcheck.a \
   congest/libCongestionControl.a \
   logging/liblogging.a \
   logging/liblogcollation.a \

@@ -1,4 +1,4 @@
-# Makefile.am for the traffic/iocore/hostdb hierarchy
+# Makefile.am for Http
 #
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
@@ -16,40 +16,26 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-if STANDALONE_IOCORE
 AM_CPPFLAGS = \
   $(iocore_include_dirs) \
+  -I$(top_srcdir)/lib/ \
   -I$(top_srcdir)/lib/records \
-  -I$(top_srcdir)/lib/ts
-else
-AM_CPPFLAGS = \
-  $(iocore_include_dirs) \
-  -I$(top_srcdir)/lib \
-  -I$(top_srcdir)/lib/records \
-  -I$(top_srcdir)/lib/ts \
   -I$(top_srcdir)/proxy \
+  -I$(top_srcdir)/mgmt \
+  -I$(top_srcdir)/mgmt/preparse \
+  -I$(top_srcdir)/mgmt/utils \
   -I$(top_srcdir)/proxy/hdrs \
   -I$(top_srcdir)/proxy/http \
-  -I$(top_srcdir)/proxy/http/healthcheck \
-  -I$(top_srcdir)/proxy/http/remap \
-  -I$(top_srcdir)/mgmt \
-  -I$(top_srcdir)/mgmt/utils \
-  -I$(top_srcdir)/mgmt/preparse
-endif
+  -I$(top_srcdir)/proxy/http/remap
 
+noinst_LIBRARIES = libhttp_healthcheck.a
 
-DEFS += @IOCORE_MODULARIZED_DEFS@
-
-EXTRA_DIST = I_HostDB.h
-
-noinst_LIBRARIES = libinkhostdb.a
-
-libinkhostdb_a_SOURCES = \
-  HostDB.cc \
-  I_HostDBProcessor.h \
-  MultiCache.cc \
-  P_HostDB.h \
-  P_HostDBProcessor.h \
-  P_MultiCache.h \
-  Inline.cc
-
+libhttp_healthcheck_a_SOURCES = \
+  HCHandler.cc \
+  HCHandler.h \
+  HCProcessor.cc \
+  HCProcessor.h \
+  HCSM.cc \
+  HCSM.h \
+  HCUtil.cc \
+  HCUtil.h

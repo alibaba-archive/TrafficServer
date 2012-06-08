@@ -234,6 +234,7 @@ public:
   //   calling transact to process the hostdb lookup
   // A NULL 'r' argument indicates the hostdb lookup failed
   void process_hostdb_info(HostDBInfo * r);
+  void process_hostdb_info_with_hc(HostDBInfo *r);
   void process_srv_info(HostDBInfo * r);
 
   // Called by transact.  Synchronous.

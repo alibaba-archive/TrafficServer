@@ -39,6 +39,7 @@
 
 class HttpClientSession;
 class HttpSM;
+class HCSM;
 
 void
 initialize_thread_for_http_sessions(EThread *thread, int thread_index);
@@ -75,6 +76,7 @@ public:
   HSMresult_t acquire_session(Continuation *cont,
                               sockaddr const* addr,
                               const char *hostname, HttpClientSession *ua_session, HttpSM *sm);
+  HttpServerSession* acquire_session_hc(sockaddr const* ip, const char *hostname, HCSM *hcsm);
   HSMresult_t release_session(HttpServerSession *to_release);
   void purge_keepalives();
   void init();
