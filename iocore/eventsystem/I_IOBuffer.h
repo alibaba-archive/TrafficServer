@@ -57,7 +57,7 @@ extern int64_t default_large_iobuffer_size; // matched to size of OS buffers
 #define TRACK_BUFFER_USER
 
 enum AllocType
-{ NO_ALLOC, FAST_ALLOCATED, XMALLOCED, MEMALIGNED,
+{ NO_ALLOC, FAST_ALLOCATED, XMALLOCED, MEMALIGNED, RAM_ALLOCATED,
   DEFAULT_ALLOC, CONSTANT
 };
 #ifndef TS_MICRO
@@ -126,6 +126,7 @@ enum AllocType
 
 inkcoreapi extern Allocator ioBufAllocator[DEFAULT_BUFFER_SIZES];
 inkcoreapi extern Allocator cacheBufAllocator[DEFAULT_BUFFER_SIZES];
+inkcoreapi extern Allocator ramBufAllocator[DEFAULT_BUFFER_SIZES];
 
 void init_buffer_allocators();
 

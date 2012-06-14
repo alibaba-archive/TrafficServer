@@ -29,6 +29,7 @@ struct RamCacheLRUEntry {
   uint32_t auxkey2;
   LINK(RamCacheLRUEntry, lru_link);
   LINK(RamCacheLRUEntry, hash_link);
+  LINK(RamCacheLRUEntry, size_link);
   Ptr<IOBufferData> data;
 };
 
@@ -48,6 +49,8 @@ struct RamCacheLRU: public RamCache {
   uint16_t *seen;
   Que(RamCacheLRUEntry, lru_link) lru;
   DList(RamCacheLRUEntry, hash_link) *bucket;
+  Que(RamCacheLRUEntry, size_link) size_bucket[DEFAULT_BUFFER_SIZES];
+  int size_bucket_remove[DEFAULT_BUFFER_SIZES];
   int nbuckets;
   int ibuckets;
   Vol *vol;
@@ -94,6 +97,7 @@ void
 RamCacheLRU::init(int64_t abytes, Vol *avol) {
   vol = avol;
   max_bytes = abytes;
+  is_full = false;
   DDebug("ram_cache", "initializing ram_cache %" PRId64 " bytes", abytes);
   if (!max_bytes)
     return;
@@ -110,6 +114,8 @@ RamCacheLRU::get(INK_MD5 * key, Ptr<IOBufferData> *ret_data, uint32_t auxkey1, u
     if (e->key == *key && e->auxkey1 == auxkey1 && e->auxkey2 == auxkey2) {
       lru.remove(e);
       lru.enqueue(e);
+      size_bucket[e->data->_size_index].remove(e);
+      size_bucket[e->data->_size_index].enqueue(e);
       (*ret_data) = e->data;
       DDebug("ram_cache", "get %X %d %d HIT", key->word(3), auxkey1, auxkey2);
       CACHE_SUM_DYN_STAT_THREAD(cache_ram_cache_hits_stat, 1);
@@ -127,6 +133,7 @@ RamCacheLRUEntry * RamCacheLRU::remove(RamCacheLRUEntry *e) {
   uint32_t b = e->key.word(3) % nbuckets;
   bucket[b].remove(e);
   lru.remove(e);
+  size_bucket[e->data->_size_index].remove(e);
   bytes -= e->data->block_size();
   CACHE_SUM_DYN_STAT_THREAD(cache_ram_cache_bytes_stat, -e->data->block_size());
   DDebug("ram_cache", "put %X %d %d FREED", e->key.word(3), e->auxkey1, e->auxkey2);
@@ -151,6 +158,20 @@ int RamCacheLRU::put(INK_MD5 *key, IOBufferData *data, uint32_t len, bool, uint3
     }
   }
   RamCacheLRUEntry *e = bucket[i].head;
+
+  if (!is_full && (bytes > max_bytes))
+    is_full = true;
+
+  if (!is_full) {
+    if (bytes > max_bytes) {
+      memset(&size_bucket_remove, 0, sizeof(int) * DEFAULT_BUFFER_SIZES);
+      is_full = true;
+    }
+  } else {
+    if (bytes < (max_bytes - 16 * 1024 * 1024))
+      is_full = false;
+  }
+
   while (e) {
     if (e->key == *key) {
       if (e->auxkey1 == auxkey1 && e->auxkey2 == auxkey2) {
@@ -158,6 +179,9 @@ int RamCacheLRU::put(INK_MD5 *key, IOBufferData *data, uint32_t len, bool, uint3
         lru.enqueue(e);
         return 1;
       } else { // discard when aux keys conflict
+        if (is_full)
+          size_bucket_remove[e->data->_size_index]++;
+
         e = remove(e);
         continue;
       }
@@ -171,15 +195,17 @@ int RamCacheLRU::put(INK_MD5 *key, IOBufferData *data, uint32_t len, bool, uint3
   e->data = data;
   bucket[i].push(e);
   lru.enqueue(e);
+  size_bucket[e->data->_size_index].enqueue(e);
   bytes += data->block_size();
   objects++;
   CACHE_SUM_DYN_STAT_THREAD(cache_ram_cache_bytes_stat, data->block_size());
-  while (bytes > max_bytes) {
-    RamCacheLRUEntry *ee = lru.dequeue();
-    if (ee)
-      remove(ee);
-    else
-      break;
+  if (is_full) {
+    if (size_bucket_remove[data->_size_index] > 0)
+      size_bucket_remove[data->_size_index]--;
+    else {
+      if ((e = size_bucket[data->_size_index].dequeue()))
+        remove(e);
+    }
   }
   DDebug("ram_cache", "put %X %d %d INSERTED", key->word(3), auxkey1, auxkey2);
   if (objects > nbuckets) {

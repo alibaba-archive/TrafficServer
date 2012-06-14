@@ -34,6 +34,7 @@
 //
 inkcoreapi Allocator ioBufAllocator[DEFAULT_BUFFER_SIZES];
 inkcoreapi Allocator cacheBufAllocator[DEFAULT_BUFFER_SIZES];
+inkcoreapi Allocator ramBufAllocator[DEFAULT_BUFFER_SIZES];
 inkcoreapi ClassAllocator<MIOBuffer> ioAllocator("ioAllocator", DEFAULT_BUFFER_NUMBER);
 inkcoreapi ClassAllocator<IOBufferData> ioDataAllocator("ioDataAllocator", DEFAULT_BUFFER_NUMBER);
 inkcoreapi ClassAllocator<IOBufferBlock> ioBlockAllocator("ioBlockAllocator", DEFAULT_BUFFER_NUMBER);
@@ -68,6 +69,9 @@ init_buffer_allocators()
       cacheBufAllocator[i].re_init(name, s, n, a, 0, POOL_ALIGN);
     else
       cacheBufAllocator[i].re_init(name, s, n, a, 0);
+    name = NEW(new char[64]);
+    snprintf(name, 64, "ramBufAllocator[%d]", i);
+    ramBufAllocator[i].re_init(name, s, n, a);
   }
 }
 

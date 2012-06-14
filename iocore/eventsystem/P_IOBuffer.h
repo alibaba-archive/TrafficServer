@@ -286,6 +286,13 @@ IOBufferData::alloc(int64_t size_index, AllocType type)
   iobuffer_mem_inc(_location, size_index);
 #endif
   switch (type) {
+  case RAM_ALLOCATED:
+    if (BUFFER_SIZE_INDEX_IS_FAST_ALLOCATED(size_index))
+      _data = (char *) ramBufAllocator[size_index].alloc_void();
+    else if (BUFFER_SIZE_INDEX_IS_XMALLOCED(size_index))
+      // coverity[dead_error_line]
+      _data = (char *) valloc(index_to_buffer_size(size_index));
+    break;
   case MEMALIGNED:
     if (BUFFER_SIZE_INDEX_IS_FAST_ALLOCATED(size_index))
       _data = (char *) cacheBufAllocator[size_index].alloc_void();
@@ -313,6 +320,12 @@ IOBufferData::dealloc()
   iobuffer_mem_dec(_location, _size_index);
 #endif
   switch (_mem_type) {
+  case RAM_ALLOCATED:
+    if (BUFFER_SIZE_INDEX_IS_FAST_ALLOCATED(_size_index))
+      ramBufAllocator[_size_index].free_void(_data);
+    else if (BUFFER_SIZE_INDEX_IS_XMALLOCED(_size_index))
+      ::free((void *) _data);
+    break;
   case MEMALIGNED:
     if (BUFFER_SIZE_INDEX_IS_FAST_ALLOCATED(_size_index))
       cacheBufAllocator[_size_index].free_void(_data);

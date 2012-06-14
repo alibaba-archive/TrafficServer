@@ -1988,7 +1988,10 @@ CacheVC::handleRead(int event, Event *e)
   // see if its in the aggregation buffer
   if (dir_agg_buf_valid(vol, &dir)) {
     int agg_offset = vol_offset(vol, &dir) - vol->header->write_pos;
-    buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), MEMALIGNED);
+    if ((int64_t)io.aiocb.aio_nbytes > cache_config_ram_cache_cutoff)
+      buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), MEMALIGNED);
+    else
+      buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), RAM_ALLOCATED);
     ink_assert((agg_offset + io.aiocb.aio_nbytes) <= (unsigned) vol->agg_buf_pos);
     char *doc = buf->data();
     char *agg = vol->agg_buffer + agg_offset;
@@ -2002,7 +2005,10 @@ CacheVC::handleRead(int event, Event *e)
   io.aiocb.aio_offset = vol_offset(vol, &dir);
   if ((off_t)(io.aiocb.aio_offset + io.aiocb.aio_nbytes) > (off_t)(vol->skip + vol->len))
     io.aiocb.aio_nbytes = vol->skip + vol->len - io.aiocb.aio_offset;
-  buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), MEMALIGNED);
+  if ((int64_t)io.aiocb.aio_nbytes > cache_config_ram_cache_cutoff)
+    buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), MEMALIGNED);
+  else
+    buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), RAM_ALLOCATED);
   io.aiocb.aio_buf = buf->data();
   io.action = this;
   io.thread = mutex->thread_holding->tt == DEDICATED ? AIO_CALLBACK_THREAD_ANY : mutex->thread_holding;

@@ -459,7 +459,7 @@ ink_atomiclist_push(InkAtomicList * l, void *item)
   head_p item_pair;
   int result = 0;
   volatile void *h = NULL;
-  ink_assert(*adr_of_next == NULL);
+  //ink_assert(*adr_of_next == NULL);
   do {
     INK_QUEUE_LD64(head, l->head);
     h = FREELIST_POINTER(head);

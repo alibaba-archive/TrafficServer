@@ -63,6 +63,7 @@ struct RamCacheCLFUSEntry {
   };
   LINK(RamCacheCLFUSEntry, lru_link);
   LINK(RamCacheCLFUSEntry, hash_link);
+  LINK(RamCacheCLFUSEntry, size_link);
   Ptr<IOBufferData> data;
 };
 
@@ -85,6 +86,8 @@ struct RamCacheCLFUS : public RamCache {
   int nbuckets;
   DList(RamCacheCLFUSEntry, hash_link) *bucket;
   Que(RamCacheCLFUSEntry, lru_link) lru[2];
+  Que(RamCacheCLFUSEntry, size_link) size_bucket[DEFAULT_BUFFER_SIZES];
+  int size_bucket_remove[DEFAULT_BUFFER_SIZES];
   uint16_t *seen;
   int ncompressed;
   RamCacheCLFUSEntry *compressed; // first uncompressed lru[0] entry
@@ -134,6 +137,7 @@ void RamCacheCLFUS::resize_hashtable() {
 void RamCacheCLFUS::init(int64_t abytes, Vol *avol) {
   vol = avol;
   max_bytes = abytes;
+  is_full = false;
   DDebug("ram_cache", "initializing ram_cache %" PRId64 " bytes", abytes);
   if (!max_bytes)
     return;
@@ -168,6 +172,8 @@ int RamCacheCLFUS::get(INK_MD5 *key, Ptr<IOBufferData> *ret_data, uint32_t auxke
       lru[e->flag_bits.lru].enqueue(e);
       if (!e->flag_bits.lru) { // in memory
         e->hits++;
+        size_bucket[e->data->_size_index].remove(e);
+        size_bucket[e->data->_size_index].enqueue(e);
         if (e->flag_bits.compressed) {
           b = (char*)ats_malloc(e->len);
           switch (e->flag_bits.compressed) {
@@ -265,6 +271,8 @@ Lfree:
 void RamCacheCLFUS::victimize(RamCacheCLFUSEntry *e) {
   objects--;
   DDebug("ram_cache", "put %X %d %d size %d VICTIMIZED", e->key.word(3), e->auxkey1, e->auxkey2, e->size);
+  if (is_full && !e->flag_bits.lru)
+    size_bucket_remove[e->data->_size_index]++;
   e->data = NULL;
   e->flag_bits.lru = 1;
   lru[1].enqueue(e);
@@ -287,6 +295,9 @@ RamCacheCLFUSEntry *RamCacheCLFUS::destroy(RamCacheCLFUSEntry *e) {
   move_compressed(e);
   lru[e->flag_bits.lru].remove(e);
   if (!e->flag_bits.lru) {
+    if (is_full)
+    	size_bucket_remove[e->data->_size_index]++;
+    size_bucket[e->data->_size_index].remove(e);
     objects--;
     bytes -= e->size + ENTRY_OVERHEAD;
     CACHE_SUM_DYN_STAT_THREAD(cache_ram_cache_bytes_stat, -e->size);
@@ -436,6 +447,7 @@ void RamCacheCLFUS::requeue_victims(RamCacheCLFUS *c, Que(RamCacheCLFUSEntry, lr
     CACHE_SUM_DYN_STAT_THREAD(cache_ram_cache_bytes_stat, victim->size);
     victim->hits = REQUEUE_HITS(victim->hits);
     c->lru[0].enqueue(victim);
+    c->size_bucket[victim->data->_size_index].enqueue(victim);
   }
 }
 
@@ -445,6 +457,19 @@ int RamCacheCLFUS::put(INK_MD5 *key, IOBufferData *data, uint32_t len, bool copy
   uint32_t i = key->word(3) % nbuckets;
   RamCacheCLFUSEntry *e = bucket[i].head;
   uint32_t size = copy ? len : data->block_size();
+  
+  if (!is_full) {
+    if(bytes > max_bytes) {
+      memset(&size_bucket_remove, 0, sizeof(int) * DEFAULT_BUFFER_SIZES);
+      is_full = true;
+    }
+  }
+  else {
+    if(bytes < (max_bytes - 16 * 1024 * 1024)) {
+      is_full = false;
+    }
+  }
+
   while (e) {
     if (e->key == *key) {
       if (e->auxkey1 == auxkey1 && e->auxkey2 == auxkey2)
@@ -462,6 +487,8 @@ int RamCacheCLFUS::put(INK_MD5 *key, IOBufferData *data, uint32_t len, bool copy
       move_compressed(e);
       lru[e->flag_bits.lru].remove(e);
       lru[e->flag_bits.lru].enqueue(e);
+      size_bucket[e->data->_size_index].remove(e);
+      size_bucket[e->data->_size_index].enqueue(e);
       int64_t delta = ((int64_t)size) - (int64_t)e->size;
       bytes += delta;
       CACHE_SUM_DYN_STAT_THREAD(cache_ram_cache_bytes_stat, delta);
@@ -499,7 +526,7 @@ int RamCacheCLFUS::put(INK_MD5 *key, IOBufferData *data, uint32_t len, bool copy
     }
   }
   while (1) {
-    victim = lru[0].dequeue();
+    victim = size_bucket[data->_size_index].dequeue();
     if (!victim) {
       if (bytes + size <= max_bytes)
         goto Linsert;
@@ -509,6 +536,7 @@ int RamCacheCLFUS::put(INK_MD5 *key, IOBufferData *data, uint32_t len, bool copy
       DDebug("ram_cache", "put %X %d %d NO VICTIM", key->word(3), auxkey1, auxkey2);
       return 0;
     }
+    lru[0].remove(victim);
     bytes -= victim->size + ENTRY_OVERHEAD;
     CACHE_SUM_DYN_STAT_THREAD(cache_ram_cache_bytes_stat, -victim->size);
     victims.enqueue(victim);
@@ -540,8 +568,10 @@ Linsert:
       CACHE_SUM_DYN_STAT_THREAD(cache_ram_cache_bytes_stat, victim->size);
       victim->hits = REQUEUE_HITS(victim->hits);
       lru[0].enqueue(victim);
-    } else
+      size_bucket[victim->data->_size_index].enqueue(victim);
+    } else {
       victimize(victim);
+    }
   }
   if (e) {
     history--; // move from history
@@ -573,9 +603,21 @@ Linsert:
   e->size = size;
   objects++;
   lru[0].enqueue(e);
+  size_bucket[e->data->_size_index].enqueue(e);
   e->len = len;
   check_accounting(this);
   DDebug("ram_cache", "put %X %d %d size %d INSERTED", key->word(3), auxkey1, auxkey2, e->size);
+  if (is_full) {
+    if (size_bucket_remove[data->_size_index] > 0)
+      size_bucket_remove[data->_size_index]--;
+    else {
+      if ((victim = size_bucket[data->_size_index].dequeue())) {
+        lru[0].remove(victim);
+        victimize(victim);
+        size_bucket_remove[e->data->_size_index]--;
+      }
+    }
+  }
   return 1;
 Lhistory:
   requeue_victims(this, victims);
