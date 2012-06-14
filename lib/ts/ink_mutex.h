@@ -55,6 +55,7 @@ public:
   {
   }
 };
+
 inline
 x_pthread_mutexattr_t::x_pthread_mutexattr_t()
 {
@@ -64,7 +65,7 @@ x_pthread_mutexattr_t::x_pthread_mutexattr_t()
 #endif
 }
 
-extern class x_pthread_mutexattr_t _g_mattr;
+static x_pthread_mutexattr_t _g_mattr;
 
 static inline int
 ink_mutex_init(ink_mutex * m, const char *name)
@@ -84,9 +85,27 @@ ink_mutex_init(ink_mutex * m, const char *name)
 }
 
 static inline int
+ink_mutex_init_ex(ink_mutex * m, const char *name, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+		return ink_mutex_init(m, name);
+}
+
+static inline int
 ink_mutex_destroy(ink_mutex * m)
 {
   return pthread_mutex_destroy(m);
+}
+
+static inline int
+ink_mutex_destroy_ex(ink_mutex * m, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+	  return ink_mutex_destroy(m);
 }
 
 static inline int
@@ -99,12 +118,30 @@ ink_mutex_acquire(ink_mutex * m)
 }
 
 static inline int
+ink_mutex_acquire_ex(ink_mutex * m, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+		return ink_mutex_acquire(m);
+}
+
+static inline int
 ink_mutex_release(ink_mutex * m)
 {
   if (pthread_mutex_unlock(m) != 0) {
     abort();
   }
   return 0;
+}
+
+static inline int
+ink_mutex_release_ex(ink_mutex * m, int thread_safe)
+{
+  if (thread_safe)
+    return 0;
+    else
+      return ink_mutex_release(m);
 }
 
 static inline int

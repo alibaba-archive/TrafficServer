@@ -125,6 +125,7 @@ enum AllocType
 #define BUFFER_SIZE_INDEX_FOR_CONSTANT_SIZE(_size) (_size+DEFAULT_BUFFER_SIZES)
 
 inkcoreapi extern Allocator ioBufAllocator[DEFAULT_BUFFER_SIZES];
+inkcoreapi extern Allocator cacheBufAllocator[DEFAULT_BUFFER_SIZES];
 
 void init_buffer_allocators();
 
@@ -843,9 +844,9 @@ public:
   /**
     Adds by reference len bytes of data pointed to by b to the end of the
     buffer. b MUST be a pointer to the beginning of  block allocated from
-    ioBufAllocator of the corresponding index for fast_size_index. The
-    data will be deallocated by the buffer once all readers on the buffer
-    have consumed it.
+    ioBufAllocator or cacheBufAllocator of the corresponding index for
+    fast_size_index. The data will be deallocated by the buffer once all
+    readers on the buffer have consumed it.
 
   */
   void append_fast_allocated(void *b, int64_t len, int64_t fast_size_index);

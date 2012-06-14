@@ -17,7 +17,7 @@
 #  limitations under the License.
 
 noinst_PROGRAMS = mkdfa CompileParseRules
-check_PROGRAMS = test_atomic test_freelist test_arena test_List test_Map test_Vec
+check_PROGRAMS = test_atomic test_freelist test_arena test_List test_Map test_Vec test_mem_pool
 TESTS = $(check_PROGRAMS)
 
 AM_CPPFLAGS = -I$(top_srcdir)/lib
@@ -73,12 +73,14 @@ libtsutil_la_SOURCES = \
   ink_inout.h \
   ink_killall.cc \
   ink_killall.h \
+  ink_list.h \
   ink_llqueue.h \
   ink_lockfile.h \
   INK_MD5.h \
   ink_memory.cc \
   ink_memory.h \
-  ink_mutex.cc \
+  ink_memory_pool.cc \
+  ink_memory_pool.h \
   ink_mutex.h \
   ink_platform.h \
   InkPool.h \
@@ -88,12 +90,13 @@ libtsutil_la_SOURCES = \
   ink_queue_utils.cc \
   ink_rand.cc \
   ink_rand.h \
+	ink_rbtree.cc \
+	ink_rbtree.h \
   ink_res_init.cc \
   ink_res_mkquery.cc \
   ink_resolver.h \
   ink_resource.cc \
   ink_resource.h \
-  ink_rwlock.cc \
   ink_rwlock.h \
   ink_sock.cc \
   ink_sock.h \
@@ -167,6 +170,10 @@ test_atomic_LDFLAGS = @EXTRA_CXX_LDFLAGS@ @LIBTOOL_LINK_FLAGS@
 test_freelist_SOURCES = test_freelist.cc
 test_freelist_LDADD = libtsutil.la @LIBTHREAD@ @LIBTCL@ @LIBICONV@ @LIBEXECINFO@ @LIBPCRE@
 test_freelist_LDFLAGS = @EXTRA_CXX_LDFLAGS@ @LIBTOOL_LINK_FLAGS@
+
+test_mem_pool_SOURCES = test_mem_pool.cc
+test_mem_pool_LDADD = libtsutil.la @LIBTHREAD@ @LIBTCL@ @LIBICONV@ @LIBEXECINFO@
+test_mem_pool_LDFLAGS = @EXTRA_CXX_LDFLAGS@ @LIBTOOL_LINK_FLAGS@
 
 test_arena_SOURCES = test_arena.cc
 test_arena_LDADD = libtsutil.la @LIBTHREAD@ @LIBTCL@ @LIBICONV@ @LIBEXECINFO@ @LIBPCRE@

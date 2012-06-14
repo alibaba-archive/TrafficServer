@@ -288,7 +288,7 @@ IOBufferData::alloc(int64_t size_index, AllocType type)
   switch (type) {
   case MEMALIGNED:
     if (BUFFER_SIZE_INDEX_IS_FAST_ALLOCATED(size_index))
-      _data = (char *) ioBufAllocator[size_index].alloc_void();
+      _data = (char *) cacheBufAllocator[size_index].alloc_void();
     // coverity[dead_error_condition]
     else if (BUFFER_SIZE_INDEX_IS_XMALLOCED(size_index))
       _data = (char *)ats_memalign(sysconf(_SC_PAGESIZE), index_to_buffer_size(size_index));
@@ -315,7 +315,7 @@ IOBufferData::dealloc()
   switch (_mem_type) {
   case MEMALIGNED:
     if (BUFFER_SIZE_INDEX_IS_FAST_ALLOCATED(_size_index))
-      ioBufAllocator[_size_index].free_void(_data);
+      cacheBufAllocator[_size_index].free_void(_data);
     else if (BUFFER_SIZE_INDEX_IS_XMALLOCED(_size_index))
       ::free((void *) _data);
     break;

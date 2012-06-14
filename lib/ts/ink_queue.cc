@@ -146,7 +146,7 @@ ink_freelist_new(InkFreeList * f)
       uint32_t type_size = f->type_size;
       uint32_t i;
 
-#ifdef MEMPROTECT
+  #ifdef MEMPROTECT
       if (type_size >= MEMPROTECT_SIZE) {
         if (f->alignment < page_size)
           f->alignment = page_size;
@@ -393,6 +393,19 @@ ink_atomiclist_pop(InkAtomicList * l)
   }
 }
 
+
+void *
+ink_atomiclist_empty(InkAtomicList * l)
+{
+  head_p item;
+  INK_QUEUE_LD64(item, l->head);
+  if (TO_PTR(FREELIST_POINTER(item)) == NULL)
+    return l;
+  else
+    return NULL;
+}
+
+
 #if defined(INK_USE_MUTEX_FOR_ATOMICLISTS)
 void *
 ink_atomiclist_popall_wrap(InkAtomicList * l)
@@ -420,6 +433,7 @@ ink_atomiclist_popall(InkAtomicList * l)
   while (result == 0);
   {
     void *ret = TO_PTR(FREELIST_POINTER(item));
+#ifdef DEBUG
     void *e = ret;
     /* fixup forward pointers */
     while (e) {
@@ -427,6 +441,7 @@ ink_atomiclist_popall(InkAtomicList * l)
       *ADDRESS_OF_NEXT(e, l->offset) = n;
       e = n;
     }
+#endif
     return ret;
   }
 }

@@ -30,26 +30,141 @@
 #ifndef _INK_RWLOCK_H_
 #define _INK_RWLOCK_H_
 
-#include "ink_mutex.h"
-#include "ink_thread.h"
-
-#define RW_MAGIC 0x19283746
-
+#if defined(POSIX_THREAD)
+#include <pthread.h>
+#include <stdlib.h>
 struct ink_rwlock
 {
-  ink_mutex rw_mutex;           /* basic lock on this struct */
-  ink_cond rw_condreaders;      /* for reader threads waiting */
-  ink_cond rw_condwriters;      /* for writer threads waiting */
-  int rw_magic;                 /* for error checking */
-  int rw_nwaitreaders;          /* the number waiting */
-  int rw_nwaitwriters;          /* the number waiting */
-  int rw_refcount;
+	pthread_rwlock_t rwlock;
 };
 
-int ink_rwlock_init(ink_rwlock * rw);
-int ink_rwlock_destroy(ink_rwlock * rw);
-int ink_rwlock_rdlock(ink_rwlock * rw);
-int ink_rwlock_wrlock(ink_rwlock * rw);
-int ink_rwlock_unlock(ink_rwlock * rw);
+// just a wrapper so that the constructor gets executed
+// before the first call to ink_rwlock_init();
+static inline int
+ink_rwlock_init(ink_rwlock * rw)
+{
+#if defined(solaris)
+  if ( pthread_rwlock_init(&rw->rwlock, NULL) != 0 ) {
+    abort();
+  }
+#else
+  pthread_rwlockattr_t attr;
+  
+	pthread_rwlockattr_init(&attr);
+	pthread_rwlockattr_setkind_np(&attr, PTHREAD_RWLOCK_PREFER_WRITER_NP);
 
+  if (pthread_rwlock_init(&rw->rwlock, &attr) != 0) {
+    abort();
+  }
+#endif
+  return 0;
+}
+
+static inline int
+ink_rwlock_init_ex(ink_rwlock * rw, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+		return ink_rwlock_init(rw);
+}
+
+static inline int
+ink_rwlock_destroy(ink_rwlock * rw)
+{
+  return pthread_rwlock_destroy(&rw->rwlock);
+}
+
+static inline int
+ink_rwlock_destroy_ex(ink_rwlock * rw, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+	  return ink_rwlock_destroy(rw);
+}
+
+static inline int ink_rwlock_rdlock(ink_rwlock * rw)
+{
+  if (pthread_rwlock_rdlock(&rw->rwlock) != 0) {
+    abort();
+  }
+  return 0;
+}
+
+static inline int
+ink_rwlock_rdlock_ex(ink_rwlock * rw, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+		return ink_rwlock_rdlock(rw);
+}
+
+static inline int
+ink_rwlock_tryrdlock(ink_rwlock * rw)
+{
+  return pthread_rwlock_tryrdlock(&rw->rwlock) == 0;
+}
+
+static inline int
+ink_rwlock_tryrdlock_ex(ink_rwlock * rw, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+  	return ink_rwlock_tryrdlock(rw);
+}
+
+static inline int ink_rwlock_wrlock(ink_rwlock * rw)
+{
+  if (pthread_rwlock_wrlock(&rw->rwlock) != 0) {
+    abort();
+  }
+  return 0;
+}
+
+static inline int
+ink_rwlock_wrlock_ex(ink_rwlock * rw, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+		return ink_rwlock_wrlock(rw);
+}
+
+static inline int
+ink_rwlock_trywrlock(ink_rwlock * rw)
+{
+  return pthread_rwlock_trywrlock(&rw->rwlock) == 0;
+}
+
+static inline int
+ink_rwlock_trywrlock_ex(ink_rwlock * rw, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+  	return ink_rwlock_trywrlock(rw);
+}
+
+static inline int
+ink_rwlock_unlock(ink_rwlock * rw)
+{
+  if (pthread_rwlock_unlock(&rw->rwlock) != 0) {
+    abort();
+  }
+  return 0;
+}
+
+static inline int
+ink_rwlock_unlock_ex(ink_rwlock * rw, int thread_safe)
+{
+	if (thread_safe)
+		return 0;
+	else
+		return ink_rwlock_unlock(rw);
+}
+
+#endif /* #if defined(POSIX_THREAD) */
 #endif

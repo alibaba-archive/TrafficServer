@@ -168,10 +168,12 @@ extern "C"
 #define INK_ATOMICLIST_EMPTY(_x) (!(      (FREELIST_POINTER((_x.head)))))
 #endif
 
+
   inkcoreapi void ink_atomiclist_init(InkAtomicList * l, const char *name, uint32_t offset_to_next);
 #if !defined(INK_USE_MUTEX_FOR_ATOMICLISTS)
   inkcoreapi void *ink_atomiclist_push(InkAtomicList * l, void *item);
   void *ink_atomiclist_pop(InkAtomicList * l);
+  void *ink_atomiclist_empty(InkAtomicList *l);
   inkcoreapi void *ink_atomiclist_popall(InkAtomicList * l);
 /*
  * WARNING WARNING WARNING WARNING WARNING WARNING WARNING

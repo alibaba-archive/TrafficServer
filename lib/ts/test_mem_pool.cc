@@ -25,30 +25,27 @@
 #include <string.h>
 #include "ink_thread.h"
 #include "ink_queue.h"
+#include "ink_memory_pool.h"
 #include "ink_unused.h" /* MAGIC_EDITING_TAG */
 #include "libts.h"
 
 
 #define NTHREADS 32
-
-
-InkFreeList *flist = NULL;
 static int num_test_calls = 0;
 
 void *
-test(void *d)
+test(void *p)
 {
-  int id;
+  int id = 1;
   void *m1, *m2, *m3;
-
-  id = *((int *) &d);
+	struct mem_pool *pool = (struct mem_pool *)p;
 
   time_t start = time(NULL);
   int count = 0;
   for (;;) {
-    m1 = ink_freelist_new(flist);
-    m2 = ink_freelist_new(flist);
-    m3 = ink_freelist_new(flist);
+    m1 = ink_mem_pool_new(pool);
+    m2 = ink_mem_pool_new(pool);
+    m3 = ink_mem_pool_new(pool);
 
     if ((m1 == m2) || (m1 == m3) || (m2 == m3)) {
       printf("0x%08" PRIx64 "   0x%08" PRIx64 "   0x%08" PRIx64 "\n",
@@ -56,21 +53,21 @@ test(void *d)
       exit(1);
     }
 
-    memset(m1, id, 64);
-    memset(m2, id, 64);
-    memset(m3, id, 64);
+    //memset(m1, id, 64);
+    //memset(m2, id, 64);
+    //memset(m3, id, 64);
 
-    ink_freelist_free(flist, m1);
-    ink_freelist_free(flist, m2);
-    ink_freelist_free(flist, m3);
+    ink_mem_pool_free(pool, m1);
+    ink_mem_pool_free(pool, m2);
+    ink_mem_pool_free(pool, m3);
 
 		ink_atomic_increment(&num_test_calls, 1);
     // break out of the test if we have run more then 60 seconds
-    if (++count % 1000 == 0 && (start + 60) < time(NULL)) {
-      return NULL;
+    if (++count % 1000 == 0 && (start + 10) < time(NULL)) {
+			//printf("allocated: %lld  count: %lld  unfree_block: %lld\n", pool->allocated, pool->count, pool->unfree_block);
+      //return NULL;
     }
   }
-
 }
 
 
@@ -79,14 +76,19 @@ main(int argc, char *argv[])
 {
   int i;
 
-  flist = ink_freelist_create("woof", 64, 32, 0, 8);
+	struct mem_pool *align_pool, *unalign_pool;
+  align_pool = ink_mem_pool_create("align", 64, 4, 0, 8, 0, POOL_ALIGN);
+  unalign_pool = ink_mem_pool_create("unalign", 64, 4, 0, 8, 0, POOL_UNALIGN);
 
   for (i = 0; i < NTHREADS; i++) {
     fprintf(stderr, "Create thread %d\n", i);
-    ink_thread_create(test, (void *)((intptr_t)i));
+    ink_thread_create(test, (void *)unalign_pool);
+    ink_thread_create(test, (void *)align_pool);
   }
 
-  test((void *) NTHREADS);
+  test((void *) unalign_pool);
+  test((void *) align_pool);
+
 	fprintf(stderr, "total test calls is %d\n", num_test_calls);
   return 0;
 }

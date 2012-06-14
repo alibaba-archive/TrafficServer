@@ -122,6 +122,9 @@ RecordElement RecordsConfig[] = {
   // The maximum number of chunks to allocate with mmap. Setting this to zero disables all use of mmap. (Unix only)
   {RECT_CONFIG, "proxy.config.system.mmap_max", RECD_INT, "2097152", RECU_RESTART_TS, RR_NULL, RECC_INT, NULL, RECA_READ_ONLY}
   ,
+  // DAllocator
+  {RECT_CONFIG, "proxy.config.dallocate.free_pools", RECD_INT, "1", RECU_RESTART_TS, RR_NULL, RECC_INT, NULL, RECA_NULL}
+  ,
   // Traffic Server Execution threads configuration
   // By default Traffic Server set number of execution threads equal to total CPUs
   {RECT_CONFIG, "proxy.config.exec_thread.autoconfig", RECD_INT, "1", RECU_RESTART_TS, RR_NULL, RECC_INT, "[0-65535]", RECA_READ_ONLY}
@@ -1902,6 +1905,12 @@ RecordElement RecordsConfig[] = {
   ,
   //# Librecords based stats system (new as of v2.1.3)
   {RECT_CONFIG, "proxy.config.stat_api.max_stats_allowed", RECD_INT, "256", RECU_RESTART_TS, RR_NULL, RECC_INT, "[256-1000]", RECA_NULL}
+  ,
+
+  //# memory allocate type
+  {RECT_CONFIG, "proxy.config.mem_alloc_type.iobuf", RECD_INT, "2", RECU_RESTART_TS, RR_NULL, RECC_INT, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.mem_alloc_type.cachebuf", RECD_INT, "2", RECU_RESTART_TS, RR_NULL, RECC_INT, NULL, RECA_NULL}
   ,
 
   //############

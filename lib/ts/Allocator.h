@@ -45,6 +45,8 @@
 #include "ink_port.h"
 #include "ink_resource.h"
 
+#include "ink_memory_pool.h"
+
 #define RND16(_x)               (((_x)+15)&~15)
 
 /** Allocator for fixed size memory blocks. */
@@ -58,19 +60,26 @@ public:
   void *
   alloc_void()
   {
-    return ink_freelist_new(&this->fl);
+    if (this->alloc_type == POOL_NULL)
+      return ink_freelist_new(&this->fl);
+    else
+        return ink_mem_pool_new(&this->pool);
   }
 
   /** Deallocate a block of memory allocated by the Allocator. */
   void
   free_void(void *ptr)
   {
-    ink_freelist_free(&this->fl, ptr);
+    if (this->alloc_type == POOL_NULL)
+      ink_freelist_free(&this->fl, ptr);
+    else
+      ink_mem_pool_free(&this->pool, ptr);
   }
 
   Allocator()
   {
     memset(&fl, 0, sizeof fl);
+    memset(&pool, 0, sizeof pool);
   }
 
   /**
@@ -81,20 +90,34 @@ public:
     @param chunk_size number of units to be allocated if free pool is empty.
     @param alignment of objects must be a power of 2.
   */
-  Allocator(const char *name, unsigned int element_size, unsigned int chunk_size = 128, unsigned int alignment = 8)
+  Allocator(const char *name, unsigned int element_size, unsigned int chunk_size = 128,
+      unsigned int alignment = 8, unsigned int thread_safe = 0, unsigned int pool_type = POOL_NULL)
   {
-    ink_freelist_init(&fl, name, element_size, chunk_size, 0, alignment);
+    this->alloc_type = pool_type;
+    if (pool_type == POOL_NULL)
+      ink_freelist_init(&fl, name, element_size, chunk_size, 0, alignment);
+    else
+      ink_mem_pool_init(&pool, name, element_size, chunk_size, 0, alignment,
+          thread_safe, pool_type);
   }
 
   /** Re-initialize the parameters of the allocator. */
   void
-  re_init(const char *name, unsigned int element_size, unsigned int chunk_size, unsigned int alignment)
+  re_init(const char *name, unsigned int element_size, unsigned int chunk_size,
+      unsigned int alignment, unsigned int thread_safe = 0, unsigned int pool_type = POOL_NULL)
   {
-    ink_freelist_init(&this->fl, name, element_size, chunk_size, 0, alignment);
+    this->alloc_type = pool_type;
+    if (pool_type == POOL_NULL)
+      ink_freelist_init(&this->fl, name, element_size, chunk_size, 0, alignment);
+    else
+      ink_mem_pool_init(&pool, name, element_size, chunk_size, 0, alignment,
+          thread_safe, pool_type);
   }
 
 protected:
   InkFreeList fl;
+  mem_pool pool;
+  unsigned int alloc_type;
 };
 
 /**
