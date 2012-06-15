@@ -1,3 +1,5 @@
+  *) [TS-1006] cut down memory waste
+  *) [TS-654] support Layer7 http health checking for Origin Servers
   *) [TS-1280] cache control rule matching performance tweak
   *) [TS-1270] cache control force local cache in clustering mode
   *) [TS-621] allow 0 byte files to be cached
