@@ -2018,11 +2018,13 @@ HttpSM::process_hostdb_info(HostDBInfo * r)
         ret = rr->select_best_http_with_hc(&t_state.client_info.addr.sa, ink_cluster_time(), (int) t_state.txn_conf->down_server_timeout, &state);
         if (state == false) {
           const char *hostname = t_state.request_data.hostname_str;
-          HCEntry *entry = find_entry(hostname);
-          for (int i = 0; i < rr->good; ++i) {
-            HCSM *hcsm = HCSM::allocate();
-            hcsm->init(entry, &rr->info[i]);
-            eventProcessor.schedule_imm(hcsm, ET_TASK);
+          HCEntry *entry = NULL;
+          if ((entry = find_entry(hostname)) != NULL) {
+            for (int i = 0; i < rr->good; ++i) {
+              HCSM *hcsm = HCSM::allocate();
+              hcsm->init(entry, &rr->info[i]);
+              eventProcessor.schedule_imm(hcsm, ET_TASK);
+            }
           }
         }
       } else {
