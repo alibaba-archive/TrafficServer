@@ -37,7 +37,6 @@
 #include "PluginVC.h"
 #include "ReverseProxy.h"
 #include "RemapProcessor.h"
-#include "Transform.h"
 
 #include "HttpPages.h"
 
@@ -3049,7 +3048,7 @@ HttpSM::tunnel_handler_ua(int event, HttpTunnelConsumer * c)
   //
   HttpTransact::Source_t original_source = t_state.source;
   if (HttpTransact::SOURCE_TRANSFORM == original_source &&
-      t_state.range_setup != HttpTransact::RANGE_NONE) {
+      t_state.range_setup == HttpTransact::RANGE_TRANSFORM) {
     original_source = t_state.pre_transform_source;
   }
 
@@ -3596,7 +3595,7 @@ HttpSM::tunnel_handler_transform_write(int event, HttpTunnelConsumer * c)
   // all other transforms are plugin driven and the difference between
   // source data and final data should represent the transformation delta
   //
-  if (t_state.range_setup == HttpTransact::RANGE_NONE) {
+  if (t_state.range_setup != HttpTransact::RANGE_TRANSFORM) {
     switch (t_state.pre_transform_source) {
     case HttpTransact::SOURCE_HTTP_ORIGIN_SERVER:
       server_response_body_bytes = client_response_body_bytes;
@@ -3903,236 +3902,37 @@ HttpSM::do_hostdb_update_if_necessary()
   return;
 }
 
-void
-HttpSM::parse_range_and_compare(MIMEField *field, int64_t content_length)
-{
-  // note: unsatisfiable_range is initialized to true in constructor
-  int prev_good_range = -1;
-  const char *value;
-  int value_len;
-  int n_values;
-  int nr = 0; // number of valid ranges, also index to range array.
-  HdrCsvIter csv;
-  const char *s, *e;
 
-  if (content_length <= 0)
-    return;
-
-  ink_assert(field != NULL);
-
-  n_values = 0;
-  value = csv.get_first(field, &value_len);
-  while (value) {
-    ++n_values;
-    value = csv.get_next(&value_len);
-  }
-
-  if (n_values <= 0)
-    return;
-
-  value = csv.get_first(field, &value_len);
-
-  // Currently HTTP/1.1 only defines bytes Range
-  if (ptr_len_ncmp(value, value_len, "bytes=", 6) == 0) {
-    t_state.ranges = NEW(new RangeRecord[n_values]);
-    value += 6; // skip leading 'bytes='
-    value_len -= 6;
-
-    while (value) {
-      bool valid = true; // found valid range.
-      // If delimiter '-' is missing
-      if (!(e = (const char *) memchr(value, '-', value_len))) {
-        t_state.range_setup = HttpTransact::RANGE_NOT_SATISFIABLE;
-        t_state.num_range_fields = -1;
-        return;
-      }
-
-      /* [amc] We should do a much better job of checking the values
-         from mime_parse_int64 to detect invalid range values (e.g.
-         non-numeric). Those need to be handled differently than
-         missing values. My reading of the spec is that ATS should go to
-         RANGE_NONE in such a case.
-      */
-      s = value;
-      t_state.ranges[nr]._start = ((s==e)?-1:mime_parse_int64(s, e));
-
-      ++e;
-      s = e;
-      e = value + value_len;
-      if ( e && *(e-1) == '-') { //open-ended Range: bytes=10-\r\n\r\n should be supported
-        t_state.ranges[nr]._end = -1;
-      }
-      else {
-        t_state.ranges[nr]._end = mime_parse_int64(s, e);
-      }
-
-      // check and change if necessary whether this is a right entry
-      if (t_state.ranges[nr]._start >= content_length) {
-          valid = false;
-      } 
-      // open start
-      else if (t_state.ranges[nr]._start == -1 && t_state.ranges[nr]._end > 0) {
-        if (t_state.ranges[nr]._end > content_length)
-          t_state.ranges[nr]._end = content_length;
-
-        t_state.ranges[nr]._start = content_length - t_state.ranges[nr]._end;
-        t_state.ranges[nr]._end = content_length - 1;
-      }
-      // open end
-      else if (t_state.ranges[nr]._start >= 0 && t_state.ranges[nr]._end == -1) {
-          t_state.ranges[nr]._end = content_length - 1;
-      }
-      // "normal" Range - could be wrong if _end<_start
-      else if (t_state.ranges[nr]._start >= 0 && t_state.ranges[nr]._end >= 0) {
-        if (t_state.ranges[nr]._start > t_state.ranges[nr]._end)
-          // [amc] My reading of the spec is that this should cause a change
-          // to RANGE_NONE because it is syntatically invalid.
-          valid = false;
-        else if (t_state.ranges[nr]._end >= content_length)
-          t_state.ranges[nr]._end = content_length - 1;
-      }
-      // Syntactically invalid range, fail.
-      else {
-        // [amc] My reading of the spec is that this should cause a change
-        // to RANGE_NONE because it is syntatically invalid.
-        t_state.range_setup = HttpTransact::RANGE_NOT_SATISFIABLE;
-        t_state.num_range_fields = -1;
-        return;
-      }
-
-      // this is a good Range entry
-      if (valid) {
-        if (t_state.unsatisfiable_range) {
-          t_state.unsatisfiable_range = false;
-          // initialize t_state.current_range to the first good Range
-          t_state.current_range = nr;
-        }
-        // currently we don't handle out-of-order Range entry
-        else if (prev_good_range >= 0 && t_state.ranges[nr]._start <= t_state.ranges[prev_good_range]._end) {
-          t_state.not_handle_range = true;
-          break;
-        }
-
-        prev_good_range = nr;
-        ++nr;
-      }
-      value = csv.get_next(&value_len);
-    }
-  }
-  // Fail if we didn't find any valid ranges.
-  if (nr < 1) {
-    t_state.range_setup = HttpTransact::RANGE_NOT_SATISFIABLE;
-    t_state.num_range_fields = -1;
-  } else {
-    t_state.num_range_fields = nr;
-  }
-}
-
-void
-HttpSM::calculate_output_cl(int64_t content_length, int64_t num_chars)
-{
-  int i;
-
-  if (t_state.unsatisfiable_range)
-    return;
-
-  if (t_state.num_range_fields == 1) {
-    t_state.range_output_cl = t_state.ranges[0]._end - t_state.ranges[0]._start + 1;
-  }
-  else {
-    for (i = 0; i < t_state.num_range_fields; i++) {
-      if (t_state.ranges[i]._start >= 0) {
-        t_state.range_output_cl += boundary_size;
-        t_state.range_output_cl += sub_header_size + content_length;
-        t_state.range_output_cl += num_chars_for_int(t_state.ranges[i]._start)
-          + num_chars_for_int(t_state.ranges[i]._end) + num_chars + 2;
-        t_state.range_output_cl += t_state.ranges[i]._end - t_state.ranges[i]._start + 1;
-        t_state.range_output_cl += 2;
-      }
-    }
-
-    t_state.range_output_cl += boundary_size + 2;
-  }
-
-  Debug("http_range", "Pre-calculated Content-Length for Range response is %"PRId64, t_state.range_output_cl);
-}
-
-void
-HttpSM::do_range_parse(MIMEField *range_field)
-{
-
-  //bool res = false;
-  
-  int64_t content_length   = t_state.cache_info.object_read->object_size_get();
-  int64_t num_chars_for_cl = num_chars_for_int(content_length);
-  
-  parse_range_and_compare(range_field, content_length);
-  calculate_output_cl(content_length, num_chars_for_cl);
-  
-  if (t_state.unsatisfiable_range) {
-    t_state.range_setup = HttpTransact::RANGE_NOT_SATISFIABLE;
-    return;
-  }
-
-  if (t_state.not_handle_range) {
-    t_state.range_setup = HttpTransact::RANGE_NOT_HANDLED;
-    return;
-  }
-
-  t_state.range_setup = HttpTransact::RANGE_REQUESTED;
-}
-
-// this function looks for any Range: headers, parses them and either
-// sets up a transform processor to handle the request OR defers to the 
-// HttpTunnel
+// this function first checks if cached response has Accept-Ranges and
+// Content-Length header and is HTTP/1.1. && There is no other plugins
+// hooked to TS_HTTP_RESPONSE_TRANSFORM_HOOK.
+// Then setup Range transformation if necessary
 void
 HttpSM::do_range_setup_if_necessary()
 {
   MIMEField *field;
   INKVConnInternal *range_trans;
-  int field_content_type_len = -1;
-  const char * content_type;
-  
+  bool res = false;
+
   ink_assert(t_state.cache_info.object_read != NULL);
-  
+
   field = t_state.hdr_info.client_request.field_find(MIME_FIELD_RANGE, MIME_LEN_RANGE);
   ink_assert(field != NULL);
-  
+
   t_state.range_setup = HttpTransact::RANGE_NONE;
   if (t_state.method == HTTP_WKSIDX_GET && t_state.hdr_info.client_request.version_get() == HTTPVersion(1, 1)) {
-    do_range_parse(field);
-    
-    if (t_state.range_setup == HttpTransact::RANGE_REQUESTED && 
-        t_state.num_range_fields > 1 &&
-        api_hooks.get(TS_HTTP_RESPONSE_TRANSFORM_HOOK) == NULL
-       ) 
-    {
-          Debug("http_trans", "Handling multiple Range: requests");
-          content_type = t_state.cache_info.object_read->response_get()->value_get(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE, &field_content_type_len);
-          //create a Range: transform processor for requests of type Range: bytes=1-2,4-5,10-100 (eg. multiple ranges)
-          range_trans = transformProcessor.range_transform(mutex, 
-                  t_state.ranges,
-                  t_state.unsatisfiable_range, 
-                  t_state.num_range_fields, 
-                  &t_state.hdr_info.transform_response,
-                  content_type,
-                  field_content_type_len,
-                  t_state.cache_info.object_read->object_size_get()
-                  );
-          if (range_trans != NULL) {
-            api_hooks.append(TS_HTTP_RESPONSE_TRANSFORM_HOOK, range_trans);
-            t_state.range_setup = HttpTransact::RANGE_REQUESTED;
-          }
-          else { //we couldnt append the transform to our API hooks so bailing
-            t_state.range_setup = HttpTransact::RANGE_NOT_SATISFIABLE;
-          } 
-    }
-    else if (t_state.range_setup == HttpTransact::RANGE_REQUESTED && t_state.num_range_fields == 1) {
-      Debug("http_trans", "Handling single Range: request");
-      //no op, we will handle this later in the HttpTunnel
-    }
-    else {
-      t_state.range_setup = HttpTransact::RANGE_NOT_SATISFIABLE;
+    if (api_hooks.get(TS_HTTP_RESPONSE_TRANSFORM_HOOK) == NULL) {
+      // We may still not do Range if it is out of order Range.
+      range_trans = transformProcessor.range_transform(mutex, field,
+                                                       t_state.cache_info.object_read,
+                                                       &t_state.hdr_info.transform_response, res);
+      if (range_trans != NULL) {
+        api_hooks.append(TS_HTTP_RESPONSE_TRANSFORM_HOOK, range_trans);
+        t_state.range_setup = HttpTransact::RANGE_TRANSFORM;
+      } else if (res)
+        t_state.range_setup = HttpTransact::RANGE_NOT_SATISFIABLE;
+      else
+        t_state.range_setup = HttpTransact::RANGE_NOT_HANDLED;
     }
   }
 }
