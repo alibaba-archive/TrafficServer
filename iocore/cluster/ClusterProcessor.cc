@@ -738,6 +738,10 @@ ClusterProcessor::start()
     ET_CLUSTER = eventProcessor.spawn_event_threads(num_of_cluster_threads, "ET_CLUSTER");
     for (int i = 0; i < eventProcessor.n_threads_for_type[ET_CLUSTER]; i++) {
       initialize_thread_for_net(eventProcessor.eventthread[ET_CLUSTER][i], i);
+#ifndef STANDALONE_IOCORE
+      extern void initialize_thread_for_http_sessions(EThread *thread, int thread_index);
+      initialize_thread_for_http_sessions(eventProcessor.eventthread[ET_CLUSTER][i], i);
+#endif
     }
     IOCORE_RegisterConfigUpdateFunc("proxy.config.cluster.cluster_configuration", machine_config_change, (void *) CLUSTER_CONFIG);
     do_machine_config_change((void *) CLUSTER_CONFIG, "proxy.config.cluster.cluster_configuration");
