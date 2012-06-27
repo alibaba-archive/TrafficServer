@@ -159,17 +159,16 @@ int RamCacheLRU::put(INK_MD5 *key, IOBufferData *data, uint32_t len, bool, uint3
   }
   RamCacheLRUEntry *e = bucket[i].head;
 
-  if (!is_full && (bytes > max_bytes))
-    is_full = true;
-
   if (!is_full) {
-    if (bytes > max_bytes) {
+    if(bytes > max_bytes) {
       memset(&size_bucket_remove, 0, sizeof(int) * DEFAULT_BUFFER_SIZES);
       is_full = true;
     }
-  } else {
-    if (bytes < (max_bytes - 16 * 1024 * 1024))
+  }
+  else {
+    if(bytes < (max_bytes - 16 * 1024 * 1024)) {
       is_full = false;
+    }
   }
 
   while (e) {
@@ -177,11 +176,12 @@ int RamCacheLRU::put(INK_MD5 *key, IOBufferData *data, uint32_t len, bool, uint3
       if (e->auxkey1 == auxkey1 && e->auxkey2 == auxkey2) {
         lru.remove(e);
         lru.enqueue(e);
+        size_bucket[e->data->_size_index].remove(e);
+        size_bucket[e->data->_size_index].enqueue(e);
         return 1;
       } else { // discard when aux keys conflict
         if (is_full)
           size_bucket_remove[e->data->_size_index]++;
-
         e = remove(e);
         continue;
       }
