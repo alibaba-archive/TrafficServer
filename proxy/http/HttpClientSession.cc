@@ -630,7 +630,6 @@ HttpClientSession::release(IOBufferReader * r)
     ka_vio = this->do_io_read(this, INT64_MAX, read_buffer);
     ink_assert(slave_ka_vio != ka_vio);
     client_vc->set_inactivity_timeout(HRTIME_SECONDS(ka_in));
-    client_vc->set_active_timeout(HRTIME_SECONDS(ka_in));
   }
 }
 
