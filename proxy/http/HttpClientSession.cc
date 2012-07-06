@@ -577,8 +577,6 @@ HttpClientSession::attach_server_session(HttpServerSession * ssession, bool tran
     if (transaction_done) {
       ssession->get_netvc()->
         set_inactivity_timeout(HRTIME_SECONDS(current_reader->t_state.txn_conf->keep_alive_no_activity_timeout_out));
-      ssession->get_netvc()->
-        set_active_timeout(HRTIME_SECONDS(current_reader->t_state.txn_conf->keep_alive_no_activity_timeout_out));
     } else {
       // we are serving from the cache - this could take a while.
       ssession->get_netvc()->cancel_inactivity_timeout();
