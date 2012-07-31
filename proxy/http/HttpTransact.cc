@@ -5749,6 +5749,7 @@ HttpTransact::initialize_state_variables_from_response(State* s, HTTPHdr* incomi
 
         s->hdr_info.response_content_length = HTTP_UNDEFINED_CL;
         s->hdr_info.trust_response_cl = false;
+        incoming_response->field_delete(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
 
         // OBJECTIVE: Since we are dechunking the request remove the
         //   chunked value If this is the only value, we need to remove
@@ -5822,6 +5823,12 @@ HttpTransact::is_cache_response_returnable(State* s)
     SET_VIA_STRING(VIA_CACHE_RESULT, VIA_IN_CACHE_NOT_ACCEPTABLE);
     SET_VIA_STRING(VIA_DETAIL_CACHE_LOOKUP, VIA_DETAIL_MISS_COOKIE);
     return false;
+  }
+
+  HTTPHdr *hdr = s->cache_info.object_read->response_get();
+  if (hdr->presence(MIME_PRESENCE_CONTENT_LENGTH)) {
+    int64_t cl = hdr->get_content_length();
+    return s->cache_info.object_read->object_size_get() == cl;
   }
 
   return true;

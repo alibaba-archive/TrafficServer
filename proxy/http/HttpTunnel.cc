@@ -614,6 +614,8 @@ HttpTunnel::add_producer(VConnection * vc,
       //  for the producer
       p->ntodo = p->nbytes - p->init_bytes_done;
       ink_assert(p->ntodo >= 0);
+      if (p->ntodo < 0)
+        p->ntodo = 0;
     }
 
     // We are static, the producer is never "alive"

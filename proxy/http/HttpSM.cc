@@ -5353,7 +5353,10 @@ HttpSM::setup_cache_read_transfer()
   ink_assert(cache_sm.cache_read_vc != NULL);
 
   doc_size = t_state.cache_info.object_read->object_size_get();
-  alloc_index = buffer_size_to_index(doc_size + HTTP_HEADER_BUFFER_SIZE);
+  if (doc_size == INT64_MAX)
+    alloc_index = buffer_size_to_index(doc_size);
+  else
+    alloc_index = buffer_size_to_index(doc_size + HTTP_HEADER_BUFFER_SIZE);
 
 #ifndef USE_NEW_EMPTY_MIOBUFFER
   MIOBuffer *buf = new_MIOBuffer(alloc_index);
