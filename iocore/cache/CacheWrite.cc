@@ -114,7 +114,11 @@ CacheVC::updateVector(int event, Event *e)
       // rewriting has not changed and the alternate is not being deleted,
       // since we set od->move_resident_alt  to 0 in that case
       // (in updateVector)
-      if (small_doc && have_res_alt && (fragment || (f.update && !total_len))) {
+      if (small_doc && have_res_alt && (fragment || (f.update && !total_len))
+#ifdef HTTP_CACHE
+	&& !f.force_empty
+#endif
+	) {
         // for multiple fragment document, we must have done
         // CacheVC:openWriteCloseDataDone
         ink_assert(!fragment || f.data_done);
@@ -813,7 +817,11 @@ agg_copy(char *p, CacheVC *vc)
         }
         // update + data_written =>  Update case (b)
         // need to change the old alternate's object length
-        if (vc->f.update && vc->total_len) {
+        if (vc->f.update && (vc->total_len ||
+#ifdef HTTP_CACHE
+	  vc->f.force_empty)
+#endif
+	) {
           CacheHTTPInfo *http_info = vc->write_vector->get(vc->alternate_index);
           http_info->object_size_set(vc->total_len);
         }
