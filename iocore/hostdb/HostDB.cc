@@ -467,7 +467,7 @@ make_md5(INK_MD5 & md5, const char *hostname, int len, int port, char *pDNSServe
   ink_code_incr_MMH_update(&ctx, hostname, len);
   unsigned short p = port;
   p = htons(p);
-  ink_code_incr_MMH_update(&ctx, (char *) &p, 2);
+  //ink_code_incr_MMH_update(&ctx, (char *) &p, 2);
   ink_code_incr_MMH_update(&ctx, (char *) &srv, 4);     /* FIXME: check this */
   if (pDNSServers)
     ink_code_incr_MMH_update(&ctx, pDNSServers, strlen(pDNSServers));
@@ -478,7 +478,7 @@ make_md5(INK_MD5 & md5, const char *hostname, int len, int port, char *pDNSServe
   ink_code_incr_md5_update(&ctx, hostname, len);
   unsigned short p = port;
   p = htons(p);
-  ink_code_incr_md5_update(&ctx, (char *) &p, 2);
+  //ink_code_incr_md5_update(&ctx, (char *) &p, 2);
   ink_code_incr_MMH_update(&ctx, (char *) &srv, 4);     /* FIXME: check this */
   if (pDNSServers)
     ink_code_incr_md5_update(&ctx, pDNSServers, strlen(pDNSServers));
@@ -2204,6 +2204,7 @@ struct ShowHostDB: public ShowCont
                     "Type", r->round_robin ? "Round-Robin" : "", r->reverse_dns ? "Reverse DNS" : "DNS"));
     CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App1", r->app.allotment.application1));
     CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App2", r->app.allotment.application2));
+    CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "State", r->app.http_data.os_down ? "down":"up"));
     if (!rr) {
       CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Stale", r->is_ip_stale()? "Yes" : "No"));
       CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Timed-Out", r->is_ip_timeout()? "Yes" : "No"));

@@ -98,7 +98,8 @@ union HostDBApplicationInfo
     unsigned int pipeline_max:7;
     unsigned int keepalive_timeout:6;
     unsigned int fail_count:8;
-    unsigned int unused1:8;
+    unsigned int unused1:7;
+    unsigned int os_down:1;
     unsigned int last_failure:32;
   } http_data;
 

@@ -224,7 +224,20 @@ HostDBRoundRobin::select_best_http(sockaddr const* client_ip, ink_time_t now, in
 
   if (HostDBProcessor::hostdb_strict_round_robin) {
     Debug("hostdb", "Using strict round robin");
-    best_up = current++ % good;
+    for (int i = 0; i < good; i++) {
+      best_up = current++ % good;
+      if (info[best_up].app.http_data.last_failure == 0 ||(unsigned int) (now - fail_window) > info[best_up].app.http_data.last_failure) {
+        if (info[best_up].app.http_data.os_down == 1)
+          info[best_up].app.http_data.os_down = 0;
+        if ((unsigned int) (now - fail_window) > info[best_up].app.http_data.last_failure)
+          info[best_up].app.http_data.last_failure = 0;
+        break;
+      }
+      else {
+        if (info[best_up].app.http_data.os_down == 0)
+          info[best_up].app.http_data.os_down = 1;
+      }
+    }
   } else if (HostDBProcessor::hostdb_timed_round_robin > 0) {
     Debug("hostdb", "Using timed round-robin for HTTP");
     if ((now - timed_rr_ctime) > HostDBProcessor::hostdb_timed_round_robin) {
