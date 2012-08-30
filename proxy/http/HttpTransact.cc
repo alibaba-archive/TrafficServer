@@ -2171,7 +2171,7 @@ HttpTransact::issue_revalidate(State* s)
     //   (or is method that we don't conditionalize but lookup the
     //    cache on like DELETE)
     if (c_resp->get_last_modified() > 0 &&
-        s->hdr_info.server_request.method_get_wksidx() == HTTP_WKSIDX_GET && s->range_setup == RANGE_NONE) {
+        s->hdr_info.server_request.method_get_wksidx() == HTTP_WKSIDX_GET/* && s->range_setup == RANGE_NONE*/) {
       // make this a conditional request
       int length;
       const char *str = c_resp->value_get(MIME_FIELD_LAST_MODIFIED, MIME_LEN_LAST_MODIFIED, &length);
@@ -4317,13 +4317,17 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
 
           resp->set_expires(exp_time);
         }
-      } else if (is_request_conditional(&s->hdr_info.client_request) && server_response_code == HTTP_STATUS_OK) {
+      } else if ((is_request_conditional(&s->hdr_info.client_request) ||
+          s->remove_range_request) && server_response_code == HTTP_STATUS_OK) {
         DebugTxn("http_trans", "[hcoofsr] conditional request, 200 " "response, send back 304 if possible");
         client_response_code =
           HttpTransactCache::match_response_to_request_conditionals(&s->hdr_info.client_request,
                                                                     &s->hdr_info.server_response);
 
-        if ((client_response_code == HTTP_STATUS_NOT_MODIFIED) || (client_response_code == HTTP_STATUS_PRECONDITION_FAILED)) {
+        if ((client_response_code == HTTP_STATUS_NOT_MODIFIED) || (client_response_code == HTTP_STATUS_PRECONDITION_FAILED)
+            || s->remove_range_request) {
+          if (s->remove_range_request)
+            build_error_response(s, HTTP_STATUS_RANGE_NOT_SATISFIABLE, "Requested Range Not Satisfiable","","");
           switch (s->cache_info.action) {
           case CACHE_DO_WRITE:
           case CACHE_DO_REPLACE:
@@ -4448,7 +4452,8 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
          (s->next_action == SERVER_READ)) && s->state_machine->do_transform_open()) {
       set_header_for_transform(s, base_response);
     } else {
-      build_response(s, base_response, &s->hdr_info.client_response, s->client_info.http_version, client_response_code);
+      if (!s->remove_range_request)
+        build_response(s, base_response, &s->hdr_info.client_response, s->client_info.http_version, client_response_code);
     }
   }
 
@@ -7719,6 +7724,11 @@ HttpTransact::build_request(State* s, HTTPHdr* base_request, HTTPHdr* outgoing_r
   HttpTransactHeaders::add_global_user_agent_header_to_request(s->http_config_param, outgoing_request);
   handle_request_keep_alive_headers(s, outgoing_version, outgoing_request);
   HttpTransactHeaders::handle_conditional_headers(&s->cache_info, outgoing_request);
+  if (s->http_config_param->range_to_server_disabled &&
+      outgoing_request->presence(MIME_PRESENCE_RANGE) && !url_looks_dynamic(base_request->url_get())) {
+    outgoing_request->field_delete(MIME_FIELD_RANGE, MIME_LEN_RANGE);
+    s->remove_range_request = true;
+  }
 
   if (s->next_hop_scheme < 0)
     s->next_hop_scheme = URL_WKSIDX_HTTP;

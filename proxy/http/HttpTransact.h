@@ -858,7 +858,7 @@ public:
     HTTPHdr server_response;
     HTTPHdr transform_response;
     HTTPHdr cache_response;
-   int64_t request_content_length;
+    int64_t request_content_length;
     int64_t response_content_length;
     int64_t transform_request_cl;
     int64_t transform_response_cl;
@@ -985,6 +985,8 @@ public:
 
     // for Range: to avoid write transfomed Range response into cache
     RangeSetup_t range_setup;
+    // for Range:
+    bool remove_range_request;
 
     // for negative caching
     bool negative_caching;
@@ -1105,6 +1107,7 @@ public:
         first_stats(),
         current_stats(NULL),
         range_setup(RANGE_NONE),
+        remove_range_request(false),
         negative_caching(false),
         www_auth_content(CACHE_AUTH_NONE),
         client_connection_enabled(true),
