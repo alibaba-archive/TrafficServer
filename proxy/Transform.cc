@@ -122,6 +122,8 @@ TransformProcessor::range_transform(ProxyMutex *mut, MIMEField *range_field, HTT
   b = range_transform->is_range_unsatisfiable();
 
   if (b || range_transform->is_this_range_not_handled()) {
+    if (range_transform->m_content_length == INT64_MAX)
+      b = false;
     delete range_transform;
     return NULL;
   }
@@ -813,7 +815,7 @@ RangeTransform::parse_range_and_compare()
   HdrCsvIter csv;
   const char *s, *e;
 
-  if (m_content_length <= 0)
+  if (m_content_length <= 0 || m_content_length == INT64_MAX)
     return;
 
   ink_assert(m_range_field != NULL);
