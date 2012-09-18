@@ -4106,14 +4106,22 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
           s->cache_info.action = CACHE_DO_UPDATE;
           s->next_action = SERVER_READ;
         } else {
+          s->cache_info.action = CACHE_DO_SERVE_AND_UPDATE;
+          s->next_action = SERVE_FROM_CACHE;
           if (s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE)) {
             s->state_machine->do_range_setup_if_necessary();
             // Note that even if the Range request is not satisfiable, we
             // update and serve this cache. This will give a 200 response to
             // a bad client, but allows us to avoid pegging the origin (e.g. abuse).
+            if (s->remove_range_request && s->range_setup == HttpTransact::RANGE_NOT_SATISFIABLE) {
+              build_error_response(s, HTTP_STATUS_RANGE_NOT_SATISFIABLE, "Requested Range Not Satisfiable","","");
+              s->next_action = PROXY_INTERNAL_CACHE_UPDATE_HEADERS;
+            } else {
+              if (s->remove_range_request)
+                s->remove_range_request = 0;
+            }
           }
-          s->cache_info.action = CACHE_DO_SERVE_AND_UPDATE;
-          s->next_action = SERVE_FROM_CACHE;
+
         }
         /* base_response will be set after updating headers below */
       }
@@ -7724,7 +7732,7 @@ HttpTransact::build_request(State* s, HTTPHdr* base_request, HTTPHdr* outgoing_r
   HttpTransactHeaders::add_global_user_agent_header_to_request(s->http_config_param, outgoing_request);
   handle_request_keep_alive_headers(s, outgoing_version, outgoing_request);
   HttpTransactHeaders::handle_conditional_headers(&s->cache_info, outgoing_request);
-  if (s->http_config_param->range_to_server_disabled &&
+  if (s->http_config_param->range_to_server_disabled && s->method == HTTP_WKSIDX_GET &&
       outgoing_request->presence(MIME_PRESENCE_RANGE) && !url_looks_dynamic(base_request->url_get())) {
     outgoing_request->field_delete(MIME_FIELD_RANGE, MIME_LEN_RANGE);
     s->remove_range_request = true;
