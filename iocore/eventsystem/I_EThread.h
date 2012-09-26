@@ -308,6 +308,10 @@ public:
   ProtectedQueue EventQueueExternal;
   PriorityEventQueue EventQueue;
 
+  /* Cancel handler List & Queue */
+  InkAtomicList CancelList;
+  Que(Event, clink) CancelQueue;
+
   EThread **ethreads_to_be_signalled;
   int n_ethreads_to_be_signalled;
 
@@ -325,6 +329,8 @@ public:
 
   void execute();
   void process_event(Event *e, int calling_code);
+  void process_cancel_event(ink_hrtime now, EThread * t);
+  void set_event_cancel(Event * e);
   void free_event(Event *e);
   void (*signal_hook)(EThread *);
 
