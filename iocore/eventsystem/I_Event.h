@@ -207,7 +207,6 @@ public:
 
   EThread *ethread;
 
-  unsigned int in_the_atomic_list:1;
   unsigned int in_the_prot_queue:1;
   unsigned int in_the_priority_queue:1;
   unsigned int immediate:1;

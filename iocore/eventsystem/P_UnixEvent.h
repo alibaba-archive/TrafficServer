@@ -45,7 +45,6 @@ Event::free()
 TS_INLINE
 Event::Event():
   ethread(0),
-  in_the_atomic_list(false),
   in_the_prot_queue(false),
   in_the_priority_queue(false),
   immediate(false),

@@ -128,7 +128,7 @@ EThread::set_event_type(EventType et)
 void
 EThread::process_event(Event * e, int calling_code)
 {
-  ink_assert((!e->in_the_atomic_list && !e->in_the_prot_queue && !e->in_the_priority_queue));
+  ink_assert((!e->in_the_prot_queue && !e->in_the_priority_queue));
   MUTEX_TRY_LOCK_FOR(lock, e->mutex.m_ptr, this, e->continuation);
   if (!lock) {
     e->timeout_at = cur_time + DELAY_FOR_RETRY;
@@ -144,7 +144,7 @@ EThread::process_event(Event * e, int calling_code)
     ink_assert(c_temp == e->continuation);
     MUTEX_RELEASE(lock);
     if (e->period) {
-      if (!e->in_the_atomic_list && !e->in_the_prot_queue && !e->in_the_priority_queue) {
+      if (!e->in_the_prot_queue && !e->in_the_priority_queue) {
         if (e->period < 0)
           e->timeout_at = e->period;
         else {
@@ -155,7 +155,7 @@ EThread::process_event(Event * e, int calling_code)
         }
         EventQueueExternal.enqueue_local(e);
       }
-    } else if (!e->in_the_atomic_list && !e->in_the_prot_queue && !e->in_the_priority_queue)
+    } else if (!e->in_the_prot_queue && !e->in_the_priority_queue)
       free_event(e);
   }
 }
