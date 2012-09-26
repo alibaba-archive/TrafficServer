@@ -68,7 +68,7 @@ ProtectedQueue::try_signal()
 TS_INLINE void
 ProtectedQueue::enqueue_local(Event * e)
 {
-  ink_assert(!e->in_the_prot_queue && !e->in_the_priority_queue);
+  ink_assert(!e->in_the_atomic_list && !e->in_the_prot_queue && !e->in_the_priority_queue);
   e->in_the_prot_queue = 1;
   localQueue.enqueue(e);
 }
@@ -76,10 +76,14 @@ ProtectedQueue::enqueue_local(Event * e)
 TS_INLINE void
 ProtectedQueue::remove(Event * e)
 {
-  ink_assert(e->in_the_prot_queue);
-  if (!ink_atomiclist_remove(&al, e))
+  ink_assert(e->in_the_atomic_list || e->in_the_prot_queue);
+  if (e->in_the_atomic_list) {
+    ink_atomiclist_remove(&al, e);
+    e->in_the_atomic_list = 0;
+  } else if (e->in_the_prot_queue) {
     localQueue.remove(e);
-  e->in_the_prot_queue = 0;
+    e->in_the_prot_queue = 0;
+  }
 }
 
 TS_INLINE Event *
