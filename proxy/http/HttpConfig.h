@@ -675,11 +675,6 @@ public:
   MgmtByte avoid_content_spoofing;
   MgmtByte enable_http_stats;
 
-  ///////////////////////////////////////////////////////////////////
-  // Disable Range Request to Server                               //
-  ///////////////////////////////////////////////////////////////////
-  MgmtByte range_to_server_disabled;
-
   ///////////////////
   // ICP variables //
   ///////////////////
@@ -934,7 +929,6 @@ HttpConfigParams::HttpConfigParams()
     insert_age_in_response(1),
     avoid_content_spoofing(1),
     enable_http_stats(1),
-    range_to_server_disabled(1),
     icp_enabled(0),
     stale_icp_enabled(0),
     cache_vary_default_text(0),
