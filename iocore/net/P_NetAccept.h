@@ -90,6 +90,7 @@ struct NetAccept:public Continuation
   int ifd;
   int ifd_seq_num;
   bool callback_on_open;
+  bool backdoor;
   Ptr<NetAcceptAction> action_;
   int recv_bufsize;
   int send_bufsize;
