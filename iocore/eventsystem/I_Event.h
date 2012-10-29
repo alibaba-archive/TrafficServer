@@ -209,7 +209,6 @@ public:
 
   unsigned int in_the_prot_queue:1;
   unsigned int in_the_priority_queue:1;
-  unsigned int in_the_cancel_queue:1;
   unsigned int immediate:1;
   unsigned int globally_allocated:1;
   unsigned int in_heap:4;

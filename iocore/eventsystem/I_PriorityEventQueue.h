@@ -43,12 +43,10 @@ struct PriorityEventQueue
   Que(Event, link) tv1[TVR_SIZE];
   Que(Event, link) tv2[TV_SIZE];
   Que(Event, link) tv3[TV_SIZE];
-  Que(Event, link) running;
   ink_hrtime last_check_time;
 
   void enqueue(Event * e, ink_hrtime now);
   void remove(Event * e);
-  Event *dequeue_ready(ink_hrtime t);
   void check_ready(ink_hrtime now, EThread * t);
   int cascade(ink_hrtime now, int heap, int index);
   ink_hrtime earliest_timeout();

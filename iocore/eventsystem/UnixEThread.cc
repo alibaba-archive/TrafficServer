@@ -49,8 +49,7 @@ EThread::EThread()
    signal_hook(0),
    tt(REGULAR), eventsem(NULL)
 {
-  Event e;
-  ink_atomiclist_init(&CancelList, "CancelList", (char *) &e.clink.next - (char *) &e);
+  ink_atomiclist_init(&CancelList, "CancelList", offsetof(Event, clink.next));
   memset(thread_private, 0, PER_THREAD_DATA);
 }
 
@@ -66,8 +65,7 @@ EThread::EThread(ThreadType att, int anid)
     eventsem(NULL),
     l1_hash(NULL)
 {
-  Event e;
-  ink_atomiclist_init(&CancelList, "CancelList", (char *) &e.clink.next - (char *) &e);
+  ink_atomiclist_init(&CancelList, "CancelList", offsetof(Event, clink.next));
   ethreads_to_be_signalled = (EThread **)ats_malloc(MAX_EVENT_THREADS * sizeof(EThread *));
   memset((char *) ethreads_to_be_signalled, 0, MAX_EVENT_THREADS * sizeof(EThread *));
   memset(thread_private, 0, PER_THREAD_DATA);
@@ -102,8 +100,7 @@ EThread::EThread(ThreadType att, Event * e, ink_sem * sem)
    tt(att), oneevent(e), eventsem(sem)
 {
   ink_assert(att == DEDICATED);
-  Event ee;
-  ink_atomiclist_init(&CancelList, "CancelList", (char *) &ee.clink.next - (char *) &ee);
+  ink_atomiclist_init(&CancelList, "CancelList", offsetof(Event, clink.next));
   memset(thread_private, 0, PER_THREAD_DATA);
 }
 
@@ -136,16 +133,20 @@ EThread::set_event_cancel(Event * e)
 {
   /*
    * only cancel event in this case:
-   * 1. have be inserted in priority queue (e->in_the_priority_queue)
+   * 1. have be inserted in priority queue (e->in_the_priority_queue) && e->timeout_at > now + 10s
    * localQueue Event will be process soon, so don't set cancel. This will be less cancel handler.
    */
-  if (e->in_the_priority_queue && (e->timeout_at - e->ethread->cur_time) > HRTIME_SECONDS(5)) {
-    e->in_the_cancel_queue = 1;
-    e->cancelled = true;
-    if (e->ethread == this_thread())
-      CancelQueue.enqueue(e);
-    else
-      ink_atomiclist_push(&CancelList, e);
+  if (e->in_the_priority_queue && (e->timeout_at - e->ethread->cur_time) > HRTIME_SECONDS(10)) {
+    while (!e->cancelled) {
+      /* prevent more threads cancel one event racing */
+      if (ink_atomic_cas((int32_t *)(&e->cancelled), false, true)) {
+        if (e->ethread == this_thread())
+          CancelQueue.enqueue(e);
+        else
+          ink_atomiclist_push(&CancelList, e);
+        return;
+      }
+    }
   }
 }
 
@@ -153,33 +154,21 @@ void
 EThread::process_cancel_event(ink_hrtime now, EThread * t)
 {
   Event *e, *e_next;
-  Que(Event, clink) cancel;
 
   e = (Event *) ink_atomiclist_popall(&CancelList);
   while (e) {
-    ink_assert(e->ethread == t);
-    e_next = (Event *) e->clink.next;
-    e->clink.next = NULL;
-    CancelQueue.enqueue(e);
+    ink_assert((e->ethread == t) && e->cancelled);
+    e_next = e->clink.next;
+    EventQueue.remove(e);
+    free_event(e);
     e = e_next;
   }
  
-  cancel.append(CancelQueue);
-  CancelQueue.clear();
-  while ((e = cancel.dequeue())) {
+  while ((e = CancelQueue.dequeue())) {
     /* have be inserted in priority queue */
-    if (e->in_the_priority_queue) {
-      e->in_the_cancel_queue = 0;
-      EventQueue.remove(e);
-      free_event(e);
-    } 
-    /* have be called free_event() in process_event() */
-    else {
-      ink_assert(!e->in_the_cancel_queue);
-      e->in_the_cancel_queue = 0;
-      e->in_the_prot_queue = 0;
-      free_event(e);
-    }
+    ink_assert((e->ethread == t) && e->cancelled);
+    EventQueue.remove(e);
+    free_event(e);
   }
 }
 
@@ -264,22 +253,10 @@ EThread::execute() {
               NegativeQueue.insert(e, p);
           }
         }
-        bool done_one;
-        do {
-          done_one = false;
-          // execute all the eligible internal events
-          EventQueue.check_ready(cur_time, this);
-          while ((e = EventQueue.dequeue_ready(cur_time))) {
-            ink_assert(e);
-            ink_assert(e->timeout_at > 0);
-            if (e->cancelled)
-              free_event(e);
-            else {
-              done_one = true;
-              process_event(e, e->callback_event);
-            }
-          }
-        } while (done_one);
+
+        // execute all the eligible internal events
+        EventQueue.check_ready(cur_time, this);
+
         // execute any negative (poll) events
         if (NegativeQueue.head) {
           if (n_ethreads_to_be_signalled)
