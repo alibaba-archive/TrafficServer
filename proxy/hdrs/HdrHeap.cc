@@ -934,7 +934,10 @@ HdrHeap::unmarshal(int buf_length, int obj_type, HdrHeapObjImpl ** found_obj, Re
       return -1;
     }
 
+    if (obj->m_length <= 0)
+      return -1;
     obj_data = obj_data + obj->m_length;
+
   }
 
   m_magic = HDR_BUF_MAGIC_ALIVE;
