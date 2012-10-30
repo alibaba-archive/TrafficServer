@@ -4276,7 +4276,7 @@ HttpSM::do_http_server_open(bool raw)
 
     char addrbuf[INET6_ADDRSTRLEN];
     if (connections->getCount((t_state.current.server->addr)) >= t_state.txn_conf->origin_max_connections) {
-      Warning("[%" PRId64 "] over the number of connection for this host: %s", sm_id,
+      DebugSM("http", "[%" PRId64 "] over the number of connection for this host: %s", sm_id,
         ats_ip_ntop(&t_state.current.server->addr.sa, addrbuf, sizeof(addrbuf)));
       ink_debug_assert(pending_action == NULL);
       pending_action = eventProcessor.schedule_in(this, HRTIME_MSECONDS(100));
@@ -4511,7 +4511,7 @@ HttpSM::mark_host_failure(HostDBInfo * info, time_t time_down)
   ink_assert(ink_cluster_time() + t_state.txn_conf->down_server_timeout > time_down);
 #endif
 
-  Warning("[%" PRId64 "] hostdb update marking IP: %s as down",
+  DebugSM("http", "[%" PRId64 "] hostdb update marking IP: %s as down",
         sm_id,
         ats_ip_nptop(&t_state.current.server->addr.sa, addrbuf, sizeof(addrbuf)));
 }
