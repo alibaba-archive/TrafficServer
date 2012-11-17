@@ -79,7 +79,7 @@ main(int argc, char *argv[])
 {
   int i;
 
-  flist = ink_freelist_create("woof", 64, 32, 0, 8);
+  flist = ink_freelist_create("woof", 64, 256, 8);
 
   for (i = 0; i < NTHREADS; i++) {
     fprintf(stderr, "Create thread %d\n", i);

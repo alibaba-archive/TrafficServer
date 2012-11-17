@@ -59,16 +59,12 @@ init_buffer_allocators()
 
     name = NEW(new char[64]);
     snprintf(name, 64, "ioBufAllocator[%d]", i);
-    if (POOL_ALIGN == REC_ConfigReadInteger("proxy.config.mem_alloc_type.iobuf"))
-      ioBufAllocator[i].re_init(name, s, n, a, 0, POOL_ALIGN);
-    else
-      ioBufAllocator[i].re_init(name, s, n, a);
+    ioBufAllocator[i].re_init(name, s, n, a);
+
     name = NEW(new char[64]);
     snprintf(name, 64, "cacheBufAllocator[%d]", i);
-    if (POOL_ALIGN == REC_ConfigReadInteger("proxy.config.mem_alloc_type.cachebuf"))
-      cacheBufAllocator[i].re_init(name, s, n, a, 0, POOL_ALIGN);
-    else
-      cacheBufAllocator[i].re_init(name, s, n, a, 0);
+    cacheBufAllocator[i].re_init(name, s, n, a);
+
     name = NEW(new char[64]);
     snprintf(name, 64, "ramBufAllocator[%d]", i);
     ramBufAllocator[i].re_init(name, s, n, a);
