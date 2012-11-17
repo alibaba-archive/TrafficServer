@@ -23,7 +23,9 @@
 
 #include "P_Cache.h"
 
-
+#ifdef SSD_CACHE
+extern uint64_t total_cache_size;
+#endif
 int
 CacheDisk::open(char *s, off_t blocks, off_t askip, int ahw_sector_size, int fildes, bool clear)
 {
@@ -57,6 +59,7 @@ CacheDisk::open(char *s, off_t blocks, off_t askip, int ahw_sector_size, int fil
 
   header = (DiskHeader *)ats_memalign(sysconf(_SC_PAGESIZE), header_len);
   memset(header, 0, header_len);
+
   if (clear) {
     SET_HANDLER(&CacheDisk::clearDone);
     return clearDisk();
@@ -411,7 +414,7 @@ CacheDisk::delete_all_volumes()
   header->num_diskvol_blks = 1;
   header->num_blocks = len;
   cleared = 1;
-  update_header();
 
+  update_header();
   return 0;
 }

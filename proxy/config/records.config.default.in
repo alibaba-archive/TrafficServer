@@ -361,6 +361,10 @@ CONFIG proxy.config.cache.threads_per_disk INT 8
    # this low can reduce latencies in some cases, but can consume more CPU.
    # If you experience CPU spinning, try increasing this setting.
 CONFIG proxy.config.cache.mutex_retry_delay INT 2
+   # The ssd storage disks. This must be raw disks.
+LOCAL proxy.config.cache.ssd.storage STRING NULL
+   # The transistor range threshold to hold hot doc in ssd (defalut: 1G).
+CONFIG proxy.config.cache.ssd.transistor_range_threshold INT 1073741824
 ##############################################################################
 #
 # DNS

@@ -631,14 +631,6 @@ cmd_clear(char *cmd)
       Note("unable to unlink %s", p);
   }
 
-  if (c_all || c_cache) {
-    const char *err = NULL;
-    theStore.delete_all();
-    if ((err = theStore.read_config())) {
-      printf("%s, CLEAR failed\n", err);
-      return CMD_FAILED;
-    }
-  }
 #ifndef INK_NO_HOSTDB
   if (c_hdb || c_all) {
     Note("Clearing Host Database");
@@ -1203,6 +1195,8 @@ run_RegressionTest()
 {
   if (regression_level)
     eventProcessor.schedule_every(NEW(new RegressionCont), HRTIME_SECONDS(1));
+  else if (regression_test[0] != '\0')
+    eventProcessor.schedule_every(NEW(new RegressionCont), HRTIME_SECONDS(1));
 }
 #endif //TS_HAS_TESTS
 
@@ -1584,12 +1578,6 @@ main(int argc, char **argv)
   //  if (!lock_process) check_for_root_uid();
   check_fd_limit();
 
-  command_flag = command_flag || *command_string;
-
-  // Set up store
-  if (!command_flag && initialize_store())
-    ProcessFatal("unable to initialize storage, (Re)Configuration required\n");
-
   // Read proxy name
   TS_ReadConfigString(proxy_name, "proxy.config.proxy_name", 255);
 
@@ -1654,6 +1642,8 @@ main(int argc, char **argv)
 
   init_signals2();
   // log initialization moved down
+
+  command_flag = command_flag || *command_string;
 
   if (command_flag) {
     // pmgmt initialization moved up, needed by RecProcessInit

@@ -130,6 +130,11 @@ enum
   cache_read_active_stat,
   cache_read_success_stat,
   cache_read_failure_stat,
+#ifdef SSD_CACHE
+  cache_ssd_read_success_stat,
+  cache_sas_read_success_stat,
+  cache_ram_read_success_stat,
+#endif
   cache_write_active_stat,
   cache_write_success_stat,
   cache_write_failure_stat,
@@ -232,6 +237,10 @@ extern int cache_config_target_fragment_size;
 extern int cache_config_mutex_retry_delay;
 #ifdef HTTP_CACHE
 extern int enable_cache_empty_http_doc;
+#endif
+#ifdef SSD_CACHE
+extern int good_ssd_disks;
+extern int64_t transistor_range_threshold;
 #endif
 
 // CacheVC
@@ -456,7 +465,11 @@ struct CacheVC: public CacheVConnection
   int header_to_write_len;
   void *header_to_write;
   short writer_lock_retry;
-
+#ifdef SSD_CACHE
+  SSDVol *ssd_vol;
+  MigrateToSSD *mts;
+  uint64_t dir_off;
+#endif
   union
   {
     uint32_t flags;
@@ -485,6 +498,12 @@ struct CacheVC: public CacheVConnection
 #endif
 #ifdef HTTP_CACHE
       unsigned int force_empty:1; // used for cache empty http document
+#endif
+#ifdef SSD_CACHE
+      unsigned int read_from_ssd:1;
+      unsigned int write_into_ssd:1;
+      unsigned int ram_fixup:1;
+      unsigned int transistor:1;
 #endif
     } f;
   };
@@ -529,6 +548,9 @@ int get_alternate_index(CacheHTTPInfoVector *cache_vector, CacheKey key);
 #endif
 CacheVC *new_DocEvacuator(int nbytes, Vol *d);
 
+#ifdef SSD_CACHE
+extern ClassAllocator<MigrateToSSD> migrateToSSDAllocator;
+#endif
 // inline Functions
 
 TS_INLINE CacheVC *
@@ -563,6 +585,17 @@ free_CacheVC(CacheVC *cont)
     CACHE_DECREMENT_DYN_STAT(cont->base_stat + CACHE_STAT_ACTIVE);
     if (cont->closed > 0) {
       CACHE_INCREMENT_DYN_STAT(cont->base_stat + CACHE_STAT_SUCCESS);
+#ifdef  SSD_CACHE
+      if (cont->vio.op == VIO::READ) {
+        if (cont->f.doc_from_ram_cache) {
+          CACHE_INCREMENT_DYN_STAT(cache_ram_read_success_stat);
+        } else if (cont->f.read_from_ssd) {
+          CACHE_INCREMENT_DYN_STAT(cache_ssd_read_success_stat);
+        } else {
+          CACHE_INCREMENT_DYN_STAT(cache_sas_read_success_stat);
+        }
+      }
+#endif
     }                             // else abort,cancel
   }
   ink_debug_assert(mutex->thread_holding == this_ethread());
@@ -579,6 +612,9 @@ free_CacheVC(CacheVC *cont)
   cont->io.aio_result = 0;
   cont->io.aiocb.aio_nbytes = 0;
   cont->io.aiocb.aio_reqprio = AIO_DEFAULT_PRIORITY;
+#ifdef SSD_CACHE
+  ink_assert(!cont->mts);
+#endif
 #ifdef HTTP_CACHE
   cont->request.reset();
   cont->vector.clear();
@@ -648,6 +684,36 @@ CacheVC::do_read_call(CacheKey *akey)
   doc_pos = 0;
   read_key = akey;
   io.aiocb.aio_nbytes = dir_approx_size(&dir);
+#ifdef SSD_CACHE
+  ssd_vol = NULL;
+  ink_assert(mts == NULL);
+  mts = NULL;
+  f.write_into_ssd = 0;
+  f.ram_fixup = 0;
+  f.transistor = 0;
+  f.read_from_ssd = dir_inssd(&dir);
+
+  if (!f.read_from_ssd && vio.op == VIO::READ && good_ssd_disks > 0){
+    vol->history.put_key(read_key);
+    if (vol->history.is_hot(read_key) && !vol->migrate_probe(read_key, NULL) && !od) {
+      f.write_into_ssd = 1;
+    }
+  }
+  if (f.read_from_ssd) {
+    ssd_vol = &vol->ssd_vols[dir_get_index(&dir)];
+    if (vio.op == VIO::READ && vol_transistor_range_valid(ssd_vol, &dir, transistor_range_threshold) &&
+        ssd_vol->cos.is_seen(dir_offset(&dir) - 1) && !vol->migrate_probe(read_key, NULL) && !od)
+      f.transistor = 1;
+  }
+  if (f.write_into_ssd || f.transistor) {
+    mts = migrateToSSDAllocator.alloc();
+    mts->vc = this;
+    mts->key = *read_key;
+    mts->rewrite = (f.transistor == 1);
+    dir_assign(&mts->dir, &dir);
+    vol->set_migrate_in_progress(mts);
+  }
+#endif
   PUSH_HANDLER(&CacheVC::handleRead);
   return handleRead(EVENT_CALL, 0);
 }
@@ -775,6 +841,12 @@ Vol::open_write(CacheVC *cont, int allow_if_writers, int max_writers)
     CACHE_INCREMENT_DYN_STAT(cache_write_backlog_failure_stat);
     return ECACHE_WRITE_FAIL;
   }
+#ifdef SSD_CACHE
+  MigrateToSSD *m_result = NULL;
+  if (vol->migrate_probe(&cont->first_key, &m_result)) {
+    m_result->notMigrate = true;
+  }
+#endif
   if (open_dir.open_write(cont, allow_if_writers, max_writers)) {
 #ifdef CACHE_STAT_PAGES
     ink_debug_assert(cont->mutex->thread_holding == this_ethread());

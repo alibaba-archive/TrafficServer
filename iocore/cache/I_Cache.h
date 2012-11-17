@@ -55,6 +55,8 @@
 #define CACHE_COMPRESSION_LIBZ           2
 #define CACHE_COMPRESSION_LIBLZMA        3
 
+#define SSD_CACHE	1
+
 struct CacheVC;
 #ifdef HTTP_CACHE
 class CacheLookupHttpConfig;

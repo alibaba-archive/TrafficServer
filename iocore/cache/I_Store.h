@@ -37,6 +37,10 @@
 #define STORE_BLOCK_SHIFT      13
 #define DEFAULT_HW_SECTOR_SIZE 512
 
+#ifndef SSD_CACHE
+#define SSD_CACHE	1
+#endif
+
 //
 // A Store is a place to store data.
 // Those on the same disk should be in a linked list.
@@ -164,7 +168,10 @@ struct Store
 
   int n_disks;
   Span **disk;
-
+#ifdef SSD_CACHE
+  int n_ssd_disks;
+  Span **ssd_disk;
+#endif
   //
   // returns NULL on success
   // if fd >= 0 then on failure it returns an error string
@@ -172,13 +179,15 @@ struct Store
   //
   const char *read_config(int fd = -1);
   int write_config_data(int fd);
+#ifdef SSD_CACHE
+  const char *read_ssd_config();
+#endif
 };
 
 extern Store theStore;
 
 // store either free or in the cache, can be stolen for reconfiguration
 void stealStore(Store & s, int blocks);
-int initialize_store();
 
 struct storageConfigFile {
   const char *parseFile(int fd) {

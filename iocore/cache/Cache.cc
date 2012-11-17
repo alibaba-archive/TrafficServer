@@ -50,7 +50,6 @@ do { \
 	RecSetRawStatCount(rsb, x, 0); \
 } while (0);
 
-
 // Configuration
 
 int64_t cache_config_ram_cache_size = AUTO_SIZE_RAM_CACHE;
@@ -83,6 +82,10 @@ int cache_config_mutex_retry_delay = 2;
 int enable_cache_empty_http_doc = 0;
 #endif
 
+#ifdef SSD_CACHE
+int migrate_threshold = 2;
+int64_t transistor_range_threshold = (1 << 30); // 1G;
+#endif
 // Globals
 
 RecRawStatBlock *cache_rsb = NULL;
@@ -90,6 +93,17 @@ Cache *theStreamCache = 0;
 Cache *theCache = 0;
 CacheDisk **gdisks = NULL;
 int gndisks = 0;
+#ifdef SSD_CACHE
+CacheDisk **g_ssd_disks = NULL;
+int gn_ssd_disks = 0;
+int good_ssd_disks = 0;
+uint64_t total_cache_size = 0;
+uint64_t num_call_trans_ssd = 0;
+uint64_t num_transed_ssd = 0;
+uint64_t size_trans_alloced = 0;
+uint64_t size_trans_freed = 0;
+uint64_t num_transistor_in_ssd = 0;
+#endif
 static volatile int initialize_disk = 0;
 Cache *caches[NUM_CACHE_FRAG_TYPES] = { 0 };
 CacheSync *cacheDirSync = 0;
@@ -108,6 +122,9 @@ ClassAllocator<CacheVC> cacheVConnectionAllocator("cacheVConnection");
 ClassAllocator<EvacuationBlock> evacuationBlockAllocator("evacuationBlock");
 ClassAllocator<CacheRemoveCont> cacheRemoveContAllocator("cacheRemoveCont");
 ClassAllocator<EvacuationKey> evacuationKeyAllocator("evacuationKey");
+#ifdef SSD_CACHE
+ClassAllocator<MigrateToSSD> migrateToSSDAllocator("migrateToSSD");
+#endif
 int CacheVC::size_to_init = -1;
 CacheKey zero_key(0, 0);
 
@@ -155,6 +172,7 @@ int cplist_reconfigure();
 static int create_volume(int volume_number, off_t size_in_blocks, int scheme, CacheVol *cp);
 static void rebuild_host_table(Cache *cache);
 void register_cache_stats(RecRawStatBlock *rsb, const char *prefix);
+
 
 Queue<CacheVol> cp_list;
 int cp_list_len = 0;
@@ -402,11 +420,11 @@ CacheVC::set_http_info(CacheHTTPInfo *ainfo)
   if (enable_cache_empty_http_doc) {
     MIMEField *field = ainfo->m_alt->m_response_hdr.
       field_find(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
-    if (field && !field->value_get_int64()) 
+    if (field && !field->value_get_int64())
       f.force_empty = 1;
     else
       f.force_empty = 0;
-  } else 
+  } else
     f.force_empty = 0;
   alternate.copy_shallow(ainfo);
   ainfo->clear();
@@ -457,6 +475,9 @@ Vol::begin_read(CacheVC *cont)
 #endif
   // no need for evacuation as the entire document is already in memory
   if (cont->f.single_fragment)
+    return 0;
+  ink_assert(!dir_inssd(&cont->earliest_dir));
+  if (dir_inssd(&cont->earliest_dir))
     return 0;
   int i = dir_evac_bucket(&cont->earliest_dir);
   EvacuationBlock *b;
@@ -529,7 +550,96 @@ CacheProcessor::start_internal(int flags)
   int i;
   start_done = 0;
   int diskok = 1;
+  Span *sd;
 
+#ifdef SSD_CACHE
+  gn_ssd_disks = theCacheStore.n_ssd_disks;
+  g_ssd_disks = (CacheDisk **) ats_malloc(gn_ssd_disks * sizeof(CacheDisk *));
+
+  gn_ssd_disks = 0;
+
+  for (i = 0; i < theCacheStore.n_ssd_disks; i++) {
+    sd = theCacheStore.ssd_disk[i];
+    char path[PATH_MAX];
+    int opts = O_RDWR;
+    ink_strlcpy(path, sd->pathname, sizeof(path));
+    if (!sd->file_pathname) {
+#if !defined(_WIN32)
+      if (config_volumes.num_http_volumes && config_volumes.num_stream_volumes) {
+        Warning(
+            "It is suggested that you use raw disks if streaming and http are in the same cache");
+      }
+#endif
+      ink_strlcat(path, "/cache.db", sizeof(path));
+      opts |= O_CREAT;
+    }
+    opts |= _O_ATTRIB_OVERLAPPED;
+#ifdef O_DIRECT
+    opts |= O_DIRECT;
+#endif
+#ifdef O_DSYNC
+    opts |= O_DSYNC;
+#endif
+
+    int fd = open(path, opts, 0644);
+    int blocks = sd->blocks;
+    if (fd > 0) {
+#if defined (_WIN32)
+      aio_completion_port.register_handle((void *) fd, 0);
+#endif
+      if (!sd->file_pathname) {
+        if (ftruncate(fd, ((uint64_t) blocks) * STORE_BLOCK_SIZE) < 0) {
+          Warning("unable to truncate cache file '%s' to %d blocks", path,
+              blocks);
+          diskok = 0;
+#if defined(_WIN32)
+          /* We can do a specific check for FAT32 systems on NT,
+           * to print a specific warning */
+          if ((((uint64_t) blocks) * STORE_BLOCK_SIZE) > (1 << 32)) {
+            Warning("If you are using a FAT32 file system, please ensure that cachesize"
+                "specified in storage.config, does not exceed 4GB!. ");
+          }
+#endif
+        }
+      }
+      if (diskok) {
+        CacheDisk *disk = NEW(new CacheDisk());
+        Debug("cache_hosting", "ssd Disk: %d, blocks: %d", gn_ssd_disks, blocks);
+        int sector_size = sd->hw_sector_size;
+        if (sector_size < cache_config_force_sector_size)
+          sector_size = cache_config_force_sector_size;
+        if (sd->hw_sector_size <= 0 || sector_size > STORE_BLOCK_SIZE) {
+          Warning("bad hardware sector size %d, resetting to %d", sector_size,
+              STORE_BLOCK_SIZE);
+          sector_size = STORE_BLOCK_SIZE;
+        }
+        off_t
+            skip =
+                ROUND_TO_STORE_BLOCK((sd->offset * STORE_BLOCK_SIZE < START_POS ? START_POS + sd->alignment : sd->offset * STORE_BLOCK_SIZE));
+        blocks = blocks - (skip >> STORE_BLOCK_SHIFT);
+        disk->path = ats_strdup(path);
+        disk->hw_sector_size = sector_size;
+        disk->fd = fd;
+        disk->skip = skip;
+        disk->start = skip;
+        /* we can't use fractions of store blocks. */
+        disk->len = blocks;
+        disk->io.aiocb.aio_fildes = fd;
+        disk->io.aiocb.aio_reqprio = 0;
+        disk->io.action = disk;
+        disk->io.thread = AIO_CALLBACK_THREAD_ANY;
+        g_ssd_disks[gn_ssd_disks++] = disk;
+      }
+    } else
+      Warning("cache unable to open '%s': %s", path, strerror(errno));
+  }
+
+  if (gn_ssd_disks == 0) {
+    Warning("unable to open cache disk(s): SSD Cache Disabled\n");
+  }
+  good_ssd_disks = gn_ssd_disks;
+#endif
+  diskok = 1;
   /* read the config file and create the data structures corresponding
      to the file */
   gndisks = theCacheStore.n_disks;
@@ -537,8 +647,13 @@ CacheProcessor::start_internal(int flags)
 
   gndisks = 0;
   ink_aio_set_callback(new AIO_Callback_handler());
-  Span *sd;
+
   config_volumes.read_config_file();
+
+  total_cache_size = 0;
+  for (i = 0; i < theCacheStore.n_disks; i++)
+    total_cache_size += theCacheStore.disk[i]->blocks;
+
   for (i = 0; i < theCacheStore.n_disks; i++) {
     sd = theCacheStore.disk[i];
     char path[PATH_NAME_MAX];
@@ -718,10 +833,10 @@ CacheProcessor::cacheInitialized()
   int cache_init_ok = 0;
   /* allocate ram size in proportion to the disk space the
      volume accupies */
-  int64_t total_size = 0;               // count in HTTP & MIXT
-  uint64_t total_cache_bytes = 0;       // bytes that can used in total_size
-  uint64_t total_direntries = 0;        // all the direntries in the cache
-  uint64_t used_direntries = 0;         //   and used
+  int64_t total_size = 0;
+  uint64_t total_cache_bytes = 0;
+  uint64_t total_direntries = 0;
+  uint64_t used_direntries = 0;
   uint64_t vol_total_cache_bytes = 0;
   uint64_t vol_total_direntries = 0;
   uint64_t vol_used_direntries = 0;
@@ -785,6 +900,9 @@ CacheProcessor::cacheInitialized()
         for (i = 0; i < gnvol; i++) {
           vol = gvol[i];
           gvol[i]->ram_cache->init(vol_dirlen(vol), vol);
+#ifdef SSD_CACHE
+          gvol[i]->history.init(1<<20, 2097143);
+#endif
           ram_cache_bytes += vol_dirlen(gvol[i]);
           Debug("cache_init", "CacheProcessor::cacheInitialized - ram_cache_bytes = %" PRId64 " = %" PRId64 "Mb",
                 ram_cache_bytes, ram_cache_bytes / (1024 * 1024));
@@ -828,6 +946,9 @@ CacheProcessor::cacheInitialized()
 
         for (i = 0; i < gnvol; i++) {
           vol = gvol[i];
+#ifdef SSD_CACHE
+          gvol[i]->history.init(1<<20, 2097143);
+#endif
           double factor;
           if (gvol[i]->cache == theCache) {
             factor = (double) (int64_t) (gvol[i]->len >> STORE_BLOCK_SHIFT) / (int64_t) theCache->cache_size;
@@ -1071,6 +1192,19 @@ Vol::init(char *s, off_t blocks, off_t dir_skip, bool clear)
     Note("clearing cache directory '%s'", hash_id);
     return clear_dir();
   }
+#ifdef SSD_CACHE
+  num_ssd_vols = good_ssd_disks;
+  ink_assert(num_ssd_vols >= 0 && num_ssd_vols <= 8);
+  for (int i = 0; i < num_ssd_vols; i++) {
+    double r = (double) blocks / total_cache_size;
+    off_t vlen = off_t (r * g_ssd_disks[i]->len * STORE_BLOCK_SIZE);
+    vlen = (vlen / STORE_BLOCK_SIZE) * STORE_BLOCK_SIZE;
+    off_t start = g_ssd_disks[i]->skip;
+    ssd_vols[i].init(start, vlen, g_ssd_disks[i], this);
+    g_ssd_disks[i]->skip += vlen;
+    ink_assert(ssd_vols[i].start + ssd_vols[i].len <= g_ssd_disks[i]->len * STORE_BLOCK_SIZE);
+  }
+#endif
 
   init_info = new VolInitInfo();
   int footerlen = ROUND_TO_STORE_BLOCK(sizeof(VolHeaderFooter));
@@ -1149,8 +1283,12 @@ Vol::handle_dir_read(int event, void *data)
     return EVENT_DONE;
   }
   CHECK_DIR(this);
+#ifdef SSD_CACHE
+  clear_ssd_dir(this);
+#endif
   sector_size = header->sector_size;
   SET_HANDLER(&Vol::handle_recover_from_data);
+
   return handle_recover_from_data(EVENT_IMMEDIATE, 0);
 }
 
@@ -1669,6 +1807,28 @@ AIO_Callback_handler::handle_disk_failure(int event, void *data) {
   int disk_no = 0;
   int good_disks = 0;
   AIOCallback *cb = (AIOCallback *) data;
+#ifdef SSD_CACHE
+  for (; disk_no < gn_ssd_disks; disk_no++) {
+    CacheDisk *d = g_ssd_disks[disk_no];
+
+    if (d->fd == cb->aiocb.aio_fildes) {
+      d->num_errors++;
+      if (!DISK_BAD(d)) {
+        char message[128];
+        snprintf(message, sizeof(message), "Error accessing Disk %s", d->path);
+        Warning("%s", message);
+        IOCORE_SignalManager(REC_SIGNAL_CACHE_WARNING, message);
+      } else if (!DISK_BAD_SIGNALLED(d)) {
+        char message[128];
+        snprintf(message, sizeof(message),
+            "too many errors accessing disk %s: declaring disk bad", d->path);
+        Warning("%s", message);
+        IOCORE_SignalManager(REC_SIGNAL_CACHE_ERROR, message);
+        good_ssd_disks--;
+      }
+    }
+  }
+#endif
   for (; disk_no < gndisks; disk_no++) {
     CacheDisk *d = gdisks[disk_no];
 
@@ -1860,6 +2020,8 @@ CacheVC::handleReadDone(int event, Event *e) {
   else
     if (is_io_in_progress())
       return EVENT_CONT;
+  int okay = 0;
+  Doc *doc;
   {
     MUTEX_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock)
@@ -1869,6 +2031,7 @@ CacheVC::handleReadDone(int event, Event *e) {
         Debug("cache_disk_error", "Read error on disk %s\n \
 	    read range : [%" PRIu64 " - %" PRIu64 " bytes]  [%" PRIu64 " - %" PRIu64 " blocks] \n", vol->hash_id, io.aiocb.aio_offset, io.aiocb.aio_offset + io.aiocb.aio_nbytes, io.aiocb.aio_offset / 512, (io.aiocb.aio_offset + io.aiocb.aio_nbytes) / 512);
       }
+      okay = 0;
       goto Ldone;
     }
 
@@ -1885,11 +2048,11 @@ CacheVC::handleReadDone(int event, Event *e) {
       ink_assert(!memcmp(((Doc *) buf->data())->data(), x, ib - (x - xx)));
     }
 #endif
-    Doc *doc = (Doc *) buf->data();
+    doc = (Doc *) buf->data();
     // put into ram cache?
     if (io.ok() &&
         ((doc->first_key == *read_key) || (doc->key == *read_key) || STORE_COLLISION) && doc->magic == DOC_MAGIC) {
-      int okay = 1;
+      okay = 1;
       if (!f.doc_from_ram_cache)
         f.not_from_ram_cache = 1;
       if (cache_config_enable_checksum && doc->checksum != DOC_NO_CHECKSUM) {
@@ -1906,6 +2069,55 @@ CacheVC::handleReadDone(int event, Event *e) {
           okay = 0;
         }
       }
+#ifdef SSD_CACHE
+    ink_debug_assert(vol->num_ssd_vols >= good_ssd_disks);
+    if (mts && !f.doc_from_ram_cache) {
+      int indx;
+      do {
+        indx = vol->ssd_index++ % vol->num_ssd_vols;
+      }while (good_ssd_disks > 0 && DISK_BAD(vol->ssd_vols[indx].disk));
+
+      if (good_ssd_disks) {
+        ++num_call_trans_ssd;
+        if (num_call_trans_ssd % 1000 == 0)
+          Debug("trans_ssd", "to trans: %" PRId64 ", transed: %" PRId64 ". allocd: %" PRId64 ", freed: %" PRId64 ", trans_hot: %" PRId64 "", num_call_trans_ssd,
+           num_transed_ssd, size_trans_alloced, size_trans_freed, num_transistor_in_ssd);
+
+        if (f.write_into_ssd) {
+          mts->ssd_vol = ssd_vol = &vol->ssd_vols[indx];
+          mts->agg_len = ssd_vol->round_to_approx_size(doc->len);
+          if (vol->sector_size != ssd_vol->sector_size) {
+            dir_set_approx_size(&mts->dir, mts->agg_len);
+          }
+        }
+        if (f.transistor) {
+          mts->ssd_vol = ssd_vol;
+          mts->agg_len = ssd_vol->round_to_approx_size(doc->len);
+          ink_assert(mts->agg_len == dir_approx_size(&mts->dir));
+        }
+
+        if (!ssd_vol->is_io_in_progress()) {
+          mts->buf = buf;
+          mts->copy = false;
+          ssd_vol->agg.enqueue(mts);
+          ssd_vol->aggWrite(event, e);
+        } else {
+          if ((int64_t)io.aiocb.aio_nbytes > cache_config_ram_cache_cutoff)
+            mts->buf = new_IOBufferData(iobuffer_size_to_index(mts->agg_len, MAX_BUFFER_SIZE_INDEX), MEMALIGNED);
+          else
+            mts->buf = new_IOBufferData(iobuffer_size_to_index(mts->agg_len, MAX_BUFFER_SIZE_INDEX), RAM_ALLOCATED);
+          mts->copy = true;
+          size_trans_alloced += mts->agg_len;
+          memcpy(mts->buf->data(), buf->data(), doc->len);
+          ssd_vol->agg.enqueue(mts);
+        }
+      } else {
+        vol->set_migrate_failed(mts);
+        migrateToSSDAllocator.free(mts);
+      }
+      mts = NULL;
+    }
+#endif
       bool http_copy_hdr = false;
 #ifdef HTTP_CACHE
       http_copy_hdr = cache_config_ram_cache_compress && !f.doc_from_ram_cache &&
@@ -1928,15 +2140,22 @@ CacheVC::handleReadDone(int event, Event *e) {
                         || (doc_len && (int64_t)doc_len < cache_config_ram_cache_cutoff)
                         || !cache_config_ram_cache_cutoff);
         if (cutoff_check && !f.doc_from_ram_cache) {
-          uint64_t o = dir_offset(&dir);
-          vol->ram_cache->put(read_key, buf, doc->len, http_copy_hdr, (uint32_t)(o >> 32), (uint32_t)o);
+          if (!f.ram_fixup) {
+            uint64_t o = dir_get_offset(&dir);
+            vol->ram_cache->put(read_key, buf, doc->len, http_copy_hdr, (uint32_t)(o >> 32), (uint32_t)o);
+          } else {
+            vol->ram_cache->put(read_key, buf, doc->len, http_copy_hdr, (uint32_t)(dir_off>>32), (uint32_t)dir_off);
+          }
         }
         if (!doc_len) {
           // keep a pointer to it. In case the state machine decides to
           // update this document, we don't have to read it back in memory
           // again
           vol->first_fragment_key = *read_key;
-          vol->first_fragment_offset = dir_offset(&dir);
+          if (!f.ram_fixup)
+            vol->first_fragment_offset = dir_get_offset(&dir);
+          else
+            vol->first_fragment_offset = dir_off;
           vol->first_fragment_data = buf;
         }
       }                           // end VIO::READ check
@@ -1946,8 +2165,15 @@ CacheVC::handleReadDone(int event, Event *e) {
         unmarshal_helper(doc, buf, okay);
 #endif
     }                             // end io.ok() check
-  }
 Ldone:
+#ifdef SSD_CACHE
+    if (mts) {
+      vol->set_migrate_failed(mts);
+      migrateToSSDAllocator.free(mts);
+      mts = NULL;
+    }
+#endif
+  }
   POP_HANDLER;
   return handleEvent(AIO_EVENT_DONE, 0);
 }
@@ -1964,15 +2190,55 @@ CacheVC::handleRead(int event, Event *e)
 
   // check ram cache
   ink_debug_assert(vol->mutex->thread_holding == this_ethread());
-  if (vol->ram_cache->get(read_key, &buf, 0, dir_offset(&dir)))
+  uint64_t o = dir_get_offset(&dir);
+#ifdef SSD_CACHE
+  if(f.read_from_ssd && mts && mts->rewrite)
+    goto LssdRead;
+#endif
+  if (vol->ram_cache->get(read_key, &buf, (uint32_t)(o >> 32), (uint32_t)o))
     goto LramHit;
 
   // check if it was read in the last open_read call
-  if (*read_key == vol->first_fragment_key && dir_offset(&dir) == vol->first_fragment_offset) {
+  if (*read_key == vol->first_fragment_key && dir_get_offset(&dir) == vol->first_fragment_offset) {
     buf = vol->first_fragment_data;
     goto LmemHit;
   }
+#ifdef SSD_CACHE
+LssdRead:
+  if (f.read_from_ssd) {
+    if (dir_agg_buf_valid(ssd_vol, &dir)) {
+      int ssd_agg_offset = vol_offset(ssd_vol, &dir) - ssd_vol->header->write_pos;
+      if ((int64_t)io.aiocb.aio_nbytes > cache_config_ram_cache_cutoff)
+        buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), MEMALIGNED);
+      else
+        buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), RAM_ALLOCATED);
+      ink_assert((ssd_agg_offset + io.aiocb.aio_nbytes) <= (unsigned) ssd_vol->agg_buf_pos);
+      char *doc = buf->data();
+      char *agg = ssd_vol->agg_buffer + ssd_agg_offset;
+      memcpy(doc, agg, io.aiocb.aio_nbytes);
+      io.aio_result = io.aiocb.aio_nbytes;
+      SET_HANDLER(&CacheVC::handleReadDone);
+      return EVENT_RETURN;
+    }
 
+    io.aiocb.aio_fildes = ssd_vol->fd;
+    io.aiocb.aio_offset = vol_offset(ssd_vol, &dir);
+    if ((off_t)(io.aiocb.aio_offset + io.aiocb.aio_nbytes) > (off_t)(ssd_vol->skip + ssd_vol->len))
+      io.aiocb.aio_nbytes = ssd_vol->skip + ssd_vol->len - io.aiocb.aio_offset;
+    if ((int64_t)io.aiocb.aio_nbytes > cache_config_ram_cache_cutoff)
+      buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), MEMALIGNED);
+    else
+      buf = new_IOBufferData(iobuffer_size_to_index(io.aiocb.aio_nbytes, MAX_BUFFER_SIZE_INDEX), RAM_ALLOCATED);
+    io.aiocb.aio_buf = buf->data();
+    io.action = this;
+    io.thread = mutex->thread_holding->tt == DEDICATED ? AIO_CALLBACK_THREAD_ANY : mutex->thread_holding;
+
+    SET_HANDLER(&CacheVC::handleReadDone);
+    ink_assert(ink_aio_read(&io) >= 0);
+    CACHE_DEBUG_INCREMENT_DYN_STAT(cache_pread_count_stat);
+    return EVENT_CONT;
+  }
+#endif
   // see if its in the aggregation buffer
   if (dir_agg_buf_valid(vol, &dir)) {
     int agg_offset = vol_offset(vol, &dir) - vol->header->write_pos;
@@ -2017,6 +2283,11 @@ LramHit: {
 LmemHit:
   f.doc_from_ram_cache = true;
   io.aio_result = io.aiocb.aio_nbytes;
+  if (mts) { // for hit from memory, not migrate
+    vol->set_migrate_failed(mts);
+    migrateToSSDAllocator.free(mts);
+    mts = NULL;
+  }
   POP_HANDLER;
   return EVENT_RETURN; // allow the caller to release the volume lock
 }
@@ -2120,6 +2391,13 @@ CacheVC::removeEvent(int event, Event *e)
   Lcollision:
     // check for collision
     if (dir_probe(&key, vol, &dir, &last_collision) > 0) {
+#ifdef SSD_CACHE
+      if (dir_inssd(&dir)) {
+        dir_delete(&key, vol, &dir);
+        last_collision = NULL;
+        goto Lcollision;
+      }
+#endif
       int ret = do_read_call(&key);
       if (ret == EVENT_RETURN)
         goto Lread;
@@ -2613,6 +2891,11 @@ register_cache_stats(RecRawStatBlock *rsb, const char *prefix)
   REG_INT("read.active", cache_read_active_stat);
   REG_INT("read.success", cache_read_success_stat);
   REG_INT("read.failure", cache_read_failure_stat);
+#ifdef SSD_CACHE
+  REG_INT("ssd.read.success", cache_ssd_read_success_stat);
+  REG_INT("sas.read.success", cache_sas_read_success_stat);
+  REG_INT("ram.read.success", cache_ram_read_success_stat);
+#endif
   REG_INT("write.active", cache_write_active_stat);
   REG_INT("write.success", cache_write_success_stat);
   REG_INT("write.failure", cache_write_failure_stat);
@@ -2730,6 +3013,13 @@ ink_cache_init(ModuleVersion v)
   IOCORE_EstablishStaticConfigInt32(url_hash_method, "proxy.config.cache.url_hash_method");
   Debug("cache_init", "proxy.config.cache.url_hash_method = %d", url_hash_method);
   IOCORE_EstablishStaticConfigInt32(enable_cache_empty_http_doc, "proxy.config.cache.enable_empty_http_doc");
+  Debug("cache_init", "proxy.config.cache.enable_empty_http_doc = %d", enable_cache_empty_http_doc);
+#ifdef SSD_CACHE
+  IOCORE_EstablishStaticConfigInt32(migrate_threshold, "proxy.config.cache.ssd.migrate_threshold");
+  Debug("cache_init", "proxy.config.cache.migrate_threshold = %d", migrate_threshold);
+  IOCORE_EstablishStaticConfigInteger(transistor_range_threshold, "proxy.config.cache.ssd.transistor_range_threshold");
+  Debug("cache_init", "proxy.config.cache.ssd.transistor_range_threshold = %" PRId64 "", transistor_range_threshold);
+#endif
 #endif
 
   IOCORE_EstablishStaticConfigInt32(cache_config_max_disk_errors, "proxy.config.cache.max_disk_errors");
@@ -2768,6 +3058,13 @@ ink_cache_init(ModuleVersion v)
     Warning("no cache disks specified in %s: cache disabled\n", p);
     //exit(1);
   }
+#ifdef SSD_CACHE
+  else {
+    theCacheStore.read_ssd_config();
+    if (theCacheStore.n_ssd_disks == 0)
+      Warning("no ssd disks specified in %s: \n", "proxy.config.cache.ssd.storage");
+  }
+#endif
 }
 
 #ifdef NON_MODULAR

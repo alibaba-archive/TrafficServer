@@ -34,14 +34,12 @@ Store theStore;
 //
 Ptr<ProxyMutex> tmp_p;
 Store::Store():n_disks(0), disk(NULL)
+#ifdef SSD_CACHE
+  , n_ssd_disks(0), ssd_disk(NULL)
+#endif
 {
 }
 
-int
-initialize_store()
-{
-  return theStore.read_config()? -1 : 0;
-}
 
 void
 Store::add(Span * ds)
@@ -348,12 +346,57 @@ Store::read_config(int fd)
     }
     sort();
   }
-
-Lfail:;
   return NULL;
+Lfail:
   return err;
 }
 
+#ifdef SSD_CACHE
+const char *
+Store::read_ssd_config() {
+  char p[PATH_NAME_MAX + 1];
+  Span *sd = NULL;
+  Span *ns;
+  int ssd_store = 0;
+  IOCORE_ReadConfigString(p, "proxy.config.cache.ssd.storage", PATH_NAME_MAX);
+
+  char *n = p;
+  int sz = strlen(p);
+
+  const char *err = NULL;
+  for (int len = 0; n < p + sz; n += len + 1) {
+    char *e = strpbrk(n, " \t\n");
+    len = e ? e - n : strlen(n);
+    n[len] = '\0';
+    ns = NEW(new Span);
+    if ((err = ns->init(n, -1))) {
+      char buf[4096];
+      snprintf(buf, sizeof(buf), "could not initialize storage \"%s\" [%s]", n,
+          err);
+      IOCORE_SignalWarning(REC_SIGNAL_SYSTEM_ERROR, buf);
+      Debug("cache_init", "Store::read_ssd_config - %s", buf);
+      delete ns;
+      continue;
+    }
+    ns->link.next = sd;
+    sd = ns;
+    ssd_store++;
+  }
+
+  n_ssd_disks = ssd_store;
+  ssd_disk = (Span **) ats_malloc(ssd_store * sizeof(Span *));
+  {
+    int i = 0;
+    while (sd) {
+      ns = sd;
+      sd = sd->link.next;
+      ns->link.next = NULL;
+      ssd_disk[i++] = ns;
+    }
+  }
+  return NULL;
+}
+#endif
 int
 Store::write_config_data(int fd)
 {
@@ -1163,7 +1206,7 @@ Store::clear(char *filename, bool clear_dirs)
       if (fd < 0)
         return -1;
       for (int b = 0; d->blocks; b++)
-        if (socketManager.pwrite(fd, z, STORE_BLOCK_SIZE, d->offset + (b * STORE_BLOCK_SIZE)) < 0) {
+        if (socketManager.pwrite(fd, z, STORE_BLOCK_SIZE, ((d->offset + b) * STORE_BLOCK_SIZE)) < 0) {
           close(fd);
           return -1;
         }

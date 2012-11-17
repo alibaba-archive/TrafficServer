@@ -27,6 +27,9 @@
 #include "HttpCacheSM.h"      //Added to get the scope of HttpCacheSM object.
 #endif
 
+#ifdef SSD_CACHE
+extern int64_t cache_config_ram_cache_cutoff;
+#endif
 #define READ_WHILE_WRITER 1
 
 Action *
@@ -564,13 +567,26 @@ CacheVC::openReadReadDone(int event, Event * e)
           Warning("Middle: Doc checksum does not match for %s", key.string(tmpstring));
         else
           Warning("Middle: Doc magic does not match for %s", key.string(tmpstring));
+#ifdef SSD_CACHE
+        if (dir_inssd(&dir)) {
+          dir_delete(&key, vol, &dir);
+          goto Lread;
+        }
+#endif
         goto Lerror;
       }
       if (doc->key == key)
         goto LreadMain;
+#ifdef SSD_CACHE
+      else if (dir_inssd(&dir)) {
+          dir_delete(&key, vol, &dir);
+          last_collision = NULL;
+        }
+#endif
     }
-    if (last_collision && dir_offset(&dir) != dir_offset(last_collision))
+    if (last_collision && dir_get_offset(&dir) != dir_get_offset(last_collision))
       last_collision = 0;       // object has been/is being overwritten
+Lread:
     if (dir_probe(&key, vol, &dir, &last_collision)) {
       int ret = do_read_call(&key);
       if (ret == EVENT_RETURN)
@@ -580,7 +596,7 @@ CacheVC::openReadReadDone(int event, Event * e)
       if (writer_done()) {
         last_collision = NULL;
         while (dir_probe(&earliest_key, vol, &dir, &last_collision)) {
-          if (dir_offset(&dir) == dir_offset(&earliest_dir)) {
+          if (dir_get_offset(&dir) == dir_get_offset(&earliest_dir)) {
             DDebug("cache_read_agg", "%p: key: %X ReadRead complete: %d",
                   this, first_key.word(1), (int)vio.ndone);
             doc_len = vio.ndone;
@@ -753,6 +769,11 @@ CacheVC::openReadStartEarliest(int event, Event * e)
 
   int ret = 0;
   Doc *doc = NULL;
+#ifdef SSD_CACHE
+  bool okay = false;
+  bool read_from_ssd = false;
+  bool remove_dir = false;
+#endif
   cancel_trigger();
   set_io_not_in_progress();
   if (_action.cancelled)
@@ -763,6 +784,9 @@ CacheVC::openReadStartEarliest(int event, Event * e)
       VC_SCHED_LOCK_RETRY();
     if (!buf)
       goto Lread;
+#ifdef SSD_CACHE
+    read_from_ssd = dir_inssd(&dir);
+#endif
     if (!io.ok())
       goto Ldone;
     // an object needs to be outside the aggregation window in order to be
@@ -784,17 +808,20 @@ CacheVC::openReadStartEarliest(int event, Event * e)
       else
         Warning("Earliest : Doc magic does not match for %s", key.string(tmpstring));
       // remove the dir entry
-      dir_delete(&key, vol, &dir);
-      // try going through the directory entries again
-      // in case the dir entry we deleted doesnt correspond
-      // to the key we are looking for. This is possible
-      // because of directory collisions
-      last_collision = NULL;
+      remove_dir = true;
       goto Lread;
     }
     if (!(doc->key == key)) // collisiion
       goto Lread;
     // success
+#ifdef SSD_CACHE
+    okay = true;
+    if (read_from_ssd) {
+      ink_assert(dir_inssd(&dir));
+      goto Lread;
+    }
+Lcont:
+#endif
     earliest_key = key;
     doc_pos = doc->prefix_len();
     next_CacheKey(&key, &doc->key);
@@ -809,9 +836,26 @@ CacheVC::openReadStartEarliest(int event, Event * e)
 #endif
     goto Lsuccess;
 Lread:
+#ifdef SSD_CACHE
+    if ((read_from_ssd && !okay) || remove_dir) {
+      dir_delete(&key, vol, &dir);
+      last_collision = NULL;
+      remove_dir = false;
+    }
+#endif
     if (dir_probe(&key, vol, &earliest_dir, &last_collision) ||
         dir_lookaside_probe(&key, vol, &earliest_dir, NULL))
     {
+#ifdef SSD_CACHE
+      if (read_from_ssd) {
+        if (dir_inssd(&earliest_dir)) {
+          dir = earliest_dir;
+          remove_dir = true;
+          goto Lread;
+        } else if (okay)
+          goto Lcont;
+      }
+#endif
       dir = earliest_dir;
       if ((ret = do_read_call(&key)) == EVENT_RETURN)
         goto Lcallreturn;
@@ -833,7 +877,12 @@ Lread:
           // finds that the directory entry has been overwritten
           // (cannot assert on the return value)
           dir_delete(&first_key, vol, &first_dir);
-        } else {
+        }
+#ifdef SSD_CACHE
+        else if (dir_inssd(&first_dir))
+          dir_delete(&first_key, vol, &first_dir);
+#endif
+        else {
           buf = NULL;
           last_collision = NULL;
           write_len = 0;
@@ -974,6 +1023,12 @@ CacheVC::openReadStartHead(int event, Event * e)
       // a directory entry which is nolonger valid may have been overwritten
       if (!dir_valid(vol, &dir))
         last_collision = NULL;
+#ifdef SSD_CACHE
+      if (dir_inssd(&dir)) {
+        dir_delete(&key, vol, &dir);
+        last_collision = NULL;
+      }
+#endif
       goto Lread;
     }
     doc = (Doc *) buf->data();
@@ -995,8 +1050,15 @@ CacheVC::openReadStartHead(int event, Event * e)
       last_collision = NULL;
       goto Lread;
     }
-    if (!(doc->first_key == key))
+    if (!(doc->first_key == key)) {
+#ifdef SSD_CACHE
+      if (dir_inssd(&dir)) {
+        dir_delete(&key, vol, &dir);
+        last_collision = NULL;
+      }
+#endif
       goto Lread;
+    }
     if (f.lookup)
       goto Lookup;
     earliest_dir = dir;
@@ -1061,7 +1123,7 @@ CacheVC::openReadStartHead(int event, Event * e)
       goto Learliest;
 
 #ifdef HIT_EVACUATE
-    if (vol->within_hit_evacuate_window(&dir) &&
+    if (!f.read_from_ssd && vol->within_hit_evacuate_window(&dir) &&
         (!cache_config_hit_evacuate_size_limit || doc_len <= (uint64_t)cache_config_hit_evacuate_size_limit)) {
       DDebug("cache_hit_evac", "dir: %"PRId64", write: %"PRId64", phase: %d",
             dir_offset(&dir), offset_to_vol_offset(vol, vol->header->write_pos), vol->header->phase);

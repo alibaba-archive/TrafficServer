@@ -109,7 +109,8 @@ struct CacheDisk: public Continuation
       path(NULL), header_len(0), len(0), start(0), skip(0),
       num_usable_blocks(0), fd(-1), free_space(0), wasted_space(0),
       disk_vols(NULL), free_blocks(NULL), num_errors(0), cleared(0)
-  { }
+  {
+  }
 
    ~CacheDisk();
 
