@@ -1,0 +1,13 @@
+# Config file for /etc/init.d/trafficserver
+#
+# Traffic Cop args:
+# default is empty 
+#TC_DAEMON_ARGS=''
+#
+# Traffic Manager args:
+# default is empty 
+#TM_DAEMON_ARGS=''
+#
+# Traffic Server args:
+# default is empty 
+#TS_DAEMON_ARGS=''
