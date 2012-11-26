@@ -69,24 +69,20 @@ void
 net_activity(UnixNetVConnection *vc, EThread *thread)
 {
   (void) thread;
-#ifdef INACTIVITY_TIMEOUT
-  if (vc->inactivity_timeout && vc->inactivity_timeout_in && vc->inactivity_timeout->ethread == thread)
+  ink_debug_assert(thread == this_ethread());
+  if (vc->inactivity_timeout && vc->inactivity_timeout_in && vc->inactivity_timeout->ethread == this_ethread())
     vc->inactivity_timeout->schedule_in(vc->inactivity_timeout_in);
   else {
     if (vc->inactivity_timeout)
-      vc->inactivity_timeout->cancel_action();
+      vc->inactivity_timeout->cancel_action(vc);
     if (vc->inactivity_timeout_in) {
-      vc->inactivity_timeout = vc->thread->schedule_in_local(vc, vc->inactivity_timeout_in);
+      if (vc->thread == this_ethread())
+        vc->inactivity_timeout = vc->thread->schedule_in_local(vc, vc->inactivity_timeout_in);
+      else
+        vc->inactivity_timeout = vc->thread->schedule_in(vc, vc->inactivity_timeout_in);
     } else
       vc->inactivity_timeout = 0;
   }
-#else
-  if (vc->inactivity_timeout_in)
-    vc->next_inactivity_timeout_at = ink_get_hrtime() + vc->inactivity_timeout_in;
-  else
-    vc->next_inactivity_timeout_at = 0;
-#endif
-
 }
 
 //
@@ -99,14 +95,10 @@ close_UnixNetVConnection(UnixNetVConnection *vc, EThread *t)
   vc->cancel_OOB();
   vc->ep.stop();
   vc->con.close();
-#ifdef INACTIVITY_TIMEOUT
   if (vc->inactivity_timeout) {
     vc->inactivity_timeout->cancel_action(vc);
     vc->inactivity_timeout = NULL;
   }
-#else
-  vc->next_inactivity_timeout_at = 0;
-#endif
   vc->inactivity_timeout_in = 0;
   if (vc->active_timeout) {
     vc->active_timeout->cancel_action(vc);
@@ -114,7 +106,6 @@ close_UnixNetVConnection(UnixNetVConnection *vc, EThread *t)
   }
   vc->active_timeout_in = 0;
   nh->open_list.remove(vc);
-  nh->cop_list.remove(vc);
   nh->read_ready_list.remove(vc);
   nh->write_ready_list.remove(vc);
   if (vc->read.in_enabled_list) {
@@ -779,11 +770,7 @@ UnixNetVConnection::reenable_re(VIO *vio)
 
 UnixNetVConnection::UnixNetVConnection()
   : closed(0), inactivity_timeout_in(0), active_timeout_in(0),
-#ifdef INACTIVITY_TIMEOUT
     inactivity_timeout(NULL),
-#else
-    next_inactivity_timeout_at(0),
-#endif
     active_timeout(NULL), nh(NULL),
     id(0), flags(0), recursion(0), submit_time(0), oob_ptr(0),
     from_accept_thread(false)
@@ -801,17 +788,12 @@ UnixNetVConnection::set_enabled(VIO *vio)
   ink_debug_assert(vio->mutex->thread_holding == this_ethread() && thread);
   ink_assert(!closed);
   STATE_FROM_VIO(vio)->enabled = 1;
-#ifdef INACTIVITY_TIMEOUT
   if (!inactivity_timeout && inactivity_timeout_in) {
-    if (vio->mutex->thread_holding == thread)
+    if (thread == this_ethread())
       inactivity_timeout = thread->schedule_in_local(this, inactivity_timeout_in);
     else
       inactivity_timeout = thread->schedule_in(this, inactivity_timeout_in);
   }
-#else
-  if (!next_inactivity_timeout_at && inactivity_timeout_in)
-    next_inactivity_timeout_at = ink_get_hrtime() + inactivity_timeout_in;
-#endif
 }
 
 void
@@ -993,10 +975,7 @@ UnixNetVConnection::mainEvent(int event, Event *e)
   if (!hlock || !rlock || !wlock ||
       (read.vio.mutex.m_ptr && rlock.m.m_ptr != read.vio.mutex.m_ptr) ||
       (write.vio.mutex.m_ptr && wlock.m.m_ptr != write.vio.mutex.m_ptr)) {
-#ifndef INACTIVITY_TIMEOUT
-    if (e == active_timeout)
-#endif
-      e->schedule_in(NET_RETRY_DELAY);
+    e->schedule_in(NET_RETRY_DELAY);
     return EVENT_CONT;
   }
   if (e->cancelled)
@@ -1011,22 +990,10 @@ UnixNetVConnection::mainEvent(int event, Event *e)
   Event *t = NULL;
   signal_timeout = &t;
 
-#ifdef INACTIVITY_TIMEOUT
   if (e == inactivity_timeout) {
     signal_event = VC_EVENT_INACTIVITY_TIMEOUT;
     signal_timeout = &inactivity_timeout;
   }
-#else
-  if (event == EVENT_IMMEDIATE) {
-    /* BZ 49408 */
-    //ink_debug_assert(inactivity_timeout_in);
-    //ink_debug_assert(next_inactivity_timeout_at < ink_get_hrtime());
-    if (!inactivity_timeout_in || next_inactivity_timeout_at > ink_get_hrtime())
-      return EVENT_CONT;
-    signal_event = VC_EVENT_INACTIVITY_TIMEOUT;
-    signal_timeout_at = &next_inactivity_timeout_at;
-  }
-#endif
   else {
     ink_debug_assert(e == active_timeout);
     signal_event = VC_EVENT_ACTIVE_TIMEOUT;

@@ -34,36 +34,6 @@ ink_hrtime last_transient_accept_error;
 
 extern "C" void fd_reify(struct ev_loop *);
 
-
-#ifndef INACTIVITY_TIMEOUT
-// INKqa10496
-// One Inactivity cop runs on each thread once every second and
-// loops through the list of NetVCs and calls the timeouts
-struct InactivityCop : public Continuation {
-  InactivityCop(ProxyMutex *m):Continuation(m) {
-    SET_HANDLER(&InactivityCop::check_inactivity);
-  }
-  int check_inactivity(int event, Event *e) {
-    (void) event;
-    ink_hrtime now = ink_get_hrtime();
-    NetHandler *nh = get_NetHandler(this_ethread());
-    // Copy the list and use pop() to catch any closes caused by callbacks.
-    forl_LL(UnixNetVConnection, vc, nh->open_list)
-      nh->cop_list.push(vc);
-    while (UnixNetVConnection *vc = nh->cop_list.pop()) {
-      MUTEX_LOCK(lock, vc->mutex, this_ethread());
-      if (vc->closed) {
-        close_UnixNetVConnection(vc, e->ethread);
-        continue;
-      } 
-      if (vc->next_inactivity_timeout_at && vc->next_inactivity_timeout_at < now)
-        vc->handleEvent(EVENT_IMMEDIATE, e);
-    }
-    return 0;
-  }
-};
-#endif
-
 PollCont::PollCont(ProxyMutex *m, int pt):Continuation(m), net_handler(NULL), poll_timeout(pt) {
   pollDescriptor = NEW(new PollDescriptor);
   pollDescriptor->init();
@@ -189,11 +159,6 @@ initialize_thread_for_net(EThread *thread, int thread_index)
   PollDescriptor *pd = pc->pollDescriptor;
 
   thread->schedule_imm(get_NetHandler(thread));
-
-#ifndef INACTIVITY_TIMEOUT
-  InactivityCop *inactivityCop = NEW(new InactivityCop(get_NetHandler(thread)->mutex));
-  thread->schedule_every(inactivityCop, HRTIME_SECONDS(1));
-#endif
 
   thread->signal_hook = net_signal_hook_function;
   thread->ep = (EventIO*)ats_malloc(sizeof(EventIO));
