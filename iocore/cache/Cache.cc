@@ -1284,7 +1284,8 @@ Vol::handle_dir_read(int event, void *data)
   }
   CHECK_DIR(this);
 #ifdef SSD_CACHE
-  clear_ssd_dir(this);
+  if (gn_ssd_disks > 0)
+    clear_ssd_dir(this);
 #endif
   sector_size = header->sector_size;
   SET_HANDLER(&Vol::handle_recover_from_data);
