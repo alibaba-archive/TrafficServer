@@ -92,7 +92,7 @@ PriorityEventQueue::earliest_timeout()
   while (idx < TVR_SIZE && !tv1[idx].head) {
     idx += 2 * inter++;
   }
-  return (last_check_time + 1 + inter) * TV_INTER;
+  return (1 + inter) * TV_INTER;
 }
 
 int 
