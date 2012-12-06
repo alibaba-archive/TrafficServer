@@ -67,9 +67,6 @@ public:
   virtual void release(IOBufferReader * r);
   NetVConnection *get_netvc() const { return client_vc;  };
 
-  virtual void attach_server_session(HttpServerSession * ssession, bool transaction_done = true);
-  HttpServerSession *get_server_session() const { return bound_ss; };
-
   // Used for the cache authenticated HTTP content feature
   HttpServerSession *get_bound_ss();
 
@@ -91,7 +88,6 @@ private:
   HttpClientSession(HttpClientSession &);
 
   int state_keep_alive(int event, void *data);
-  int state_slave_keep_alive(int event, void *data);
   int state_wait_for_close(int event, void *data);
   void set_tcp_init_cwnd();
 
@@ -118,15 +114,12 @@ private:
   bool conn_decrease;
   void *user_args[HTTP_SSN_TXN_MAX_USER_ARG];
 
-  HttpServerSession *bound_ss;
-
   MIOBuffer *read_buffer;
   IOBufferReader *sm_reader;
   HttpSM *current_reader;
   C_Read_State read_state;
 
   VIO *ka_vio;
-  VIO *slave_ka_vio;
 
   Link<HttpClientSession> debug_link;
 

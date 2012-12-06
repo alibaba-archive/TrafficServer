@@ -257,7 +257,6 @@ HttpSessionManager::acquire_session(Continuation *cont, sockaddr const* ip,
                                     const char *hostname, HttpClientSession *ua_session, HttpSM *sm)
 {
   NOWARN_UNUSED(cont);
-  HttpServerSession *to_return = NULL;
 
   //  We compute the mmh for matching the hostname as the last
   //  check for a match between the session the HttpSM is looking
@@ -271,34 +270,6 @@ HttpSessionManager::acquire_session(Continuation *cont, sockaddr const* ip,
   //  of authentication.
   INK_MD5 hostname_hash;
   bool hash_computed = false;
-
-  // First check to see if there is a server session bound
-  //   to the user agent session
-  to_return = ua_session->get_server_session();
-  if (to_return != NULL) {
-    ua_session->attach_server_session(NULL);
-
-    if (ats_ip_addr_eq(&to_return->server_ip.sa, ip) &&
-      ats_ip_port_cast(&to_return->server_ip) == ats_ip_port_cast(ip)
-    ) {
-      if (!hash_computed) {
-        ink_code_MMH((unsigned char *) hostname, strlen(hostname), (unsigned char *) &hostname_hash);
-        hash_computed = true;
-      }
-
-      if (hostname_hash == to_return->hostname_hash) {
-        Debug("http_ss", "[%" PRId64 "] [acquire session] returning attached session ", to_return->con_id);
-        to_return->state = HSS_ACTIVE;
-        sm->attach_server_session(to_return);
-        return HSM_DONE;
-      }
-    }
-    // Release this session back to the main session pool and
-    //   then continue looking for one from the shared pool
-    Debug("http_ss", "[%" PRId64 "] [acquire session] " "session not a match, returning to shared pool", to_return->con_id);
-    to_return->release();
-    to_return = NULL;
-  }
 
   // Now check to see if we have a connection is our
   //  shared connection pool

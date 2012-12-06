@@ -5399,14 +5399,12 @@ TSHttpTxnServerPacketMarkSet(TSHttpTxn txnp, int mark)
   HttpSM *sm = (HttpSM *) txnp;
 
   // change the mark on an active server session
-  if (NULL != sm->ua_session) {
-    HttpServerSession *ssn = sm->ua_session->get_server_session();
-    if (NULL != ssn) {
-      NetVConnection *vc = ssn->get_netvc();
-      if (vc != NULL) {
-        vc->options.packet_mark = (uint32_t)mark;
-        vc->apply_options();
-      }
+  HttpServerSession *ssn = sm->get_server_session();
+  if (NULL != ssn) {
+    NetVConnection *vc = ssn->get_netvc();
+    if (vc != NULL) {
+      vc->options.packet_mark = (uint32_t)mark;
+      vc->apply_options();
     }
   }
 
@@ -5441,14 +5439,12 @@ TSHttpTxnServerPacketTosSet(TSHttpTxn txnp, int tos)
   HttpSM *sm = (HttpSM *) txnp;
 
   // change the tos on an active server session
-  if (NULL != sm->ua_session) {
-    HttpServerSession *ssn = sm->ua_session->get_server_session();
-    if (NULL != ssn) {
-      NetVConnection *vc = ssn->get_netvc();
-      if (vc != NULL) {
-        vc->options.packet_tos = (uint32_t)tos;
-        vc->apply_options();
-      }
+  HttpServerSession *ssn = sm->get_server_session();
+  if (NULL != ssn) {
+    NetVConnection *vc = ssn->get_netvc();
+    if (vc != NULL) {
+      vc->options.packet_tos = (uint32_t)tos;
+      vc->apply_options();
     }
   }
 

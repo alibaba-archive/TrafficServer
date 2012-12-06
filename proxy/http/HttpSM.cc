@@ -2870,20 +2870,9 @@ HttpSM::tunnel_handler_server(int event, HttpTunnelProducer * p)
     server_session->server_trans_stat--;
     HTTP_DECREMENT_DYN_STAT(http_current_server_transactions_stat);
 
-    // If the client is still around, attach the server session
-    // to so the next ka request can use it.  We bind privately to the
-    // client to add some degree of affinity to the system.  However,
-    // we turn off private binding when outbound connections are being
-    // limit since it makes it too expensive to initiate a purge of idle
-    // server keep-alive sessions
-    if (ua_session && t_state.client_info.keep_alive == HTTP_KEEPALIVE &&
-        t_state.http_config_param->server_max_connections <= 0 &&
-        t_state.txn_conf->origin_max_connections <= 0) {
-      ua_session->attach_server_session(server_session);
-    } else {
-      // Release the session back into the shared session pool
-      server_session->release();
-    }
+    // Release the session back into the shared session pool
+    server_session->release();
+    server_session = NULL;
   }
 
   return 0;
@@ -3018,7 +3007,7 @@ HttpSM::tunnel_handler_ua(int event, HttpTunnelConsumer * c)
     c->write_success = true;
     t_state.client_info.abort = HttpTransact::DIDNOT_ABORT;
     if (t_state.client_info.keep_alive == HTTP_KEEPALIVE || t_state.client_info.keep_alive == HTTP_PIPELINE) {
-      if (t_state.www_auth_content != HttpTransact::CACHE_AUTH_SERVE || ua_session->get_bound_ss()) {
+      if (t_state.www_auth_content != HttpTransact::CACHE_AUTH_SERVE) {
         // successful keep-alive
         close_connection = false;
       }
@@ -4217,39 +4206,6 @@ HttpSM::do_http_server_open(bool raw)
       hsm_release_assert(0);
     }
   }
-  // This bug was due to when share_server_sessions is set to 0
-  // and we have keep-alive, we are trying to open a new server session
-  // when we already have an attached server session.
-  else if ((!t_state.txn_conf->share_server_sessions) && (ua_session != NULL)) {
-    HttpServerSession *existing_ss = ua_session->get_server_session();
-
-    if (existing_ss) {
-      // [amc] Is this OK? Should we compare ports? (not done by ats_ip_addr_cmp)
-      if (ats_ip_addr_cmp(&existing_ss->server_ip.sa, &t_state.current.server->addr.sa) == 0) {
-        ua_session->attach_server_session(NULL);
-        existing_ss->state = HSS_ACTIVE;
-        this->attach_server_session(existing_ss);
-        hsm_release_assert(server_session != NULL);
-        handle_http_server_open();
-        return;
-      } else {
-        // As this is in the non-sharing configuration, we want to close
-        // the existing connection and call connect_re to get a new one
-        existing_ss->release();
-        ua_session->attach_server_session(NULL);
-      }
-    }
-  }
-  // Otherwise, we release the existing connection and call connect_re
-  // to get a new one.
-  // ua_session is null when t_state.req_flavor == REQ_FLAVOR_SCHEDULED_UPDATE
-  else if (ua_session != NULL) {
-    HttpServerSession *existing_ss = ua_session->get_server_session();
-    if (existing_ss) {
-      existing_ss->release();
-      ua_session->attach_server_session(NULL);
-    }
-  }
   // Check to see if we have reached the max number of connections.
   // Atomically read the current number of connections and check to see
   // if we have gone above the max allowed.
@@ -4605,10 +4561,9 @@ HttpSM::release_server_session(bool serve_from_cache)
       if (t_state.www_auth_content == HttpTransact::CACHE_AUTH_NONE || serve_from_cache == false)
         server_session->release();
       else {
-        // an authenticated server connection - attach to the local client
         // we are serving from cache for the current transaction
         t_state.www_auth_content = HttpTransact::CACHE_AUTH_SERVE;
-        ua_session->attach_server_session(server_session, false);
+        server_session->release();
       }
     } else {
       server_session->do_io_close();
