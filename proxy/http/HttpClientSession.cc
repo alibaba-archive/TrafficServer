@@ -60,9 +60,9 @@ ClassAllocator<HttpClientSession> httpClientSessionAllocator("httpClientSessionA
 HttpClientSession::HttpClientSession()
   : VConnection(NULL), con_id(0), client_vc(NULL), magic(HTTP_CS_MAGIC_DEAD),
     tcp_init_cwnd_set(false),
-    transact_count(0), half_close(false), conn_decrease(false),
+    transact_count(0), half_close(false), conn_decrease(false), bound_ss(NULL),
     read_buffer(NULL), current_reader(NULL), read_state(HCS_INIT),
-    ka_vio(NULL),
+    ka_vio(NULL), slave_ka_vio(NULL),
     cur_hook_id(TS_HTTP_LAST_HOOK), cur_hook(NULL),
     cur_hooks(0), proxy_allocated(false), backdoor_connect(false), hooks_set(0),
     m_active(false), debug_on(false)
@@ -76,6 +76,7 @@ HttpClientSession::cleanup()
   DebugSsn("http_cs", "[%" PRId64 "] session destroy", con_id);
 
   ink_release_assert(client_vc == NULL);
+  ink_release_assert(bound_ss == NULL);
   ink_assert(read_buffer);
   magic = HTTP_CS_MAGIC_DEAD;
   if (read_buffer) {
@@ -294,6 +295,14 @@ HttpClientSession::do_io_close(int alerrno)
   // Prevent double closing
   ink_release_assert(read_state != HCS_CLOSED);
 
+  // If we have an attached server session, release
+  //   it back to our shared pool
+  if (bound_ss) {
+    bound_ss->release();
+    bound_ss = NULL;
+    slave_ka_vio = NULL;
+  }
+
   if (half_close) {
     read_state = HCS_HALF_CLOSED;
     SET_HANDLER(&HttpClientSession::state_wait_for_close);
@@ -308,6 +317,7 @@ HttpClientSession::do_io_close(int alerrno)
     client_vc->do_io_shutdown(IO_SHUTDOWN_WRITE);
 
     ka_vio = client_vc->do_io_read(this, INT64_MAX, read_buffer);
+    ink_assert(slave_ka_vio != ka_vio);
 
     // [bug 2610799] Drain any data read.
     // If the buffer is full and the client writes again, we will not receive a
@@ -360,13 +370,53 @@ HttpClientSession::state_wait_for_close(int event, void *data)
 }
 
 int
+HttpClientSession::state_slave_keep_alive(int event, void *data)
+{
+
+  STATE_ENTER(&HttpClientSession::state_slave_keep_alive, event, data);
+
+  ink_assert(data == slave_ka_vio);
+  ink_assert(bound_ss != NULL);
+
+  switch (event) {
+  default:
+  case VC_EVENT_READ_COMPLETE:
+    // These events are bogus
+    ink_assert(0);
+    /* Fall Through */
+  case VC_EVENT_ERROR:
+  case VC_EVENT_READ_READY:
+  case VC_EVENT_EOS:
+    // The server session closed or something is amiss
+    bound_ss->do_io_close();
+    bound_ss = NULL;
+    slave_ka_vio = NULL;
+    break;
+
+  case VC_EVENT_ACTIVE_TIMEOUT:
+  case VC_EVENT_INACTIVITY_TIMEOUT:
+    // Timeout - place the session on the shared pool
+    bound_ss->release();
+    bound_ss = NULL;
+    slave_ka_vio = NULL;
+    break;
+  }
+
+  return 0;
+}
+
+int
 HttpClientSession::state_keep_alive(int event, void *data)
 {
 
   // Route the event.  It is either for client vc or
   //  the origin server slave vc
-  ink_assert(data && data == ka_vio);
-  ink_assert(read_state == HCS_KEEP_ALIVE);
+  if (data && data == slave_ka_vio) {
+    return state_slave_keep_alive(event, data);
+  } else {
+    ink_assert(data && data == ka_vio);
+    ink_assert(read_state == HCS_KEEP_ALIVE);
+  }
 
   STATE_ENTER(&HttpClientSession::state_keep_alive, event, data);
 
@@ -499,6 +549,48 @@ HttpClientSession::reenable(VIO * vio)
 }
 
 void
+HttpClientSession::attach_server_session(HttpServerSession * ssession, bool transaction_done)
+{
+  if (ssession) {
+    ink_assert(bound_ss == NULL);
+    ssession->state = HSS_KA_CLIENT_SLAVE;
+    bound_ss = ssession;
+    DebugSsn("http_cs", "[%" PRId64 "] attaching server session [%" PRId64 "] as slave", con_id, ssession->con_id);
+    ink_assert(ssession->get_reader()->read_avail() == 0);
+    ink_assert(ssession->get_netvc() != client_vc);
+
+    // handling potential keep-alive here
+    if (m_active) {
+      m_active = false;
+      HTTP_DECREMENT_DYN_STAT(http_current_active_client_connections_stat);
+    }
+    // Since this our slave, issue an IO to detect a close and
+    //  have it call the client session back.  This IO also prevent
+    //  the server net conneciton from calling back a dead sm
+    SET_HANDLER(&HttpClientSession::state_keep_alive);
+    slave_ka_vio = ssession->do_io_read(this, INT64_MAX, ssession->read_buffer);
+    ink_assert(slave_ka_vio != ka_vio);
+
+    // Transfer control of the write side as well
+    ssession->do_io_write(this, 0, NULL);
+
+    if (transaction_done) {
+      ssession->get_netvc()->
+        set_inactivity_timeout(HRTIME_SECONDS(current_reader->t_state.txn_conf->keep_alive_no_activity_timeout_out));
+      ssession->get_netvc()->cancel_active_timeout();
+    } else {
+      // we are serving from the cache - this could take a while.
+      ssession->get_netvc()->cancel_inactivity_timeout();
+      ssession->get_netvc()->cancel_active_timeout();
+    }
+  } else {
+    ink_assert(bound_ss != NULL);
+    bound_ss = NULL;
+    slave_ka_vio = NULL;
+  }
+}
+
+void
 HttpClientSession::release(IOBufferReader * r)
 {
   ink_assert(read_state == HCS_ACTIVE_READER);
@@ -535,7 +627,14 @@ HttpClientSession::release(IOBufferReader * r)
     read_state = HCS_KEEP_ALIVE;
     SET_HANDLER(&HttpClientSession::state_keep_alive);
     ka_vio = this->do_io_read(this, INT64_MAX, read_buffer);
+    ink_assert(slave_ka_vio != ka_vio);
     client_vc->set_inactivity_timeout(HRTIME_SECONDS(ka_in));
     client_vc->cancel_active_timeout();
   }
+}
+
+HttpServerSession *
+HttpClientSession::get_bound_ss()
+{
+  return bound_ss;
 }

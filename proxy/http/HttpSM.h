@@ -208,7 +208,6 @@ public:
   //  the session timeouts and initiate a read while
   //  holding the lock for the server session
   void attach_server_session(HttpServerSession * s);
-  HttpServerSession *get_server_session() const { return server_session; };
 
   // Called by transact.  Updates are fire and forget
   //  so there are no callbacks and are safe to do
