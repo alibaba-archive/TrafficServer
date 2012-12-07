@@ -88,11 +88,11 @@ PriorityEventQueue::earliest_timeout()
 {
   int32_t inter = 0;
   int32_t idx = last_check_time & T_MASK & TVR_MASK;
-
-  while (idx < TVR_SIZE && !tv1[idx].head) {
+  // THREAD_MAX_HEARTBEAT_MSECONDS = 60
+  while (idx < TVR_SIZE && !tv1[idx].head && inter < 60) {
     idx += 2 * inter++;
   }
-  return (last_check_time + 1 + inter) * TV_INTER;
+  return (2 * inter * TV_INTER);
 }
 
 int 
