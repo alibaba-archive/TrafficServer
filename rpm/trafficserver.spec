@@ -13,7 +13,7 @@ URL:		http://trafficserver.apache.org/index.html
 #BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 BuildRequires:	autoconf, automake, libtool, openssl-devel, tcl-devel, expat-devel
 BuildRequires:	pcre-devel, zlib-devel, xz-devel, gcc-c++
-Provides:	t_cdn_trafficserver, trafficserver_ssd
+Provides:	t-cdn-trafficserver, trafficserver_ssd
 
 #Patch8:		lock.patch
 
