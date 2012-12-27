@@ -1806,6 +1806,76 @@ ClusterCom::sendReliableMessage(unsigned long addr, char *buf, int len)
   return ret;
 }                               /* End ClusterCom::sendReliableMessage */
 
+int
+ClusterCom::base_sendReliableMessage(unsigned long addr, const char *buf, int len, bool take_lock)
+{
+  int fd, cport;
+  char string_addr[80];
+  struct sockaddr_in serv_addr;
+  struct in_addr address;
+  InkHashTableValue hash_value;
+  struct timeval timeout = {0, 50000};
+
+  address.s_addr = addr;
+
+  ink_strlcpy(string_addr, inet_ntoa(address), sizeof(string_addr));
+  
+  if (take_lock)
+    ink_mutex_acquire(&mutex);
+
+  if (ink_hash_table_lookup(peers, string_addr, &hash_value) == 0) {
+    if (take_lock)
+      ink_mutex_release(&mutex);
+    return false;
+  }
+  cport = ((ClusterPeerInfo *) hash_value)->ccom_port;
+  if (take_lock)
+    ink_mutex_release(&mutex);
+
+  memset(&serv_addr, 0, sizeof(serv_addr));
+  serv_addr.sin_family = AF_INET;
+  serv_addr.sin_addr.s_addr = addr;
+  serv_addr.sin_port = htons(cport);
+
+  if ((fd = mgmt_socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    mgmt_elog("[ClusterCom::base_sendReliableMessage] Unable to create socket\n");
+    return false;
+  }
+  if (fcntl(fd, F_SETFD, 1 | O_NONBLOCK) < 0) {
+    mgmt_log("[ClusterCom::base_sendReliableMessage] Unable to set close-on-exec.\n");
+    close_socket(fd);
+    return false;
+  }
+
+  if (connect(fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+    if (errno != EINPROGRESS)
+      goto error;
+    else {
+      fd_set  fdw;
+      FD_ZERO(&fdw);
+      FD_SET(fd, &fdw);
+      if (mgmt_select(fd + 1, NULL, &fdw, NULL, &timeout) <= 0) {
+error:
+        mgmt_elog("[ClusterCom::base_sendReliableMessage] Unable to connect to peer\n");
+        close_socket(fd);
+        return false;
+      }
+    }
+  }
+  if (fcntl(fd, F_SETFL, 1) < 0) {
+    mgmt_elog("[ClusterCom::base_sendReliableMessage] Unable to unset O_NONBLOCK.\n");
+    close_socket(fd);
+    return false;
+  }
+
+  if (mgmt_writeline(fd, buf, len) != 0) {
+    mgmt_elog(stderr, "[ClusterCom::base_sendReliableMessage] Write failed\n");
+    close_socket(fd);
+    return false;
+  }
+  return fd;
+}                               /* End ClusterCom::rl_sendReliableMessage */
+
 /*
  * rl_sendReliableMessage(...)
  *   Used to send a string across the reliable fd.
@@ -1813,49 +1883,14 @@ ClusterCom::sendReliableMessage(unsigned long addr, char *buf, int len)
 bool
 ClusterCom::rl_sendReliableMessage(unsigned long addr, const char *buf, int len)
 {
-  int fd, cport;
-  char string_addr[80];
-  struct sockaddr_in serv_addr;
-  struct in_addr address;
-  InkHashTableValue hash_value;
+  int fd;
 
-  address.s_addr = addr;
-
-  ink_strlcpy(string_addr, inet_ntoa(address), sizeof(string_addr));
-  if (ink_hash_table_lookup(peers, string_addr, &hash_value) == 0) {
-    return false;
-  }
-  cport = ((ClusterPeerInfo *) hash_value)->ccom_port;
-
-  memset(&serv_addr, 0, sizeof(serv_addr));
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = addr;
-  serv_addr.sin_port = htons(cport);
-
-
-  if ((fd = mgmt_socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    mgmt_elog("[ClusterCom::rl_sendReliableMessage] Unable to create socket\n");
-    return false;
-  }
-  if (fcntl(fd, F_SETFD, 1) < 0) {
-    mgmt_log("[ClusterCom::rl_sendReliableMessage] Unable to set close-on-exec.\n");
-    close(fd);
-    return false;
-  }
-
-  if (connect(fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-    mgmt_elog("[ClusterCom::rl_sendReliableMessage] Unable to connect to peer\n");
+  if ((fd = base_sendReliableMessage(addr, buf, len, false))) {
     close_socket(fd);
-    return false;
+    return true;
   }
-
-  if (mgmt_writeline(fd, buf, len) != 0) {
-    mgmt_elog(stderr, "[ClusterCom::rl_sendReliableMessage] Write failed\n");
-    close_socket(fd);
+  else 
     return false;
-  }
-  close_socket(fd);
-  return true;
 }                               /* End ClusterCom::rl_sendReliableMessage */
 
 
@@ -1866,80 +1901,25 @@ ClusterCom::rl_sendReliableMessage(unsigned long addr, const char *buf, int len)
 bool
 ClusterCom::sendReliableMessage(unsigned long addr, char *buf, int len, char *reply, int len2, bool take_lock)
 {
-  int fd, cport;
-  char string_addr[80];
-  struct sockaddr_in serv_addr;
-  struct in_addr address;
-  InkHashTableValue hash_value;
+  int fd, res = false;
 
-  address.s_addr = addr;
-  if (take_lock) {
+  if (take_lock)
     ink_mutex_acquire(&mutex);
-  }
-  ink_strlcpy(string_addr, inet_ntoa(address), sizeof(string_addr));
-  if (ink_hash_table_lookup(peers, string_addr, &hash_value) == 0) {
-    if (take_lock) {
-      ink_mutex_release(&mutex);
-    }
-    return false;
-  }
-  cport = ((ClusterPeerInfo *) hash_value)->ccom_port;
 
-  memset(&serv_addr, 0, sizeof(serv_addr));
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = addr;
-  serv_addr.sin_port = htons(cport);
-
-  if ((fd = mgmt_socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    mgmt_elog("[ClusterCom::sendReliableMessage] Unable to create socket\n");
-    if (take_lock) {
-      ink_mutex_release(&mutex);
-    }
-    return false;
-  }
-  if (fcntl(fd, F_SETFD, 1) < 0) {
-    mgmt_elog("[ClusterCom::sendReliableMessage] Unable to set close-on-exec.\n");
-    if (take_lock) {
-      ink_mutex_release(&mutex);
-    }
-    close(fd);
-    return false;
-  }
-
-  if (connect(fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-    mgmt_elog("[ClusterCom::sendReliableMessage] Unable to connect to peer\n");
-    if (take_lock) {
-      ink_mutex_release(&mutex);
+  if ((fd = base_sendReliableMessage(addr, buf, len, false))) {
+    res = true;
+    if (mgmt_readline(fd, reply, len2) == -1) {
+      mgmt_elog(stderr, "[ClusterCom::sendReliableMessage] Read failed\n");
+      reply[0] = '\0';
+      res = false;
     }
     close_socket(fd);
-    return false;
   }
 
-  if (mgmt_writeline(fd, buf, len) != 0) {
-    mgmt_elog("[ClusterCom::sendReliableMessage] Write failed\n");
-    if (take_lock) {
-      ink_mutex_release(&mutex);
-    }
-    close_socket(fd);
-    return false;
-  }
-
-  if (mgmt_readline(fd, reply, len2) == -1) {
-    mgmt_elog(stderr, "[ClusterCom::sendReliableMessage] Read failed\n");
-    perror("ClusterCom::sendReliableMessage");
-    reply[0] = '\0';
-    if (take_lock) {
-      ink_mutex_release(&mutex);
-    }
-    close_socket(fd);
-    return false;
-  }
-
-  close_socket(fd);
-  if (take_lock) {
+  if (take_lock)
     ink_mutex_release(&mutex);
-  }
-  return true;
+
+  return res;
 }                               /* End ClusterCom::sendReliableMessage */
 
 
@@ -1950,74 +1930,25 @@ ClusterCom::sendReliableMessage(unsigned long addr, char *buf, int len, char *re
 bool
 ClusterCom::sendReliableMessageReadTillClose(unsigned long addr, char *buf, int len, textBuffer * reply)
 {
-  int fd, cport, res;
-  char string_addr[80], tmp_reply[1024];
-  struct sockaddr_in serv_addr;
-  struct in_addr address;
-  InkHashTableValue hash_value;
+  int fd, res;
+  char tmp_reply[1024] = {0};
 
-  address.s_addr = addr;
-  ink_mutex_acquire(&mutex);
-  ink_strlcpy(string_addr, inet_ntoa(address), sizeof(string_addr));
-  if (ink_hash_table_lookup(peers, string_addr, &hash_value) == 0) {
-    ink_mutex_release(&mutex);
-    return false;
-  }
-  cport = ((ClusterPeerInfo *) hash_value)->ccom_port;
-
-  memset(&serv_addr, 0, sizeof(serv_addr));
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = addr;
-  serv_addr.sin_port = htons(cport);
-
-  if ((fd = mgmt_socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    mgmt_elog("[ClusterCom::sendReliableMessageReadTillClose] Unable create sock\n");
-    ink_mutex_release(&mutex);
-    return false;
-  }
-  if (fcntl(fd, F_SETFD, 1) < 0) {
-    mgmt_elog("[ClusterCom::sendReliableMessageReadTillClose] Unable to set close-on-exec.\n");
-    ink_mutex_release(&mutex);
-    close(fd);
-    return false;
-  }
-
-  if (connect(fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-    mgmt_elog("[ClusterCom::sendReliableMessageReadTillClose] Unable to connect\n");
-    ink_mutex_release(&mutex);
-    close_socket(fd);
-    return false;
-  }
-
-  if (mgmt_writeline(fd, buf, len) != 0) {
-    mgmt_elog("[ClusterCom::sendReliableMessageReadTillClose] Write failed\n");
-    ink_mutex_release(&mutex);
-    close_socket(fd);
-    return false;
-  } else {
-    Debug("ccom", "[ClusterCom::sendReliableMessageREadTillClose] Sent '%s' len: %d on fd: %d\n", buf, len, fd);
-  }
-
-  memset(tmp_reply, 0, 1024);
-  while ((res = read_socket(fd, tmp_reply, 1022) > 0)) {
-    if (tmp_reply[0] == (char)EOF) {
-      break;
+  if ((fd = base_sendReliableMessage(addr, buf, len, true))) {
+    while ((res = read_socket(fd, tmp_reply, 1022) > 0)) {
+      if (tmp_reply[0] == (char)EOF) {
+        break;
+      }
+      reply->copyFrom(tmp_reply, strlen(tmp_reply));
+      memset(tmp_reply, 0, 1024);
     }
-    reply->copyFrom(tmp_reply, strlen(tmp_reply));
-    memset(tmp_reply, 0, 1024);
-  }
-
-  if (res < 0) {
-    mgmt_elog("[ClusterCom::sendReliableMessageReadTillClose] Read failed\n");
-    perror("ClusterCom::sendReliableMessageReadTillClose");
-    ink_mutex_release(&mutex);
     close_socket(fd);
+    if (res < 0) {
+      mgmt_elog("[ClusterCom::sendReliableMessageReadTillClose] Read failed\n");
+      return false;
+    }
+    return true;
+  } else
     return false;
-  }
-
-  close_socket(fd);
-  ink_mutex_release(&mutex);
-  return true;
 }                               /* End ClusterCom::sendReliableMessageReadTillClose */
 
 

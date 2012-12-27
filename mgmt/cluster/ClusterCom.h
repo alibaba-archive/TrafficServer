@@ -121,6 +121,7 @@ public:
   bool sendOutgoingMessage(char *buf, int len);
   bool sendReliableMessage(unsigned long addr, char *buf, int len);
 
+  int  base_sendReliableMessage(unsigned long addr, const char *buf, int len, bool take_lock);
   bool rl_sendReliableMessage(unsigned long addr, const char *buf, int len);
   bool sendReliableMessage(unsigned long addr, char *buf, int len, char *reply, int len2, bool take_lock);
   bool sendReliableMessageReadTillClose(unsigned long addr, char *buf, int len, textBuffer * reply);
