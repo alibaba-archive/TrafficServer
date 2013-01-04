@@ -1769,7 +1769,7 @@ HostDBContinuation::do_put_response(ClusterMachine * m, HostDBInfo * r, Continua
 {
   // don't remote fill round-robin DNS entries
   // if configured not to cluster them
-  if (!c && r->round_robin && !hostdb_cluster_round_robin)
+  if (!hostdb_cluster || (!c && r->round_robin && !hostdb_cluster_round_robin))
     return;
 
   HostDB_put_message msg;
