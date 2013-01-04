@@ -39,7 +39,7 @@
 #define EVENT_SRV_GET_RESPONSE           (SRV_EVENT_EVENTS_START+2)
 
 #define HOST_DB_MAX_ROUND_ROBIN_INFO         16
-
+#define HOST_DB_SRV_PREFIX "_http._tcp."
 //
 // Data
 //
@@ -60,6 +60,26 @@ extern unsigned int hostdb_ip_timeout_interval;
 extern unsigned int hostdb_ip_fail_timeout_interval;
 extern unsigned int hostdb_serve_stale_but_revalidate;
 
+
+static inline unsigned int
+makeHostHash(const char *string)
+{
+  ink_debug_assert(string && *string);
+  if (!string || *string == 0)
+    return 0;
+
+  const uint32_t InitialFNV = 2166136261U;
+  const int32_t FNVMultiple = 16777619;
+
+  uint64_t hash = InitialFNV;
+  uint32_t *p = (uint32_t *) &hash;
+  while(*string)  {
+    p[0] = p[0] ^ (toupper(*string));
+    hash = (p[1] ^ p[0]) * FNVMultiple;
+    ++string;
+  }
+  return (p[1] ^ p[0]);
+}
 
 //
 // Types
@@ -119,6 +139,15 @@ union HostDBApplicationInfo
 
 struct HostDBRoundRobin;
 
+struct SRVInfo
+{
+  unsigned int srv_offset:16;
+  unsigned int srv_weight:16;
+  unsigned int srv_priority:16;
+  unsigned int srv_port:16;
+  unsigned int key;
+};
+
 struct HostDBInfo
 {
   /** Internal IP address data.
@@ -128,7 +157,7 @@ struct HostDBInfo
   sockaddr const* ip() const { return &data.ip.sa; }
 
   char *hostname();
-  char *srvname();
+  char *srvname(HostDBRoundRobin * rr);
   HostDBRoundRobin *rr();
 
   /** Indicate that the HostDBInfo is BAD and should be deleted. */
@@ -144,7 +173,9 @@ struct HostDBInfo
     } else if (byname) {
       if (reverse_dns)
         goto Lbad;
-      if (!ats_is_ip(ip()))
+      if (!is_srv && !ats_is_ip(ip()))
+        goto Lbad;
+      if (is_srv && !data.srv.srv_offset)
         goto Lbad;
     } else {
       if (!reverse_dns)
@@ -267,17 +298,13 @@ struct HostDBInfo
   union {
     IpEndpoint ip; ///< IP address / port data.
     int hostname_offset; ///< Some hostname thing.
+    SRVInfo srv;
   } data;
-
-  unsigned int srv_weight:16;
-  unsigned int srv_priority:16;
-  unsigned int srv_port:16;
-  unsigned int srv_count:15;
-  unsigned int is_srv:1;
 
   unsigned int ip_timestamp;
   // limited to 0x1FFFFF (24 days)
-  unsigned int ip_timeout_interval;
+  unsigned int ip_timeout_interval:31;
+  unsigned int is_srv:1;
 
   unsigned int hc_timestamp;
   unsigned int hc_ttl;
@@ -297,8 +324,25 @@ struct HostDBInfo
 
   uint64_t md5_high;
 
-  bool failed() { return !ats_is_ip(ip()); }
-  void set_failed() { ats_ip_invalidate(ip());  }
+  bool srv_empty() {
+    return is_srv && !round_robin;
+  }
+
+  bool failed() {
+    if (reverse_dns)
+      return !data.hostname_offset;
+    if (is_srv)
+      return false;
+    return !ats_is_ip(ip());
+  }
+
+  void set_failed() {
+    if (reverse_dns)
+      data.hostname_offset = 0;
+    else if (is_srv)
+      data.srv.srv_offset = 0;
+    ats_ip_invalidate(ip());
+  }
 
   void set_deleted() { deleted = 1; }
   bool is_deleted() const { return deleted; }
@@ -311,11 +355,6 @@ struct HostDBInfo
     md5_high = 0;
     md5_low = 0;
     md5_low_low = 0;
-    is_srv = 0;
-    srv_weight = 0;
-    srv_priority = 0;
-    srv_port = 0;
-    srv_count = 0;
   }
 
   void set_full(uint64_t folded_md5, int buckets)
@@ -339,6 +378,7 @@ struct HostDBInfo
     hits = 0;
     round_robin = 0;
     reverse_dns = 0;
+    is_srv = 0;
   }
 
   uint64_t tag() {
@@ -351,13 +391,9 @@ struct HostDBInfo
   int *heap_offset_ptr();
 
 HostDBInfo()
-  : srv_weight(0)
-  , srv_priority(0)
-  , srv_port(0)
-  , srv_count(0)
-  , is_srv(0)
-  , ip_timestamp(0)
+  : ip_timestamp(0)
   , ip_timeout_interval(0)
+  , is_srv(0)
   , hc_timestamp(0), hc_ttl(0), hc_state(false), hc_switch(false)
   , full(0)
   , backed(0)
@@ -369,8 +405,7 @@ HostDBInfo()
   , md5_low(0), md5_high(0) {
     app.allotment.application1 = 0;
     app.allotment.application2 = 0;
-    ats_ip_invalidate(ip());
-
+    memset(&data, sizeof(data), 0);
     return;
   }
 };
@@ -385,34 +420,24 @@ struct HostDBRoundRobin
   short good;
 
   unsigned short current;
+  unsigned short length;
   ink_time_t timed_rr_ctime;
 
-  HostDBInfo info[HOST_DB_MAX_ROUND_ROBIN_INFO];
-  char rr_srv_hosts[HOST_DB_MAX_ROUND_ROBIN_INFO][MAXDNAME];
+  HostDBInfo info[];
 
-  static int size(int nn, bool using_srv)
+  static int size(int nn, int srv_len)
   {
-    if (using_srv) {
-      /*     sizeof this struct
-         minus
-         unused round-robin entries [info]
-         minus
-         unused srv host data [rr_srv_hosts]
-       */
-      return (int) ((sizeof(HostDBRoundRobin)) -
-                    (sizeof(HostDBInfo) * (HOST_DB_MAX_ROUND_ROBIN_INFO - nn)) -
-                    (sizeof(char) * MAXDNAME * (HOST_DB_MAX_ROUND_ROBIN_INFO - nn)));
-    } else {
-      return (int) (sizeof(HostDBRoundRobin) -
-                    sizeof(HostDBInfo) * (HOST_DB_MAX_ROUND_ROBIN_INFO - nn) -
-                    sizeof(char) * MAXDNAME * HOST_DB_MAX_ROUND_ROBIN_INFO);
-    }
+    return INK_ALIGN((int) (sizeof(HostDBRoundRobin) + nn * sizeof(HostDBInfo) + srv_len), 16);
   }
 
   HostDBInfo *find_ip(sockaddr const* addr);
+  HostDBInfo *find_target(const char *target);
   HostDBInfo *select_best(sockaddr const* client_ip, HostDBInfo * r = NULL);
   HostDBInfo *select_best_http(sockaddr const* client_ip, ink_time_t now, int32_t fail_window);
   HostDBInfo *select_best_http_with_hc(sockaddr const* client_ip, time_t now, int32_t fail_window, bool *state);
+  uint32_t get_earliest_failure_time();
+
+  HostDBInfo *select_best_srv(char *target, InkRand *rand, ink_time_t now, int32_t fail_window);
 
   HostDBInfo *increment_round_robin()
   {
@@ -427,7 +452,7 @@ struct HostDBRoundRobin
   }
 
   HostDBRoundRobin()
-    : n(0), good(0), current(0), timed_rr_ctime(0)
+    : n(0), good(0), current(0), length(0), timed_rr_ctime(0)
   { }
 
 };
@@ -548,9 +573,9 @@ struct HostDBProcessor: public Processor
     const char *hostname, ///< Hostname.
     int len, ///< Length of hostname.
     sockaddr const* aip, ///< Address and/or port.
-    HostDBApplicationInfo * app ///< I don't know.
+    HostDBApplicationInfo * app, ///< I don't know.
+    const char *target = NULL
   );
-
 };
 
 void run_HostDBTest();

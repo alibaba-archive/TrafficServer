@@ -1368,8 +1368,8 @@ MultiCacheBase::alloc(int *poffset, int asize)
     UnsunkPtr *up = unsunk[part].alloc(poffset);
     up->offset = offset;
     up->poffset = poffset;
-    Debug("multicache", "alloc unsunk %d at %" PRId64 " part %d offset %d",
-          *poffset, (int64_t)((char *) poffset - data), part, offset);
+    Debug("multicache", "alloc unsunk %d at %" PRId64 " part %d offset %d size %d",
+          *poffset, (int64_t)((char *) poffset - data), part, offset, size);
   }
   return (void *) p;
 }

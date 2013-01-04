@@ -61,7 +61,7 @@ inline unsigned int HOSTDB_CLIENT_IP_HASH(
 #define CONFIGURATION_HISTORY_PROBE_DEPTH   1
 
 // Bump this any time hostdb format is changed
-#define HOST_DB_CACHE_MAJOR_VERSION         2
+#define HOST_DB_CACHE_MAJOR_VERSION         3
 #define HOST_DB_CACHE_MINOR_VERSION         1
 // 2.1 : IPv6
 
@@ -144,7 +144,6 @@ RecSetRawStatCount(hostdb_rsb, _x, _count);
 #define HOSTDB_DECREMENT_THREAD_DYN_STAT(_s, _t) \
   RecIncrRawStatSum(hostdb_rsb, _t, (int) _s, -1);
 
-
 //
 // HostDBCache (Private)
 //
@@ -158,7 +157,7 @@ struct HostDBCache: public MultiCache<HostDBInfo>
   }
 
   // This accounts for an average of 2 HostDBInfo per DNS cache (for round-robin etc.)
-  virtual size_t estimated_heap_bytes_per_entry() const { return sizeof(HostDBInfo) * 2; }
+  virtual size_t estimated_heap_bytes_per_entry() const { return sizeof(HostDBInfo) * 2 + 512; }
 
   Queue<HostDBContinuation, Continuation::Link_link> pending_dns[MULTI_CACHE_PARTITIONS];
   Queue<HostDBContinuation, Continuation::Link_link> &pending_dns_for_hash(INK_MD5 & md5);
@@ -182,6 +181,21 @@ HostDBRoundRobin::find_ip(sockaddr const* ip) {
   return NULL;
 }
 
+inline HostDBInfo *
+HostDBRoundRobin::find_target(const char *target) {
+  bool bad = (n <= 0 || n > HOST_DB_MAX_ROUND_ROBIN_INFO || good <= 0 || good > HOST_DB_MAX_ROUND_ROBIN_INFO);
+  if (bad) {
+    ink_assert(!"bad round robin size");
+    return NULL;
+  }
+
+  uint32_t key = makeHostHash(target);
+  for (int i = 0; i < good; i++) {
+    if (info[i].data.srv.key == key && !strcmp(target, info[i].srvname(this)))
+      return &info[i];
+  }
+  return NULL;
+}
 inline HostDBInfo *
 HostDBRoundRobin::select_best(sockaddr const* client_ip, HostDBInfo * r)
 {
@@ -470,6 +484,63 @@ HostDBRoundRobin::select_best_http_with_hc(sockaddr const* client_ip, time_t now
   }
 }
 
+inline HostDBInfo *
+HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ink_time_t now, int32_t fail_window)
+{
+  bool bad = (n <= 0 || n > HOST_DB_MAX_ROUND_ROBIN_INFO || good <= 0 || good > HOST_DB_MAX_ROUND_ROBIN_INFO);
+
+  if (bad) {
+    ink_assert(!"bad round robin size");
+    return NULL;
+  }
+
+#ifdef DEBUG
+  for (int i = 1; i < good; ++i) {
+    ink_debug_assert(info[i].data.srv.srv_priority >= info[i-1].data.srv.srv_priority);
+  }
+#endif
+
+  int i = 0, len = 0;
+  uint32_t weight = 0, p = INT32_MAX;
+  HostDBInfo *result = NULL;
+  HostDBInfo *infos[HOST_DB_MAX_ROUND_ROBIN_INFO];
+
+  do {
+    if (info[i].app.http_data.last_failure != 0 &&
+        (uint32_t) (now - fail_window) < info[i].app.http_data.last_failure) {
+      continue;
+    }
+
+    if (info[i].app.http_data.last_failure)
+      info[i].app.http_data.last_failure = 0;
+
+    if (info[i].data.srv.srv_priority <= p) {
+      p = info[i].data.srv.srv_priority;
+      weight += info[i].data.srv.srv_weight;
+      infos[len++] = &info[i];
+    } else
+      break;
+  } while (++i < good);
+
+  if (len == 0) { // all failed
+    result = &info[current++ % good];
+  } else if (weight == 0) { // srv weight is 0
+    result = &info[current++ % len];
+  } else {
+    uint32_t xx = rand->random() % weight;
+    for (i = 0; i < len && xx >= infos[i]->data.srv.srv_weight; ++i)
+      xx -= infos[i]->data.srv.srv_weight;
+
+    result = infos[i];
+  }
+
+  if (result) {
+    strcpy(target, result->srvname(this));
+    return result;
+  }
+  return NULL;
+}
+
 //
 // Types
 //
@@ -496,6 +567,7 @@ struct HostDBContinuation: public Continuation
   ClusterMachine *past_probes[CONFIGURATION_HISTORY_PROBE_DEPTH];
   int namelen;
   char name[MAXDNAME];
+  char target[MAXDNAME];
   void *m_pDS;
   Action *pending_action;
 
@@ -535,7 +607,7 @@ struct HostDBContinuation: public Continuation
   HostDBInfo *insert(unsigned int attl);
 
   void init(const char *hostname, int len, sockaddr const* ip, INK_MD5 & amd5,
-            Continuation * cont, void *pDS = 0, bool is_srv = false, int timeout = 0);
+            Continuation * cont, void *pDS = 0, bool is_srv = false, int timeout = 0, const char *target = NULL);
   int make_get_message(char *buf, int len);
   int make_put_message(HostDBInfo * r, Continuation * c, char *buf, int len);
 
@@ -546,6 +618,7 @@ HostDBContinuation():
     from_cont(0), probe_depth(0), namelen(0), missing(false), force_dns(false), round_robin(false) {
     memset(&ip, 0, sizeof ip);
     memset(name, 0, MAXDNAME);
+    memset(target, 0, MAXDNAME);
     md5.b[0] = 0;
     md5.b[1] = 0;
     SET_HANDLER((HostDBContHandler) & HostDBContinuation::probeEvent);

@@ -69,6 +69,7 @@ extern unsigned int dns_sequence_number;
 #define DNS_PRIMARY_RETRY_PERIOD            HRTIME_SECONDS(5)
 #define DNS_PRIMARY_REOPEN_PERIOD           HRTIME_SECONDS(60)
 #define BAD_DNS_RESULT                      ((HostEnt*)(uintptr_t)-1)
+
 #define DEFAULT_NUM_TRY_SERVER              8
 
 // these are from nameser.h

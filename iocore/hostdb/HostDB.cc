@@ -435,13 +435,18 @@ void
 HostDBContinuation::init(
   const char *hostname, int len,
   sockaddr const* aip,
-  INK_MD5 & amd5, Continuation * cont, void *pDS, bool is_srv, int timeout
+  INK_MD5 & amd5, Continuation * cont, void *pDS, bool is_srv, int timeout, const char *t
 ) {
   if (hostname) {
     memcpy(name, hostname, len);
     name[len] = 0;
   } else
     name[0] = 0;
+
+  if (t)
+    strcpy(target, t);
+  else
+    target[0] = '\0';
   dns_lookup_timeout = timeout;
   namelen = len;
   is_srv_lookup = is_srv;
@@ -467,7 +472,7 @@ make_md5(INK_MD5 & md5, const char *hostname, int len, int port, char *pDNSServe
   ink_code_incr_MMH_update(&ctx, hostname, len);
   unsigned short p = port;
   p = htons(p);
-  //ink_code_incr_MMH_update(&ctx, (char *) &p, 2);
+  ink_code_incr_MMH_update(&ctx, (char *) &p, 2);
   ink_code_incr_MMH_update(&ctx, (char *) &srv, 4);     /* FIXME: check this */
   if (pDNSServers)
     ink_code_incr_MMH_update(&ctx, pDNSServers, strlen(pDNSServers));
@@ -478,7 +483,7 @@ make_md5(INK_MD5 & md5, const char *hostname, int len, int port, char *pDNSServe
   ink_code_incr_md5_update(&ctx, hostname, len);
   unsigned short p = port;
   p = htons(p);
-  //ink_code_incr_md5_update(&ctx, (char *) &p, 2);
+  ink_code_incr_md5_update(&ctx, (char *) &p, 2);
   ink_code_incr_MMH_update(&ctx, (char *) &srv, 4);     /* FIXME: check this */
   if (pDNSServers)
     ink_code_incr_md5_update(&ctx, pDNSServers, strlen(pDNSServers));
@@ -487,24 +492,17 @@ make_md5(INK_MD5 & md5, const char *hostname, int len, int port, char *pDNSServe
 }
 
 static bool
-reply_to_cont(Continuation * cont, HostDBInfo * ar)
+reply_to_cont(Continuation * cont, HostDBInfo * ar, bool is_srv = false)
 {
   const char *reason = "none";
   HostDBInfo *r = ar;
 
-  if (r == NULL) {
-    cont->handleEvent(EVENT_HOST_DB_LOOKUP, NULL);
+  if (r == NULL || r->is_srv != is_srv || r->failed()) {
+    cont->handleEvent(is_srv ? EVENT_SRV_LOOKUP : EVENT_HOST_DB_LOOKUP, NULL);
     return false;
   }
 
-  if (r->failed()) {
-    if (r->is_srv && r->srv_count) {
-      cont->handleEvent(EVENT_SRV_LOOKUP, NULL);
-      return false;
-    }
-    cont->handleEvent(EVENT_HOST_DB_LOOKUP, NULL);
-    return false;
-  } else {
+  {
     if (r->reverse_dns) {
       if (!r->hostname()) {
         reason = "missing hostname";
@@ -519,29 +517,22 @@ reply_to_cont(Continuation * cont, HostDBInfo * ar)
         ink_assert(!"missing round-robin");
         goto Lerror;
       }
+      if (is_srv) {
+        cont->handleEvent(EVENT_SRV_LOOKUP, r);
+        if (!r->full)
+          goto Ldelete;
+        return true;
+      }
       ip_text_buffer ipb;
       Debug("hostdb", "RR of %d with %d good, 1st IP = %s", r->rr()->n, r->rr()->good, ats_ip_ntop(r->ip(), ipb, sizeof ipb));
     }
-    if (r->is_srv && r->srv_count) {
-      cont->handleEvent(EVENT_SRV_LOOKUP, r);
-      if (!r->full)
-        goto Ldelete;
-      return true;
-    } else if (r->is_srv) {
-      /* failure case where this is an SRV lookup, but we got no records back  -- this is handled properly in process_srv_info */
-      cont->handleEvent(EVENT_SRV_LOOKUP, r);
-      return true;
-    }
-    cont->handleEvent(EVENT_HOST_DB_LOOKUP, r);
+    cont->handleEvent(is_srv ? EVENT_SRV_LOOKUP : EVENT_HOST_DB_LOOKUP, r->is_srv ? NULL : r);
     if (!r->full)
       goto Ldelete;
     return true;
   }
 Lerror:
-  if (r->is_srv && r->srv_count) {
-    cont->handleEvent(EVENT_SRV_LOOKUP, r);
-  }
-  cont->handleEvent(EVENT_HOST_DB_LOOKUP, NULL);
+  cont->handleEvent(is_srv ? EVENT_SRV_LOOKUP : EVENT_HOST_DB_LOOKUP, NULL);
 Ldelete:
   Warning("bogus entry deleted from HostDB: %s", reason);
   hostDB.delete_block(ar);
@@ -848,11 +839,7 @@ HostDBProcessor::getSRVbyname_imm(Continuation * cont, process_srv_info_pfn proc
   c->force_dns = force_dns;
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler) & HostDBContinuation::probeEvent);
 
-  if (thread->mutex == cont->mutex) {
-    thread->schedule_in(c, MUTEX_RETRY_DELAY);
-  } else {
-    dnsProcessor.thread->schedule_imm(c);
-  }
+  thread->schedule_in(c, MUTEX_RETRY_DELAY);
 
   return &c->action;
 }
@@ -996,18 +983,33 @@ HostDBProcessor::getbyname_imm_use_cache(Continuation * cont, process_hostdb_inf
 }
 
 static void
-do_setby(HostDBInfo * r, HostDBApplicationInfo * app, const char *hostname, sockaddr const* ip)
+do_setby(HostDBInfo * r, HostDBApplicationInfo * app, const char *hostname, sockaddr const* ip, bool is_srv = false)
 {
   HostDBRoundRobin *rr = r->rr();
 
+  if (is_srv && (!r->is_srv || !rr))
+    return;
+
   if (rr) {
-    ink_assert(hostname);
-    for (int i = 0; i < rr->n; i++) {
-      if (0 == ats_ip_addr_cmp(rr->info[i].ip(), ip)) {
-        Debug("hostdb", "immediate setby for %s", hostname ? hostname : "<addr>");
-        rr->info[i].app.allotment.application1 = app->allotment.application1;
-        rr->info[i].app.allotment.application2 = app->allotment.application2;
-        return;
+    if (is_srv) {
+      uint32_t key = makeHostHash(hostname);
+      for (int i = 0; i < rr->n; i++) {
+        if (key == rr->info[i].data.srv.key && !strcmp(hostname, rr->info[i].srvname(rr))) {
+          Debug("hostdb", "immediate setby for %s", hostname);
+          rr->info[i].app.allotment.application1 = app->allotment.application1;
+          rr->info[i].app.allotment.application2 = app->allotment.application2;
+          return;
+        }
+      }
+    } else {
+      for (int i = 0; i < rr->n; i++) {
+        if (0 == ats_ip_addr_cmp(rr->info[i].ip(), ip)) {
+          Debug("hostdb",
+              "immediate setby for %s", hostname ? hostname : "<addr>");
+          rr->info[i].app.allotment.application1 = app->allotment.application1;
+          rr->info[i].app.allotment.application2 = app->allotment.application2;
+          return;
+        }
       }
     }
   } else {
@@ -1021,7 +1023,7 @@ do_setby(HostDBInfo * r, HostDBApplicationInfo * app, const char *hostname, sock
 
 
 void
-HostDBProcessor::setby(const char *hostname, int len, sockaddr const* ip, HostDBApplicationInfo * app)
+HostDBProcessor::setby(const char *hostname, int len, sockaddr const* ip, HostDBApplicationInfo * app, const char *target)
 {
   if (!hostdb_enable)
     return;
@@ -1031,10 +1033,15 @@ HostDBProcessor::setby(const char *hostname, int len, sockaddr const* ip, HostDB
 
   // if it is by name, INK_MD5 the name
   //
+  bool is_srv = false;
   if (hostname) {
     if (!len)
       len = strlen(hostname);
-    make_md5(md5, hostname, len, port);
+    if (target) {
+      is_srv = true;
+      make_md5(md5, hostname, len, 0, 0, true);
+    } else
+      make_md5(md5, hostname, len, port);
   } else {
     // INK_MD5 the ip, pad on both sizes with 0's
     // so that it does not intersect the string space
@@ -1055,31 +1062,38 @@ HostDBProcessor::setby(const char *hostname, int len, sockaddr const* ip, HostDB
   MUTEX_TRY_LOCK(lock, mutex, thread);
 
   if (lock) {
-    HostDBInfo *r = probe(mutex, md5, hostname, len, ip, 0);
-    if (r)
-      do_setby(r, app, hostname, ip);
+    HostDBInfo *r = probe(mutex, md5, hostname, len, ip, 0, 0, is_srv);
+    if (r) {
+      if (!is_srv)
+        do_setby(r, app, hostname, ip);
+      else
+        do_setby(r, app, target, ip, true);
+    }
+
     return;
   }
   // Create a continuation to do a deaper probe in the background
 
   HostDBContinuation *c = hostDBContAllocator.alloc();
-  c->init(hostname, len, ip, md5, NULL);
+  if (target != NULL)
+    c->init(hostname, len, ip, md5, NULL, NULL, true, 0, target);
+  else
+    c->init(hostname, len, ip, md5, NULL);
   c->app.allotment.application1 = app->allotment.application1;
   c->app.allotment.application2 = app->allotment.application2;
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler) & HostDBContinuation::setbyEvent);
   thread->schedule_in(c, MUTEX_RETRY_DELAY);
 }
 
-
 int
 HostDBContinuation::setbyEvent(int event, Event * e)
 {
   NOWARN_UNUSED(event);
   NOWARN_UNUSED(e);
-  HostDBInfo *r = probe(mutex, md5, name, namelen, &ip.sa, 0);
+  HostDBInfo *r = probe(mutex, md5, name, namelen, &ip.sa, 0, false, is_srv_lookup);
 
   if (r)
-    do_setby(r, &app, name, &ip.sa);
+    do_setby(r, &app, name, &ip.sa, is_srv_lookup);
   hostdb_cont_free(this);
   return EVENT_DONE;
 }
@@ -1218,96 +1232,101 @@ HostDBContinuation::lookup_done(sockaddr const* aip, char *aname, bool around_ro
   HostDBInfo *i = NULL;
 
   ink_debug_assert(this_ethread() == hostDB.lock_for_bucket((int) (fold_md5(md5) % hostDB.buckets))->thread_holding);
-  if (!aip || !ats_is_ip(aip) || !aname || !aname[0]) {
-    if (is_byname()) {
+  if (is_byname()) {
+    if (!aip || !ats_is_ip(aip)) {
       Debug("hostdb", "lookup_done() failed for '%s'", name);
-    } else if (is_srv()) {
+      goto Lfailed;
+    }
+  } else if (is_srv()) {
+    if (!around_robin || !srv || srv->srv_host_count == 0) {
       Debug("dns_srv", "SRV failed for '%s'", name);
-    } else {
+      goto Lfailed;
+    }
+  } else {
+    if (!aname || !aname[0]) {
       ip_text_buffer b;
       Debug("hostdb", "failed for %s", ats_ip_ntop(&ip.sa, b, sizeof b));
-    }
-    i = insert(hostdb_ip_fail_timeout_interval);        // currently ... 0
-    i->round_robin = false;
-    i->reverse_dns = !is_byname() && !is_srv();
-  } else {
-    switch (hostdb_ttl_mode) {
-    default:
-      ink_assert(!"bad TTL mode");
-    case TTL_OBEY:
-      break;
-    case TTL_IGNORE:
-      ttl_seconds = hostdb_ip_timeout_interval * 60;
-      break;
-    case TTL_MIN:
-      if (hostdb_ip_timeout_interval * 60 < ttl_seconds)
-        ttl_seconds = hostdb_ip_timeout_interval * 60;
-      break;
-    case TTL_MAX:
-      if (hostdb_ip_timeout_interval * 60 > ttl_seconds)
-        ttl_seconds = hostdb_ip_timeout_interval * 60;
-      break;
-    }
-    HOSTDB_SUM_DYN_STAT(hostdb_ttl_stat, ttl_seconds);
-    if (!ttl_seconds)
-      ttl_seconds = 1;          // www.barnsandnobel.com is lame
-    i = insert(ttl_seconds);
-    if (is_byname()) {
-      ip_text_buffer b;
-      Debug("hostdb", "done %s TTL %d", ats_ip_ntop(aip, b, sizeof b), ttl_seconds);
-      ats_ip_copy(i->ip(), aip);
-      i->round_robin = around_robin;
-      i->reverse_dns = false;
-      if (name != aname) {
-        ink_strlcpy(name, aname, sizeof(name));
-      }
-      i->is_srv = false;
-    } else if (is_srv()) {
-
-      ats_ip_copy(i->ip(), aip);  /* this doesnt matter w. srv records -- setting to 1 so Md5 works */
-
-      i->reverse_dns = false;
-
-      if (srv) {                //failed case: srv == NULL
-        i->srv_count = srv->getCount();
-      } else {
-        i->srv_count = 0;
-      }
-
-      if (i->srv_count <= 0) {
-        i->round_robin = false;
-      } else {
-        i->round_robin = true;
-      }
-
-      i->is_srv = true;
-
-      if (name != aname) {
-        ink_strlcpy(name, aname, sizeof(name));
-      }
-
-    } else {
-      Debug("hostdb", "done '%s' TTL %d", aname, ttl_seconds);
-      const size_t s_size = strlen(aname) + 1;
-      void *s = hostDB.alloc(&i->data.hostname_offset, s_size);
-      if (s) {
-        ink_strlcpy((char *) s, aname, s_size);
-        i->round_robin = false;
-        i->reverse_dns = true;
-        i->is_srv = false;
-      } else {
-        ink_assert(!"out of room in hostdb data area");
-        Warning("out of room in hostdb for reverse DNS data");
-        hostDB.delete_block(i);
-        return NULL;
-      }
+      goto Lfailed;
     }
   }
+
+  switch (hostdb_ttl_mode) {
+  default:
+    ink_assert(!"bad TTL mode");
+  case TTL_OBEY:
+    break;
+  case TTL_IGNORE:
+    ttl_seconds = hostdb_ip_timeout_interval * 60;
+    break;
+  case TTL_MIN:
+    if (hostdb_ip_timeout_interval * 60 < ttl_seconds)
+      ttl_seconds = hostdb_ip_timeout_interval * 60;
+    break;
+  case TTL_MAX:
+    if (hostdb_ip_timeout_interval * 60 > ttl_seconds)
+      ttl_seconds = hostdb_ip_timeout_interval * 60;
+    break;
+  }
+  HOSTDB_SUM_DYN_STAT(hostdb_ttl_stat, ttl_seconds);
+  if (!ttl_seconds)
+    ttl_seconds = 1;          // www.barnsandnobel.com is lame
+  i = insert(ttl_seconds);
+  if (is_byname()) {
+    ink_debug_assert(!srv || srv->srv_hosts_length == 0);
+    ip_text_buffer b;
+    Debug("hostdb",
+        "done %s TTL %d", ats_ip_ntop(aip, b, sizeof b), ttl_seconds);
+    ats_ip_copy(i->ip(), aip);
+    i->round_robin = around_robin;
+    i->reverse_dns = false;
+    if (name != aname) {
+      ink_strlcpy(name, aname, sizeof(name));
+    }
+    i->is_srv = false;
+  } else if (is_srv()) {
+    ink_debug_assert(srv && srv->srv_host_count > 0 && srv->srv_host_count <= 16 && around_robin);
+
+    i->data.srv.srv_offset = srv->srv_host_count;
+    i->reverse_dns = false;
+    i->round_robin = around_robin;
+    ink_debug_assert(around_robin);
+    i->is_srv = true;
+
+    if (name != aname) {
+      ink_strlcpy(name, aname, sizeof(name));
+    }
+  } else {
+    Debug("hostdb", "done '%s' TTL %d", aname, ttl_seconds);
+    const size_t s_size = strlen(aname) + 1;
+    void *s = hostDB.alloc(&i->data.hostname_offset, s_size);
+    if (s) {
+      ink_strlcpy((char *) s, aname, s_size);
+      i->round_robin = false;
+      i->reverse_dns = true;
+      i->is_srv = false;
+    } else {
+      ink_assert(!"out of room in hostdb data area");
+      Warning("out of room in hostdb for reverse DNS data");
+      hostDB.delete_block(i);
+      return NULL;
+    }
+  }
+
 #ifdef NON_MODULAR
   if (from_cont)
     do_put_response(from, i, from_cont);
 #endif
   ink_assert(!i->round_robin || !i->reverse_dns);
+  return i;
+Lfailed:
+  i = insert(60);        // currently ... 0
+  i->round_robin = false;
+  i->reverse_dns = !is_byname() && !is_srv();
+  i->is_srv = is_srv();
+  if (i->is_srv)
+    i->data.srv.srv_offset = 0;
+  else if (i->reverse_dns)
+    i->data.hostname_offset = 0;
   return i;
 }
 
@@ -1390,7 +1409,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
 
     bool rr;
     if (is_srv()) {
-      rr = !failed && (e->srv_hosts.getCount() > 0);
+      rr = !failed && (e->srv_hosts.srv_host_count > 0);
     } else
       rr = !failed && e->ent.h_addr_list[1];
 
@@ -1401,9 +1420,21 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
 
     HostDBInfo *old_r = probe(mutex, md5, name, namelen, &ip.sa, m_pDS, true);
     HostDBInfo old_info;
-    if (old_r)
+    HostDBRoundRobin *old_rr_data = NULL;
+    if (old_r) {
       old_info = *old_r;
-    HostDBRoundRobin *old_rr_data = old_r ? old_r->rr() : NULL;
+      old_rr_data = old_r->rr();
+#ifdef DEBUG
+      if (old_rr_data) {
+        for (int i = 0; i < old_rr_data->n; ++i) {
+          if (old_r->md5_high != old_rr_data->info[i].md5_high ||
+              old_r->md5_low != old_rr_data->info[i].md5_low ||
+              old_r->md5_low_low != old_rr_data->info[i].md5_low_low)
+          ink_assert(0);
+        }
+      }
+#endif
+    }
 
     int n = 0, nn = 0;
     void* first = 0;
@@ -1411,7 +1442,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
     if (rr) {
       af = e->ent.h_addrtype;
       if (is_srv() && !failed) {
-        n = e->srv_hosts.getCount();
+        n = e->srv_hosts.srv_host_count;
       } else {
         void* ptr; // tmp for current entry.
         for (
@@ -1455,41 +1486,79 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
     else
       r = lookup_done(tip_ptr, failed ? name : e->ent.h_name, false, ttl_seconds, failed ? 0 : &e->srv_hosts);
 
+    ink_debug_assert(!r || (r->app.allotment.application1 == 0 && r->app.allotment.application2 == 0));
+
     if (rr) {
-      int s = HostDBRoundRobin::size(n, is_srv());
+      int s = HostDBRoundRobin::size(n, e->srv_hosts.srv_hosts_length);
       HostDBRoundRobin *rr_data = (HostDBRoundRobin *) hostDB.alloc(&r->app.rr.offset, s);
       Debug("hostdb", "allocating %d bytes for %d RR at %p %d", s, n, rr_data, r->app.rr.offset);
       if (rr_data) {
+        rr_data->length = s;
         int i = 0, ii = 0;
         if (is_srv()) {
-          SortableQueue<SRV> *q = e->srv_hosts.getHosts();
-          if (q) {
-            for (i = 0; i < n; ++i) {
-              SRV *t = q->dequeue();
-              HostDBInfo& item = rr_data->info[i];
+          int skip = 0;
+          char *pos = (char *) rr_data + sizeof(HostDBRoundRobin) + n * sizeof(HostDBInfo);
+          SRV *q[HOST_DB_MAX_ROUND_ROBIN_INFO];
+          ink_debug_assert(n <= HOST_DB_MAX_ROUND_ROBIN_INFO);
+          // sort
+          for (i = 0; i < n; ++i) {
+            q[i] = &e->srv_hosts.hosts[i];
+          }
+          for (i = 0; i < n; ++i) {
+            for (ii = i + 1; ii < n; ++ii) {
+              if (*q[ii] < *q[i]) {
+                SRV *tmp = q[i];
+                q[i] = q[ii];
+                q[ii] = tmp;
+              }
+            }
+          }
 
-              ats_ip_invalidate(item.ip());
-              item.round_robin = 0;
-              item.reverse_dns = 0;
+          for (i = 0; i < n; ++i) {
+            SRV *t = q[i];
+            HostDBInfo& item = rr_data->info[i];
+            item.round_robin = 0;
+            item.reverse_dns = 0;
+            item.is_srv = 1;
+            item.data.srv.srv_weight = t->weight;
+            item.data.srv.srv_priority = t->priority;
+            item.data.srv.srv_port = t->port;
+            item.data.srv.key = t->key;
 
-              item.srv_weight = t->getWeight();
-              item.srv_priority = t->getPriority();
-              item.srv_port = t->getPort();
+            ink_debug_assert (skip + (int) t->host_len <= e->srv_hosts.srv_hosts_length);
 
-              ink_strlcpy(rr_data->rr_srv_hosts[i], t->getHost(), MAXDNAME);
-              rr_data->rr_srv_hosts[i][MAXDNAME - 1] = '\0';
-              item.is_srv = true;
+            memcpy(pos + skip, t->host, t->host_len);
+            item.data.srv.srv_offset = (pos - (char *) rr_data) + skip;
 
-              item.full = 1;
-              item.md5_high = r->md5_high;
-              item.md5_low = r->md5_low;
-              item.md5_low_low = r->md5_low_low;
-              SRVAllocator.free(t);
-              Debug("dns_srv", "inserted SRV RR record into HostDB with TTL: %d seconds", ttl_seconds);
+            skip += t->host_len;
+
+            item.md5_high = r->md5_high;
+            item.md5_low = r->md5_low;
+            item.md5_low_low = r->md5_low_low;
+            item.full = 1;
+
+            item.app.allotment.application1 = 0;
+            item.app.allotment.application2 = 0;
+            Debug("dns_srv", "inserted SRV RR record [%s] into HostDB with TTL: %d seconds", t->host, ttl_seconds);
+          }
+          rr_data->good = rr_data->n = n;
+          rr_data->current = 0;
+
+          // restore
+          if (old_rr_data) {
+            for (i = 0; i < rr_data->n; ++i) {
+              for (ii = 0; ii < old_rr_data->n; ++ii) {
+                if (rr_data->info[i].data.srv.key == old_rr_data->info[ii].data.srv.key) {
+                  char *new_host = rr_data->info[i].srvname(rr_data);
+                  char *old_host = old_rr_data->info[ii].srvname(old_rr_data);
+                  if (!strcmp(new_host, old_host))
+                    rr_data->info[i].app = old_rr_data->info[ii].app;
+                }
+              }
             }
           }
         } else {
-          for (; ii < nn; ++ii) {
+          for (ii = 0; ii < nn; ++ii) {
             if (is_addr_valid(af, e->ent.h_addr_list[ii])) {
               HostDBInfo& item = rr_data->info[i];
               ip_addr_set(item.ip(), af, e->ent.h_addr_list[ii]);
@@ -1497,6 +1566,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
               item.full = 1;
               item.round_robin = 0;
               item.reverse_dns = 0;
+              item.is_srv = 0;
               item.md5_high = r->md5_high;
               item.md5_low = r->md5_low;
               item.md5_low_low = r->md5_low_low;
@@ -1507,16 +1577,16 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
               ++i;
             }
           }
+          rr_data->good = rr_data->n = i;
+          rr_data->current = 0;
         }
-        rr_data->good = rr_data->n = n;
-        rr_data->current = 0;
       } else {
         ink_assert(!"out of room in hostdb data area");
         Warning("out of room in hostdb for round-robin DNS data");
         r->round_robin = 0;
       }
     }
-    if (!failed && !rr)
+    if (!failed && !rr && !is_srv())
       restore_info(r, old_r, old_info, old_rr_data);
     ink_assert(!r || !r->round_robin || !r->reverse_dns);
     ink_assert(failed || !r->round_robin || r->app.rr.offset);
@@ -1540,7 +1610,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
         return EVENT_CONT;
       }
       if (!action.cancelled)
-        reply_to_cont(action.continuation, r);
+        reply_to_cont(action.continuation, r, is_srv_lookup);
     }
     // wake up everyone else who is waiting
     remove_trigger_pending_dns();
@@ -1734,7 +1804,7 @@ HostDBContinuation::probeEvent(int event, Event * e)
 
   if (!hostdb_enable || (!*name && !ats_is_ip(&ip.sa))) {
     if (action.continuation)
-      action.continuation->handleEvent(EVENT_HOST_DB_LOOKUP, NULL);
+      action.continuation->handleEvent(is_srv_lookup ? EVENT_SRV_LOOKUP : EVENT_HOST_DB_LOOKUP, NULL);
 #ifdef NON_MODULAR
     if (from)
       do_put_response(from, 0, from_cont);
@@ -1754,7 +1824,7 @@ HostDBContinuation::probeEvent(int event, Event * e)
 
 #ifdef NON_MODULAR
     if (action.continuation && r)
-      reply_to_cont(action.continuation, r);
+      reply_to_cont(action.continuation, r, is_srv_lookup);
 
     // Respond to any remote node
     //
@@ -2094,10 +2164,18 @@ HostDBInfo::hostname()
 {
   if (!reverse_dns)
     return NULL;
-
+  ink_assert(!is_srv);
   return (char *) hostDB.ptr(&data.hostname_offset, hostDB.ptr_to_partition((char *) this));
 }
 
+char *
+HostDBInfo::srvname(HostDBRoundRobin *rr)
+{
+  if (!is_srv || !data.srv.srv_offset)
+    return NULL;
+  ink_assert(this - rr->info >= 0 && this - rr->info < rr->n && data.srv.srv_offset < rr->length);
+  return (char *) rr + data.srv.srv_offset;
+}
 
 HostDBRoundRobin *
 HostDBInfo::rr()
@@ -2120,15 +2198,12 @@ HostDBInfo::heap_size()
 {
   if (reverse_dns) {
     char *h = hostname();
-
     if (h)
       return strlen(h) + 1;
   } else if (round_robin) {
     HostDBRoundRobin *r = rr();
-
     if (r)
-      // this is a bit conservative, we might want to resurect them later
-      return HostDBRoundRobin::size(r->n, this->is_srv);
+      return r->length;
   }
   return 0;
 }

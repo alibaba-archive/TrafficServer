@@ -418,6 +418,8 @@ HttpSM::init()
   t_state.cache_info.config.cache_vary_default_images = t_state.http_config_param->cache_vary_default_images;
   t_state.cache_info.config.cache_vary_default_other = t_state.http_config_param->cache_vary_default_other;
 
+  t_state.srv_lookup = HttpConfig::m_master.srv_enabled;
+
   t_state.init();
   // Added to skip dns if the document is in cache. DNS will be forced if there is a ip based ACL in
   // cache control or parent.config or if the doc_in_cache_skip_dns is disabled or if http caching is disabled
@@ -1940,63 +1942,108 @@ HttpSM::state_send_server_request_header(int event, void *data)
   return 0;
 }
 
+//void
+//HttpSM::process_srv_info(HostDBInfo * r)
+//{
+//  DebugSM("dns_srv", "beginning process_srv_info");
+//
+//  SRVHosts s(r);                /* handled by conversion constructor */
+//  char new_host[MAXDNAME];
+//
+//  /* we didnt get any SRV records, continue w normal lookup */
+//  if (!r->srv_count) {
+//    DebugSM("dns_srv", "No SRV records were available, continuing to lookup %s", t_state.dns_info.lookup_name);
+//    ink_strlcpy(new_host, t_state.dns_info.lookup_name, sizeof(new_host));
+//    goto lookup;
+//  }
+//
+//  s.getWeightedHost(&new_host[0]);
+//
+//  if (*new_host == '\0') {
+//    DebugSM("dns_srv", "Weighted host returned was NULL or blank!, using %s as origin", t_state.dns_info.lookup_name);
+//    ink_strlcpy(new_host, t_state.dns_info.lookup_name, sizeof(new_host));
+//  } else {
+//    DebugSM("dns_srv", "Weighted host now: %s", new_host);
+//  }
+//
+//  DebugSM("dns_srv", "ending process_srv_info SRV stuff; moving on to lookup origin host");
+//
+//lookup:
+//  DebugSM("http_seq", "[HttpStateMachineGet::process_srv_info] Doing DNS Lookup based on SRV %s", new_host);
+//
+//  int server_port = t_state.current.server ? t_state.current.server->port : t_state.server_info.port;
+//
+//  HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_hostdb_lookup);
+//
+//  if (t_state.api_txn_dns_timeout_value != -1) {
+//    DebugSM("http_timeout", "beginning DNS lookup. allowing %d mseconds for DNS", t_state.api_txn_dns_timeout_value);
+//  }
+//
+//  Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this,
+//                                                                   (process_hostdb_info_pfn) & HttpSM::
+//                                                                   process_hostdb_info,
+//                                                                   &new_host[0], 0,
+//                                                                   server_port,
+//                                                                   ((t_state.cache_info.directives.
+//                                                                     does_client_permit_dns_storing) ? HostDBProcessor::
+//                                                                    HOSTDB_DO_NOT_FORCE_DNS : HostDBProcessor::
+//                                                                    HOSTDB_FORCE_DNS_RELOAD),
+//                                                                   (t_state.api_txn_dns_timeout_value != -1) ? t_state.
+//                                                                   api_txn_dns_timeout_value : 0);
+//
+//
+//  if (dns_lookup_action_handle != ACTION_RESULT_DONE) {
+//    ink_assert(!pending_action);
+//    pending_action = dns_lookup_action_handle;
+//    historical_action = pending_action;
+//  } else {
+//    call_transact_and_set_next_state(NULL);
+//  }
+//  return;
+//}
+
 void
 HttpSM::process_srv_info(HostDBInfo * r)
 {
   DebugSM("dns_srv", "beginning process_srv_info");
-
-  SRVHosts s(r);                /* handled by conversion constructor */
-  char new_host[MAXDNAME];
-
-  /* we didnt get any SRV records, continue w normal lookup */
-  if (!r->srv_count) {
+  if (!r || !r->is_srv || !r->round_robin) {
+    t_state.dns_info.srv_hostname[0] = '\0';
+    t_state.dns_info.srv_lookup_sucess = false;
+    t_state.srv_lookup = false;
     DebugSM("dns_srv", "No SRV records were available, continuing to lookup %s", t_state.dns_info.lookup_name);
-    ink_strlcpy(new_host, t_state.dns_info.lookup_name, sizeof(new_host));
-    goto lookup;
-  }
-
-  s.getWeightedHost(&new_host[0]);
-
-  if (*new_host == '\0') {
-    DebugSM("dns_srv", "Weighted host returned was NULL or blank!, using %s as origin", t_state.dns_info.lookup_name);
-    ink_strlcpy(new_host, t_state.dns_info.lookup_name, sizeof(new_host));
   } else {
-    DebugSM("dns_srv", "Weighted host now: %s", new_host);
+    HostDBRoundRobin *rr = r->rr();
+    HostDBInfo *srv = NULL;
+    if (rr) {
+      if (t_state.dns_info.update_srv) {
+        uint32_t key = makeHostHash(t_state.dns_info.srv_hostname);
+        for (int i = 0; i < rr->n; i++) {
+          if (key == rr->info[i].data.srv.key
+              && !strcmp(t_state.dns_info.srv_hostname,
+                  rr->info[i].srvname(rr)))
+            rr->info[i].app = t_state.dns_info.srv_app;
+        }
+      }
+      srv = rr->select_best_srv(t_state.dns_info.srv_hostname, &mutex.m_ptr->thread_holding->generator,
+            ink_cluster_time(), (int) t_state.txn_conf->down_server_timeout);
+    }
+    if (!srv) {
+      t_state.dns_info.srv_lookup_sucess = false;
+      t_state.dns_info.srv_hostname[0] = '\0';
+      t_state.srv_lookup = false;
+      DebugSM("dns_srv", "SRV records empty for %s", t_state.dns_info.lookup_name);
+    } else {
+      ink_debug_assert(r->md5_high == srv->md5_high && r->md5_low == srv->md5_low &&
+          r->md5_low_low == srv->md5_low_low);
+      t_state.dns_info.srv_lookup_sucess = true;
+      t_state.dns_info.srv_port = srv->data.srv.srv_port;
+      t_state.dns_info.srv_app = srv->app;
+      t_state.dns_info.single_srv = (rr->good == 1);
+      ink_debug_assert(srv->data.srv.key == makeHostHash(t_state.dns_info.srv_hostname));
+      DebugSM("dns_srv", "select SRV records %s", t_state.dns_info.srv_hostname);
+    }
   }
-
-  DebugSM("dns_srv", "ending process_srv_info SRV stuff; moving on to lookup origin host");
-
-lookup:
-  DebugSM("http_seq", "[HttpStateMachineGet::process_srv_info] Doing DNS Lookup based on SRV %s", new_host);
-
-  int server_port = t_state.current.server ? t_state.current.server->port : t_state.server_info.port;
-
-  HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_hostdb_lookup);
-
-  if (t_state.api_txn_dns_timeout_value != -1) {
-    DebugSM("http_timeout", "beginning DNS lookup. allowing %d mseconds for DNS", t_state.api_txn_dns_timeout_value);
-  }
-
-  Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this,
-                                                                   (process_hostdb_info_pfn) & HttpSM::
-                                                                   process_hostdb_info,
-                                                                   &new_host[0], 0,
-                                                                   server_port,
-                                                                   ((t_state.cache_info.directives.
-                                                                     does_client_permit_dns_storing) ? HostDBProcessor::
-                                                                    HOSTDB_DO_NOT_FORCE_DNS : HostDBProcessor::
-                                                                    HOSTDB_FORCE_DNS_RELOAD),
-                                                                   (t_state.api_txn_dns_timeout_value != -1) ? t_state.
-                                                                   api_txn_dns_timeout_value : 0);
-
-
-  if (dns_lookup_action_handle != ACTION_RESULT_DONE) {
-    ink_assert(!pending_action);
-    pending_action = dns_lookup_action_handle;
-    historical_action = pending_action;
-  } else {
-    call_transact_and_set_next_state(NULL);
-  }
+  t_state.dns_info.update_srv = false;
   return;
 }
 
@@ -2028,7 +2075,30 @@ HttpSM::process_hostdb_info(HostDBInfo * r)
           }
         }
       } else {
-        ret = rr->select_best_http(&t_state.client_info.addr.sa, ink_cluster_time(), (int) t_state.txn_conf->down_server_timeout);
+        time_t now = ink_cluster_time();
+        ret = rr->select_best_http(&t_state.client_info.addr.sa, now, (int) t_state.txn_conf->down_server_timeout);
+        ink_debug_assert(r->md5_high == ret->md5_high && r->md5_low == ret->md5_low &&
+                r->md5_low_low == ret->md5_low_low);
+        if (t_state.dns_info.srv_lookup_sucess && !t_state.dns_info.single_srv) {
+          int i = 0;
+          uint32_t earliest_failure = INT32_MAX;
+          for (; i < rr->n; i++) {
+            if (rr->info[i].app.http_data.last_failure == 0
+                || (unsigned int) (now
+                    - (int) t_state.txn_conf->down_server_timeout)
+                    > rr->info[i].app.http_data.last_failure)
+              break;
+            if (rr->info[i].app.http_data.last_failure < earliest_failure)
+              earliest_failure = rr->info[i].app.http_data.last_failure;
+          }
+          if (i >= rr->n) {
+            t_state.dns_info.srv_app.http_data.last_failure = earliest_failure;
+            hostDBProcessor.setby(t_state.current.server->name,
+                      strlen(t_state.current.server->name), &t_state.current.server->addr.sa,
+                      &t_state.dns_info.srv_app, t_state.dns_info.srv_hostname);
+            DebugSM("http_srv", "set srv target %s as failed!", t_state.dns_info.srv_hostname);
+          }
+        }
       }
     } else {
       ret = r;
@@ -2079,6 +2149,34 @@ HttpSM::state_hostdb_lookup(int event, void *data)
     pending_action = NULL;
     process_hostdb_info((HostDBInfo *) data);
     call_transact_and_set_next_state(NULL);
+    break;
+  case EVENT_SRV_LOOKUP:
+  {
+    pending_action = NULL;
+    process_srv_info((HostDBInfo *) data);
+
+    char *host_name = t_state.dns_info.srv_lookup_sucess ? t_state.dns_info.srv_hostname : t_state.dns_info.lookup_name;
+    int server_port = t_state.dns_info.srv_lookup_sucess ? t_state.dns_info.srv_port : t_state.server_info.port;
+
+    Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this,
+                                                                   (process_hostdb_info_pfn) & HttpSM::
+                                                                   process_hostdb_info,
+                                                                   host_name, 0,
+                                                                   server_port,
+                                                                   ((t_state.cache_info.directives.
+                                                                     does_client_permit_dns_storing) ? HostDBProcessor::
+                                                                    HOSTDB_DO_NOT_FORCE_DNS : HostDBProcessor::
+                                                                    HOSTDB_FORCE_DNS_RELOAD),
+                                                                   (t_state.api_txn_dns_timeout_value != -1) ? t_state.
+                                                                   api_txn_dns_timeout_value : 0);
+    if (dns_lookup_action_handle != ACTION_RESULT_DONE) {
+      ink_assert(!pending_action);
+      pending_action = dns_lookup_action_handle;
+      historical_action = pending_action;
+    } else {
+      call_transact_and_set_next_state(NULL);
+    }
+  }
     break;
   case EVENT_HOST_DB_IP_REMOVED:
     ink_assert(!"Unexpected event from HostDB");
@@ -2134,7 +2232,10 @@ HttpSM::state_mark_os_down(int event, void *data)
       // Look for the entry we need mark down in the round robin
       ink_assert(t_state.current.server != NULL);
       ink_assert(t_state.current.request_to == HttpTransact::ORIGIN_SERVER);
-      if (t_state.current.server) {
+      if (r->is_srv && t_state.dns_info.update_srv) {
+        mark_down = r->rr()->find_target(t_state.dns_info.srv_hostname);
+        mark_down->app.http_data.last_failure = t_state.request_sent_time;
+      } else if (t_state.current.server) {
         mark_down = r->rr()->find_ip(&t_state.current.server->addr.sa);
       }
     } else {
@@ -3765,16 +3866,14 @@ HttpSM::do_hostdb_lookup()
   ink_assert(pending_action == NULL);
 
   milestones.dns_lookup_begin = ink_get_hrtime();
-  bool use_srv_records = HttpConfig::m_master.srv_enabled;
+  bool use_srv_records = t_state.srv_lookup;
 
   if (use_srv_records) {
-    char* d = t_state.dns_info.srv_hostname;
-
+    char d[MAXDNAME];
     memcpy(d, "_http._tcp.", 11); // don't copy '\0'
     ink_strlcpy(d + 11, t_state.server_info.name, sizeof(d) - 11 ); // all in the name of performance!
 
     DebugSM("dns_srv", "Beginning lookup of SRV records for origin %s", d);
-    HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_srv_lookup);
 
     Action *srv_lookup_action_handle =
       hostDBProcessor.getSRVbyname_imm(this, (process_srv_info_pfn) & HttpSM::process_srv_info, d,
@@ -3784,6 +3883,28 @@ HttpSM::do_hostdb_lookup()
       ink_assert(!pending_action);
       pending_action = srv_lookup_action_handle;
       historical_action = pending_action;
+    } else {
+      char *host_name = t_state.dns_info.srv_lookup_sucess ? t_state.dns_info.srv_hostname : t_state.dns_info.lookup_name;
+      int server_port = t_state.dns_info.srv_lookup_sucess ? t_state.dns_info.srv_port : t_state.server_info.port;
+
+      Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this,
+                                                                 (process_hostdb_info_pfn) & HttpSM::
+                                                                 process_hostdb_info,
+                                                                 host_name, 0,
+                                                                 server_port,
+                                                                 ((t_state.cache_info.directives.
+                                                                 does_client_permit_dns_storing) ? HostDBProcessor::
+                                                                 HOSTDB_DO_NOT_FORCE_DNS : HostDBProcessor::
+                                                                 HOSTDB_FORCE_DNS_RELOAD),
+                                                                 (t_state.api_txn_dns_timeout_value != -1) ? t_state.
+                                                                 api_txn_dns_timeout_value : 0);
+      if (dns_lookup_action_handle != ACTION_RESULT_DONE) {
+        ink_assert(!pending_action);
+        pending_action = dns_lookup_action_handle;
+        historical_action = pending_action;
+      } else {
+        call_transact_and_set_next_state(NULL);
+      }
     }
     return;
   } else {                      /* we arent using SRV stuff... */
@@ -3878,7 +3999,7 @@ HttpSM::do_hostdb_update_if_necessary()
   // Check to see if we need to report or clear a connection failure
   if (t_state.current.server->connect_failure) {
     issue_update |= 1;
-    mark_host_failure(&t_state.host_db_info, t_state.client_request_time);
+    mark_host_failure(&t_state.host_db_info, t_state.request_sent_time);
   } else {
     if (t_state.host_db_info.app.http_data.last_failure != 0) {
       t_state.host_db_info.app.http_data.last_failure = 0;
@@ -3897,6 +4018,14 @@ HttpSM::do_hostdb_update_if_necessary()
       &t_state.current.server->addr.sa,
       &t_state.host_db_info.app
     );
+    if (t_state.dns_info.update_srv ||
+        (t_state.dns_info.srv_lookup_sucess && t_state.dns_info.srv_app.http_data.last_failure != 0)) {
+      t_state.dns_info.srv_app.http_data.last_failure = t_state.host_db_info.app.http_data.last_failure;
+      hostDBProcessor.setby(t_state.current.server->name,
+          strlen(t_state.current.server->name), &t_state.current.server->addr.sa,
+          &t_state.dns_info.srv_app, t_state.dns_info.srv_hostname);
+      DebugSM("http_srv", "set srv target %s as failed!", t_state.dns_info.srv_hostname);
+    }
   }
 
   char addrbuf[INET6_ADDRPORTSTRLEN];

@@ -94,7 +94,7 @@ static int http_backdoor_port = 8084;
 
 #if defined(linux)
 // TS-1075 : auto-port ::connect DoS on high traffic linux systems
-static int source_port = 0;
+static int source_port = 8087;
 #endif
 
 static int manager_failures = 0;

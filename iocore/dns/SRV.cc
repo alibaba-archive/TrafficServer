@@ -29,11 +29,11 @@
  */
 
 
-#include "P_DNS.h"
+//#include "P_DNS.h"
 
-struct HostDBRoundRobin;
+//struct HostDBRoundRobin;
 
-ClassAllocator<SRV> SRVAllocator("SRVAllocator");
+//ClassAllocator<SRV> SRVAllocator("SRVAllocator");
 
 /*
 To select a target to be contacted next, arrange all SRV RRs
@@ -54,108 +54,108 @@ are no unordered SRV RRs.  This process is repeated for each
 Priority.
 */
 
-static InkRand SRVRand(55378008);
+//static InkRand SRVRand(55378008);
 
-void
-SRVHosts::getWeightedHost(char *ret_val)
-{
-  int a_prev;
-  int k = 0;
-  int accum = 0;
-  unsigned int pri = 0;
-  SRV *i;
-  //InkRand x(time(NULL));
-  int tmp[1024];
-  int j = 0;
-  int v;
-  uint32_t xx;
-
-  if (hosts.empty() || getCount() == 0) {
-    goto err;
-  }
-
-  /* Step 1/2 Sort based on 'priority': handled by operator<
-   */
-
-  hosts.sort();
-
-  /*
-   * Step 2/2: Select SRV RRs by random weighted order
-   */
-
-  //get lowest priority (now sorted)
-  i = hosts.head;
-
-  if (!i) {
-    goto err;
-  }
-  //Get current priority
-  pri = i->getPriority();
-  //Accumulate weight sum for priority
-
-  while (i != NULL && pri == i->getPriority()) {
-    a_prev = accum;
-    accum += i->getWeight();
-    for (j = a_prev; j < accum; j++) {
-      tmp[j] = k;
-    }
-    i = i->link.next;
-    k++;
-  }
-
-  Debug("dns_srv", "accum=%d for priority=%d", accum, pri);
-
-  if (!accum) {
-    Debug("dns_srv", "Accumulator was 0. eek.");
-    goto err;
-  }
-  //Pick random number: 0..accum
-  xx = SRVRand.random() % accum;
-
-  Debug("dns_srv", "picked %d as a random number", xx);
-
-  i = hosts.head;
-  v = tmp[xx];
-  j = 0;
-  while (j < v) {
-    i = i->link.next;
-    j++;
-  }
-  Debug("dns_srv", "using SRV record of: pri: %d, wei: %d, port: %d, host: %s",
-        i->getPriority(), i->getWeight(), i->getPort(), i->getHost());
-
-  ink_strlcpy(ret_val, i->getHost(), MAXDNAME);
-  if (strcmp(ret_val, "") == 0 || strcmp(ret_val, ".") == 0) {
-    goto err;
-  }
-  return;
-err:
-  Debug("dns_srv", "there was a problem figuring out getWeightedHost() -- we are returning a blank SRV host");
-  ret_val[0] = '\0';
-  return;
-}
-
-SRVHosts::SRVHosts(HostDBInfo * info)
-{
-  hosts.clear();
-  srv_host_count = 0;
-  if (!info)
-    return;
-  HostDBRoundRobin *rr_data = info->rr();
-
-  if (!rr_data) {
-    return;
-  }
-
-  for (unsigned int i = 0; i < info->srv_count; i++) {
-    /* get the RR data */
-    SRV *s = SRVAllocator.alloc();
-    HostDBInfo nfo = rr_data->info[i];
-    s->setPort(nfo.srv_port);
-    s->setPriority(nfo.srv_priority);
-    s->setWeight(nfo.srv_weight);
-    s->setHost(&rr_data->rr_srv_hosts[i][0]);
-    insert(s);
-  }
-  return;
-}
+//void
+//SRVHosts::getWeightedHost(char *ret_val)
+//{
+//  int a_prev;
+//  int k = 0;
+//  int accum = 0;
+//  unsigned int pri = 0;
+//  SRV *i;
+//  //InkRand x(time(NULL));
+//  int tmp[1024];
+//  int j = 0;
+//  int v;
+//  uint32_t xx;
+//
+//  if (hosts.empty() || getCount() == 0) {
+//    goto err;
+//  }
+//
+//  /* Step 1/2 Sort based on 'priority': handled by operator<
+//   */
+//
+//  hosts.sort();
+//
+//  /*
+//   * Step 2/2: Select SRV RRs by random weighted order
+//   */
+//
+//  //get lowest priority (now sorted)
+//  i = hosts.head;
+//
+//  if (!i) {
+//    goto err;
+//  }
+//  //Get current priority
+//  pri = i->getPriority();
+//  //Accumulate weight sum for priority
+//
+//  while (i != NULL && pri == i->getPriority()) {
+//    a_prev = accum;
+//    accum += i->getWeight();
+//    for (j = a_prev; j < accum; j++) {
+//      tmp[j] = k;
+//    }
+//    i = i->link.next;
+//    k++;
+//  }
+//
+//  Debug("dns_srv", "accum=%d for priority=%d", accum, pri);
+//
+//  if (!accum) {
+//    Debug("dns_srv", "Accumulator was 0. eek.");
+//    goto err;
+//  }
+//  //Pick random number: 0..accum
+//  xx = SRVRand.random() % accum;
+//
+//  Debug("dns_srv", "picked %d as a random number", xx);
+//
+//  i = hosts.head;
+//  v = tmp[xx];
+//  j = 0;
+//  while (j < v) {
+//    i = i->link.next;
+//    j++;
+//  }
+//  Debug("dns_srv", "using SRV record of: pri: %d, wei: %d, port: %d, host: %s",
+//        i->getPriority(), i->getWeight(), i->getPort(), i->getHost());
+//
+//  ink_strlcpy(ret_val, i->getHost(), MAXDNAME);
+//  if (strcmp(ret_val, "") == 0 || strcmp(ret_val, ".") == 0) {
+//    goto err;
+//  }
+//  return;
+//err:
+//  Debug("dns_srv", "there was a problem figuring out getWeightedHost() -- we are returning a blank SRV host");
+//  ret_val[0] = '\0';
+//  return;
+//}
+//
+//SRVHosts::SRVHosts(HostDBInfo * info)
+//{
+//  hosts.clear();
+//  srv_host_count = 0;
+//  if (!info)
+//    return;
+//  HostDBRoundRobin *rr_data = info->rr();
+//
+//  if (!rr_data) {
+//    return;
+//  }
+//
+//  for (unsigned int i = 0; i < info->srv_count; i++) {
+//    /* get the RR data */
+//    SRV *s = SRVAllocator.alloc();
+//    HostDBInfo nfo = rr_data->info[i];
+//    s->setPort(nfo.srv_port);
+//    s->setPriority(nfo.srv_priority);
+//    s->setWeight(nfo.srv_weight);
+//    s->setHost(&rr_data->rr_srv_hosts[i][0]);
+//    insert(s);
+//  }
+//  return;
+//}

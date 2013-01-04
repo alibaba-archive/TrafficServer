@@ -1195,12 +1195,20 @@ HttpTransact::HandleRequest(State* s)
   // this needs to be called after initializing state variables from request
   // it adds the client-ip to the incoming client request.
 
-  if (!s->cop_test_page)
+  if (!s->cop_test_page) {
     DUMP_HEADER("http_hdrs", &s->hdr_info.client_request, s->state_machine_id, "Incoming Request");
+  } else
+    s->srv_lookup = false;
 
   if (s->state_machine->plugin_tunnel_type == HTTP_PLUGIN_AS_INTERCEPT) {
     setup_plugin_request_intercept(s);
     return;
+  }
+
+  if (s->srv_lookup) {
+    IpEndpoint a;
+    if (s->server_info.port != 80 || ats_ip_pton(s->server_info.name, &a) != -1)
+      s->srv_lookup = false;
   }
 
   // if the request is a trace or options request, decrement the
@@ -3483,17 +3491,20 @@ HttpTransact::handle_response_from_server(State* s)
       // If this is a round robin DNS entry & we're tried configured
       //    number of times, we should try another node
 
-      bool use_srv_records = HttpConfig::m_master.srv_enabled;
-
-      if (use_srv_records) {
-        delete_srv_entry(s, max_connect_retries);
-        return;
-      } else if (s->server_info.dns_round_robin &&
+      if (s->server_info.dns_round_robin &&
                  (s->txn_conf->connect_attempts_rr_retries > 0) &&
                  (s->current.attempts % s->txn_conf->connect_attempts_rr_retries == 0)) {
         delete_server_rr_entry(s, max_connect_retries);
         return;
       } else {
+        if (s->dns_info.srv_lookup_sucess && !s->dns_info.single_srv &&
+            (s->txn_conf->connect_attempts_rr_retries > 0) &&
+            s->current.attempts % s->txn_conf->connect_attempts_rr_retries == 0) {
+          // mark the target as failed
+          s->dns_info.update_srv = true;
+          delete_server_rr_entry(s, max_connect_retries);
+          return;
+        }
         retry_server_connection_not_open(s, s->current.state, max_connect_retries);
         DebugTxn("http_trans", "[handle_response_from_server] Error. Retrying...");
         s->next_action = how_to_open_connection(s);
@@ -3519,136 +3530,136 @@ HttpTransact::handle_response_from_server(State* s)
   return;
 }
 
-void
-HttpTransact::delete_srv_entry(State* s, int max_retries)
-{
-  /* we are using SRV lookups and this host failed -- lets remove it from the HostDB */
-  INK_MD5 md5;
-  EThread *thread = this_ethread();
-  //ProxyMutex *mutex = thread->mutex;
-  void *pDS = 0;
-
-  int len;
-  int port;
-  ProxyMutex *bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5) % hostDB.buckets));
-
-  char *hostname = s->dns_info.srv_hostname;    /* of the form: _http._tcp.host.foo.bar.com */
-
-  s->current.attempts++;
-
-  DebugTxn("http_trans", "[delete_srv_entry] attempts now: %d, max: %d", s->current.attempts, max_retries);
-  DebugTxn("dns_srv", "[delete_srv_entry] attempts now: %d, max: %d", s->current.attempts, max_retries);
-
-  if (!hostname) {
-    TRANSACT_RETURN(OS_RR_MARK_DOWN, ReDNSRoundRobin);
-  }
-
-  len = strlen(hostname);
-  port = 0;
-
-  make_md5(md5, hostname, len, port, 0, 1);
-
-  MUTEX_TRY_LOCK(lock, bucket_mutex, thread);
-  if (lock) {
-    IpEndpoint ip;
-    HostDBInfo *r = probe(bucket_mutex, md5, hostname, len, ats_ip4_set(&ip.sa, INADDR_ANY, htons(port)), pDS, false, true);
-    if (r) {
-      if (r->is_srv) {
-        DebugTxn("dns_srv", "Marking SRV records for %s [Origin: %s] as bad", hostname, s->dns_info.lookup_name);
-
-        uint64_t folded_md5 = fold_md5(md5);
-
-        HostDBInfo *new_r = NULL;
-
-        DebugTxn("dns_srv", "[HttpTransact::delete_srv_entry] Adding relevent entries back into HostDB");
-
-        SRVHosts srv_hosts(r);  /* conversion constructor for SRVHosts() */
-        r->set_deleted();       //delete the original HostDB
-        hostDB.delete_block(r); //delete the original HostDB
-
-        new_r = hostDB.insert_block(folded_md5, NULL, 0);       //create new entry
-        new_r->md5_high = md5[1];
-
-        SortableQueue<SRV> *q = srv_hosts.getHosts();        //get the Queue of SRV entries
-        SRV *srv_entry = NULL;
-
-        Queue<SRV> still_ok_hosts;
-
-        new_r->srv_count = 0;
-        while ((srv_entry = q->dequeue())) {    // ok to dequeue since this is the last time we are using this.
-          if (strcmp(srv_entry->getHost(), s->dns_info.lookup_name) != 0) {
-            still_ok_hosts.enqueue(srv_entry);
-            new_r->srv_count++;
-          } else {
-            SRVAllocator.free(srv_entry);
-          }
-        }
-
-        q = NULL;
-
-        /* no hosts DON'T match -- max out retries and return */
-        if (still_ok_hosts.empty()) {
-          DebugTxn("dns_srv", "No more SRV hosts to try that don't contain a host we just tried -- giving up");
-          s->current.attempts = max_retries;
-          TRANSACT_RETURN(OS_RR_MARK_DOWN, ReDNSRoundRobin);
-        }
-
-        /*
-           assert: at this point, we have (inside still_ok_hosts) those SRV records that were NOT pointing to the
-           same hostname as the one that just failed; lets reenqueue those into the HostDB and perform another "lookup"
-           which [hopefully] will find these records inside the HostDB and use them.
-         */
-
-        new_r->ip_timeout_interval = 45;        /* good for 45 seconds, then lets re-validate? */
-        new_r->ip_timestamp = hostdb_current_interval;
-        ats_ip_invalidate(new_r->ip());
-
-        /* these go into the RR area */
-        int n = new_r->srv_count;
-
-        if (n < 1) {
-          new_r->round_robin = 0;
-        } else {
-          new_r->round_robin = 1;
-          int sz = HostDBRoundRobin::size(n, true);
-          HostDBRoundRobin *rr_data = (HostDBRoundRobin *) hostDB.alloc(&new_r->app.rr.offset, sz);
-          DebugTxn("hostdb", "allocating %d bytes for %d RR at %p %d", sz, n, rr_data, new_r->app.rr.offset);
-          int i = 0;
-          while ((srv_entry = still_ok_hosts.dequeue())) {
-            DebugTxn("dns_srv", "Re-adding %s to HostDB [as a RR] after %s failed", srv_entry->getHost(), s->dns_info.lookup_name);
-            ats_ip_invalidate(rr_data->info[i].ip());
-            rr_data->info[i].round_robin = 0;
-            rr_data->info[i].reverse_dns = 0;
-
-            rr_data->info[i].srv_weight = srv_entry->getWeight();
-            rr_data->info[i].srv_priority = srv_entry->getPriority();
-            rr_data->info[i].srv_port = srv_entry->getPort();
-
-            ink_strlcpy(rr_data->rr_srv_hosts[i], srv_entry->getHost(), sizeof(rr_data->rr_srv_hosts[i]));
-            rr_data->info[i].is_srv = true;
-
-            rr_data->info[i].md5_high = new_r->md5_high;
-            rr_data->info[i].md5_low = new_r->md5_low;
-            rr_data->info[i].md5_low_low = new_r->md5_low_low;
-            rr_data->info[i].full = 1;
-            SRVAllocator.free(srv_entry);
-            i++;
-          }
-          rr_data->good = rr_data->n = n;
-          rr_data->current = 0;
-        }
-
-      } else {
-        DebugTxn("dns_srv", "Trying to delete a bad SRV for %s and something was wonky", hostname);
-      }
-    } else {
-      DebugTxn("dns_srv", "No SRV data to remove. Ruh Roh Shaggy. Maxing out connection attempts...");
-      s->current.attempts = max_retries;
-    }
-  }
-
-  TRANSACT_RETURN(OS_RR_MARK_DOWN, ReDNSRoundRobin);
-}
+//void
+//HttpTransact::delete_srv_entry(State* s, int max_retries)
+//{
+//  /* we are using SRV lookups and this host failed -- lets remove it from the HostDB */
+//  INK_MD5 md5;
+//  EThread *thread = this_ethread();
+//  //ProxyMutex *mutex = thread->mutex;
+//  void *pDS = 0;
+//
+//  int len;
+//  int port;
+//  ProxyMutex *bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5) % hostDB.buckets));
+//
+//  char *hostname = s->dns_info.srv_hostname;    /* of the form: _http._tcp.host.foo.bar.com */
+//
+//  s->current.attempts++;
+//
+//  DebugTxn("http_trans", "[delete_srv_entry] attempts now: %d, max: %d", s->current.attempts, max_retries);
+//  DebugTxn("dns_srv", "[delete_srv_entry] attempts now: %d, max: %d", s->current.attempts, max_retries);
+//
+//  if (!hostname) {
+//    TRANSACT_RETURN(OS_RR_MARK_DOWN, ReDNSRoundRobin);
+//  }
+//
+//  len = strlen(hostname);
+//  port = 0;
+//
+//  make_md5(md5, hostname, len, port, 0, 1);
+//
+//  MUTEX_TRY_LOCK(lock, bucket_mutex, thread);
+//  if (lock) {
+//    IpEndpoint ip;
+//    HostDBInfo *r = probe(bucket_mutex, md5, hostname, len, ats_ip4_set(&ip.sa, INADDR_ANY, htons(port)), pDS, false, true);
+//    if (r) {
+//      if (r->is_srv) {
+//        DebugTxn("dns_srv", "Marking SRV records for %s [Origin: %s] as bad", hostname, s->dns_info.lookup_name);
+//
+//        uint64_t folded_md5 = fold_md5(md5);
+//
+//        HostDBInfo *new_r = NULL;
+//
+//        DebugTxn("dns_srv", "[HttpTransact::delete_srv_entry] Adding relevent entries back into HostDB");
+//
+//        SRVHosts srv_hosts(r);  /* conversion constructor for SRVHosts() */
+//        r->set_deleted();       //delete the original HostDB
+//        hostDB.delete_block(r); //delete the original HostDB
+//
+//        new_r = hostDB.insert_block(folded_md5, NULL, 0);       //create new entry
+//        new_r->md5_high = md5[1];
+//
+//        SortableQueue<SRV> *q = srv_hosts.getHosts();        //get the Queue of SRV entries
+//        SRV *srv_entry = NULL;
+//
+//        Queue<SRV> still_ok_hosts;
+//
+//        new_r->srv_count = 0;
+//        while ((srv_entry = q->dequeue())) {    // ok to dequeue since this is the last time we are using this.
+//          if (strcmp(srv_entry->getHost(), s->dns_info.lookup_name) != 0) {
+//            still_ok_hosts.enqueue(srv_entry);
+//            new_r->srv_count++;
+//          } else {
+//            SRVAllocator.free(srv_entry);
+//          }
+//        }
+//
+//        q = NULL;
+//
+//        /* no hosts DON'T match -- max out retries and return */
+//        if (still_ok_hosts.empty()) {
+//          DebugTxn("dns_srv", "No more SRV hosts to try that don't contain a host we just tried -- giving up");
+//          s->current.attempts = max_retries;
+//          TRANSACT_RETURN(OS_RR_MARK_DOWN, ReDNSRoundRobin);
+//        }
+//
+//        /*
+//           assert: at this point, we have (inside still_ok_hosts) those SRV records that were NOT pointing to the
+//           same hostname as the one that just failed; lets reenqueue those into the HostDB and perform another "lookup"
+//           which [hopefully] will find these records inside the HostDB and use them.
+//         */
+//
+//        new_r->ip_timeout_interval = 45;        /* good for 45 seconds, then lets re-validate? */
+//        new_r->ip_timestamp = hostdb_current_interval;
+//        ats_ip_invalidate(new_r->ip());
+//
+//        /* these go into the RR area */
+//        int n = new_r->srv_count;
+//
+//        if (n < 1) {
+//          new_r->round_robin = 0;
+//        } else {
+//          new_r->round_robin = 1;
+//          int sz = HostDBRoundRobin::size(n, true);
+//          HostDBRoundRobin *rr_data = (HostDBRoundRobin *) hostDB.alloc(&new_r->app.rr.offset, sz);
+//          DebugTxn("hostdb", "allocating %d bytes for %d RR at %p %d", sz, n, rr_data, new_r->app.rr.offset);
+//          int i = 0;
+//          while ((srv_entry = still_ok_hosts.dequeue())) {
+//            DebugTxn("dns_srv", "Re-adding %s to HostDB [as a RR] after %s failed", srv_entry->getHost(), s->dns_info.lookup_name);
+//            ats_ip_invalidate(rr_data->info[i].ip());
+//            rr_data->info[i].round_robin = 0;
+//            rr_data->info[i].reverse_dns = 0;
+//
+//            rr_data->info[i].srv_weight = srv_entry->getWeight();
+//            rr_data->info[i].srv_priority = srv_entry->getPriority();
+//            rr_data->info[i].srv_port = srv_entry->getPort();
+//
+//            ink_strlcpy(rr_data->rr_srv_hosts[i], srv_entry->getHost(), sizeof(rr_data->rr_srv_hosts[i]));
+//            rr_data->info[i].is_srv = true;
+//
+//            rr_data->info[i].md5_high = new_r->md5_high;
+//            rr_data->info[i].md5_low = new_r->md5_low;
+//            rr_data->info[i].md5_low_low = new_r->md5_low_low;
+//            rr_data->info[i].full = 1;
+//            SRVAllocator.free(srv_entry);
+//            i++;
+//          }
+//          rr_data->good = rr_data->n = n;
+//          rr_data->current = 0;
+//        }
+//
+//      } else {
+//        DebugTxn("dns_srv", "Trying to delete a bad SRV for %s and something was wonky", hostname);
+//      }
+//    } else {
+//      DebugTxn("dns_srv", "No SRV data to remove. Ruh Roh Shaggy. Maxing out connection attempts...");
+//      s->current.attempts = max_retries;
+//    }
+//  }
+//
+//  TRANSACT_RETURN(OS_RR_MARK_DOWN, ReDNSRoundRobin);
+//}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Name       : delete_server_rr_entry
