@@ -135,6 +135,7 @@ extern ink_hrtime last_transient_accept_error;
 extern int http_accept_port_number;
 
 
+//#define INACTIVITY_TIMEOUT
 //
 // Configuration Parameter had to move here to share
 // between UnixNet and UnixUDPNet or SSLNet modules.
@@ -191,6 +192,7 @@ public:
   QueM(UnixNetVConnection, NetState, read, ready_link) read_ready_list;
   QueM(UnixNetVConnection, NetState, write, ready_link) write_ready_list;
   Que(UnixNetVConnection, link) open_list;
+  DList(UnixNetVConnection, cop_link) cop_list;
   ASLLM(UnixNetVConnection, NetState, read, enable_link) read_enable_list;
   ASLLM(UnixNetVConnection, NetState, write, enable_link) write_enable_list;
 
@@ -394,12 +396,17 @@ check_transient_accept_error(int res)
 static inline void
 read_disable(NetHandler * nh, UnixNetVConnection * vc)
 {
+#ifdef INACTIVITY_TIMEOUT
   if (vc->inactivity_timeout) {
     if (!vc->write.enabled) {
-      vc->inactivity_timeout->cancel_action(vc);
+      vc->inactivity_timeout->cancel_action();
       vc->inactivity_timeout = NULL;
     }
   }
+#else
+  if (!vc->write.enabled)
+    vc->next_inactivity_timeout_at = 0;
+#endif
   vc->read.enabled = 0;
   nh->read_ready_list.remove(vc);
   vc->ep.modify(-EVENTIO_READ);
@@ -408,12 +415,17 @@ read_disable(NetHandler * nh, UnixNetVConnection * vc)
 static inline void
 write_disable(NetHandler * nh, UnixNetVConnection * vc)
 {
+#ifdef INACTIVITY_TIMEOUT
   if (vc->inactivity_timeout) {
     if (!vc->read.enabled) {
-      vc->inactivity_timeout->cancel_action(vc);
+      vc->inactivity_timeout->cancel_action();
       vc->inactivity_timeout = NULL;
     }
   }
+#else
+  if (!vc->read.enabled)
+    vc->next_inactivity_timeout_at = 0;
+#endif
   vc->write.enabled = 0;
   nh->write_ready_list.remove(vc);
   vc->ep.modify(-EVENTIO_WRITE);

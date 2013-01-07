@@ -33,10 +33,9 @@ TS_INLINE void
 Event::cancel_action(Continuation * c)
 {
   if (!cancelled) {
-    if (!c || c == continuation) {
-      ethread->set_event_cancel(this);
-      cancelled = true;
-    }
+    ink_assert(!c || c == continuation);
+    ethread->set_event_cancel(this);
+    cancelled = true;
   }
 }
 

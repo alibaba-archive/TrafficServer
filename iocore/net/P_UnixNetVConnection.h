@@ -204,7 +204,11 @@ public:
 
   ink_hrtime inactivity_timeout_in;
   ink_hrtime active_timeout_in;
+#ifdef INACTIVITY_TIMEOUT
   Event *inactivity_timeout;
+#else
+  ink_hrtime next_inactivity_timeout_at;
+#endif
   Event *active_timeout;
   EventIO ep;
   NetHandler *nh;
@@ -279,18 +283,21 @@ TS_INLINE void
 UnixNetVConnection::set_inactivity_timeout(ink_hrtime timeout)
 {
   inactivity_timeout_in = timeout;
+#ifndef INACTIVITY_TIMEOUT
+  next_inactivity_timeout_at = ink_get_hrtime() + timeout;
+#else
   if (inactivity_timeout)
     inactivity_timeout->cancel_action(this);
   if (inactivity_timeout_in) {
     if (read.enabled) {
       ink_debug_assert(read.vio.mutex->thread_holding == this_ethread() && thread);
-      if (thread == this_ethread())
+      if (read.vio.mutex->thread_holding == thread)
         inactivity_timeout = thread->schedule_in_local(this, inactivity_timeout_in);
       else
         inactivity_timeout = thread->schedule_in(this, inactivity_timeout_in);
     } else if (write.enabled) {
       ink_debug_assert(write.vio.mutex->thread_holding == this_ethread() && thread);
-      if (thread == this_ethread())
+      if (write.vio.mutex->thread_holding == thread)
         inactivity_timeout = thread->schedule_in_local(this, inactivity_timeout_in);
       else
         inactivity_timeout = thread->schedule_in(this, inactivity_timeout_in);
@@ -298,6 +305,7 @@ UnixNetVConnection::set_inactivity_timeout(ink_hrtime timeout)
       inactivity_timeout = 0;
   } else
   inactivity_timeout = 0;
+#endif
 }
 
 TS_INLINE void
@@ -309,13 +317,13 @@ UnixNetVConnection::set_active_timeout(ink_hrtime timeout)
   if (active_timeout_in) {
     if (read.enabled) {
       ink_debug_assert(read.vio.mutex->thread_holding == this_ethread() && thread);
-      if (thread == this_ethread())
+      if (read.vio.mutex->thread_holding == thread)
         active_timeout = thread->schedule_in_local(this, active_timeout_in);
       else
         active_timeout = thread->schedule_in(this, active_timeout_in);
     } else if (write.enabled) {
       ink_debug_assert(write.vio.mutex->thread_holding == this_ethread() && thread);
-      if (thread == this_ethread())
+      if (read.vio.mutex->thread_holding == thread)
         active_timeout = thread->schedule_in_local(this, active_timeout_in);
       else
         active_timeout = thread->schedule_in(this, active_timeout_in);
@@ -329,10 +337,14 @@ TS_INLINE void
 UnixNetVConnection::cancel_inactivity_timeout()
 {
   inactivity_timeout_in = 0;
+#ifdef INACTIVITY_TIMEOUT
   if (inactivity_timeout) {
     inactivity_timeout->cancel_action(this);
     inactivity_timeout = NULL;
   }
+#else
+  next_inactivity_timeout_at = 0;
+#endif
 }
 
 TS_INLINE void
