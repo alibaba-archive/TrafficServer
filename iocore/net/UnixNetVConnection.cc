@@ -70,15 +70,19 @@ net_activity(UnixNetVConnection *vc, EThread *thread)
 {
   (void) thread;
   ink_debug_assert(thread == this_ethread());
-  if (vc->inactivity_timeout)
-    vc->inactivity_timeout->cancel_action(vc);
-  if (vc->inactivity_timeout_in) {
-    if (vc->thread == this_ethread())
-      vc->inactivity_timeout = vc->thread->schedule_in_local(vc, vc->inactivity_timeout_in);
-    else
-      vc->inactivity_timeout = vc->thread->schedule_in(vc, vc->inactivity_timeout_in);
-  } else
-    vc->inactivity_timeout = 0;
+  if (vc->inactivity_timeout && vc->inactivity_timeout_in && vc->inactivity_timeout->ethread == this_ethread())
+    vc->inactivity_timeout->schedule_in(vc->inactivity_timeout_in);
+  else {
+    if (vc->inactivity_timeout)
+      vc->inactivity_timeout->cancel_action(vc);
+    if (vc->inactivity_timeout_in) {
+      if (vc->thread == this_ethread())
+        vc->inactivity_timeout = vc->thread->schedule_in_local(vc, vc->inactivity_timeout_in);
+      else
+        vc->inactivity_timeout = vc->thread->schedule_in(vc, vc->inactivity_timeout_in);
+    } else
+      vc->inactivity_timeout = 0;
+  }
 }
 
 //

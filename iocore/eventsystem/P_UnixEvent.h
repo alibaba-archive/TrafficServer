@@ -37,8 +37,6 @@ Event::cancel_action(Continuation * c)
       ethread->set_event_cancel(this);
       cancelled = true;
     }
-    else
-      Warning("Event::cancel_action error because of c != continuation");
   }
 }
 
