@@ -6201,7 +6201,7 @@ HttpTransact::is_response_cacheable(State* s, HTTPHdr* request, HTTPHdr* respons
     }
   }
   // do not cache partial content - Range response
-  if (response_code == HTTP_STATUS_PARTIAL_CONTENT) {
+  if (response_code == HTTP_STATUS_PARTIAL_CONTENT || response_code == HTTP_STATUS_RANGE_NOT_SATISFIABLE) {
     DebugTxn("http_trans", "[is_response_cacheable] " "Partial content response - don't cache");
     return false;
   }
