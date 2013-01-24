@@ -287,7 +287,7 @@ UnixNetVConnection::set_inactivity_timeout(ink_hrtime timeout)
   next_inactivity_timeout_at = ink_get_hrtime() + timeout;
 #else
   if (inactivity_timeout)
-    inactivity_timeout->cancel_action(this);
+    inactivity_timeout->cancel_event(this);
   if (inactivity_timeout_in) {
     if (read.enabled) {
       ink_debug_assert(read.vio.mutex->thread_holding == this_ethread() && thread);
@@ -313,7 +313,7 @@ UnixNetVConnection::set_active_timeout(ink_hrtime timeout)
 {
   active_timeout_in = timeout;
   if (active_timeout)
-    active_timeout->cancel_action(this);
+    active_timeout->cancel_event(this);
   if (active_timeout_in) {
     if (read.enabled) {
       ink_debug_assert(read.vio.mutex->thread_holding == this_ethread() && thread);
@@ -339,7 +339,7 @@ UnixNetVConnection::cancel_inactivity_timeout()
   inactivity_timeout_in = 0;
 #ifdef INACTIVITY_TIMEOUT
   if (inactivity_timeout) {
-    inactivity_timeout->cancel_action(this);
+    inactivity_timeout->cancel_event(this);
     inactivity_timeout = NULL;
   }
 #else
@@ -351,7 +351,7 @@ TS_INLINE void
 UnixNetVConnection::cancel_active_timeout()
 {
   if (active_timeout) {
-    active_timeout->cancel_action(this);
+    active_timeout->cancel_event(this);
     active_timeout = NULL;
     active_timeout_in = 0;
   }

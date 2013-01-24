@@ -408,7 +408,7 @@ ClusterVConnectionBase::set_active_timeout(ink_hrtime timeout)
     if (active_timeout->ethread == this_ethread())
       active_timeout->schedule_in(timeout);
     else {
-      active_timeout->cancel(this);
+      active_timeout->cancel_event(this);
       active_timeout = thread->schedule_in(this, timeout);
     }
   } else {
@@ -427,7 +427,7 @@ ClusterVConnectionBase::set_inactivity_timeout(ink_hrtime timeout)
     if (inactivity_timeout->ethread == this_ethread())
       inactivity_timeout->schedule_in(timeout);
     else {
-      inactivity_timeout->cancel(this);
+      inactivity_timeout->cancel_event(this);
       inactivity_timeout = thread->schedule_in(this, timeout);
     }
   } else {
@@ -441,7 +441,7 @@ inline void
 ClusterVConnectionBase::cancel_active_timeout()
 {
   if (active_timeout) {
-    active_timeout->cancel(this);
+    active_timeout->cancel_event(this);
     active_timeout = NULL;
     active_timeout_in = 0;
   }
@@ -451,7 +451,7 @@ inline void
 ClusterVConnectionBase::cancel_inactivity_timeout()
 {
   if (inactivity_timeout) {
-    inactivity_timeout->cancel(this);
+    inactivity_timeout->cancel_event(this);
     inactivity_timeout = NULL;
     inactivity_timeout_in = 0;
   }
