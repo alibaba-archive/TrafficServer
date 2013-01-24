@@ -49,8 +49,6 @@ EThread::EThread()
    signal_hook(0),
    tt(REGULAR), eventsem(NULL)
 {
-  Event e;
-  ink_atomiclist_init(&CancelList, "CancelList", (char *) &e.clink.next - (char *) &e);
   memset(thread_private, 0, PER_THREAD_DATA);
 }
 
@@ -66,8 +64,6 @@ EThread::EThread(ThreadType att, int anid)
     eventsem(NULL),
     l1_hash(NULL)
 {
-  Event e;
-  ink_atomiclist_init(&CancelList, "CancelList", (char *) &e.clink.next - (char *) &e);
   ethreads_to_be_signalled = (EThread **)ats_malloc(MAX_EVENT_THREADS * sizeof(EThread *));
   memset((char *) ethreads_to_be_signalled, 0, MAX_EVENT_THREADS * sizeof(EThread *));
   memset(thread_private, 0, PER_THREAD_DATA);
@@ -102,8 +98,6 @@ EThread::EThread(ThreadType att, Event * e, ink_sem * sem)
    tt(att), oneevent(e), eventsem(sem)
 {
   ink_assert(att == DEDICATED);
-  Event ee;
-  ink_atomiclist_init(&CancelList, "CancelList", (char *) &ee.clink.next - (char *) &ee);
   memset(thread_private, 0, PER_THREAD_DATA);
 }
 
@@ -129,58 +123,6 @@ void
 EThread::set_event_type(EventType et)
 {
   event_types |= (1 << (int) et);
-}
-
-void
-EThread::set_event_cancel(Event * e)
-{
-  /*
-   * only cancel event in this case:
-   * 1. have be inserted in priority queue (e->in_the_priority_queue)
-   * localQueue Event will be process soon, so don't set cancel. This will be less cancel handler.
-   */
-  if (e->in_the_priority_queue && (e->timeout_at - e->ethread->cur_time) > HRTIME_SECONDS(5)) {
-    e->in_the_cancel_queue = 1;
-    e->cancelled = true;
-    if (e->ethread == this_thread())
-      CancelQueue.enqueue(e);
-    else
-      ink_atomiclist_push(&CancelList, e);
-  }
-}
-
-void
-EThread::process_cancel_event(ink_hrtime now, EThread * t)
-{
-  Event *e, *e_next;
-  Que(Event, clink) cancel;
-
-  e = (Event *) ink_atomiclist_popall(&CancelList);
-  while (e) {
-    ink_assert(e->ethread == t);
-    e_next = (Event *) e->clink.next;
-    e->clink.next = NULL;
-    CancelQueue.enqueue(e);
-    e = e_next;
-  }
- 
-  cancel.append(CancelQueue);
-  CancelQueue.clear();
-  while ((e = cancel.dequeue())) {
-    /* have be inserted in priority queue */
-    if (e->in_the_priority_queue) {
-      e->in_the_cancel_queue = 0;
-      EventQueue.remove(e);
-      free_event(e);
-    } 
-    /* have be called free_event() in process_event() */
-    else {
-      ink_assert(!e->in_the_cancel_queue);
-      e->in_the_cancel_queue = 0;
-      e->in_the_prot_queue = 0;
-      free_event(e);
-    }
-  }
 }
 
 void
