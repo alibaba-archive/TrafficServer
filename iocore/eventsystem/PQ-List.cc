@@ -38,10 +38,10 @@ PriorityEventQueue::enqueue(Event * e, ink_hrtime now)
   ink_assert(!e->in_the_prot_queue);
   e->in_the_priority_queue = 1;
 
-  if (((e->timeout_at - now) <= HRTIME_MSECONDS(5)) || ((signed long) idx < 0)) {
-    in_heap = 1;
-    in_idx = last_check_time & T_MASK & TVR_MASK;
-    tv1[in_idx].enqueue(e);
+  if ((e->timeout_at - now) <= HRTIME_MSECONDS(5)) {
+    in_heap = 0;
+    in_idx = 0;
+    running.enqueue(e); 
   }   
   else if (idx < 1 << TVR_BITS) {
     in_heap = 1;
@@ -53,6 +53,11 @@ PriorityEventQueue::enqueue(Event * e, ink_hrtime now)
     in_idx = (expires >> TVR_BITS) & TV_MASK;
     tv2[in_idx].enqueue(e);
   } 
+  else if ((signed long) idx < 0) {
+    in_heap = 1;
+    in_idx = last_check_time & T_MASK & TVR_MASK;
+    tv1[in_idx].enqueue(e);
+  }
   else {
     if (idx > T_MASK)
       expires = T_MASK + (last_check_time & T_MASK);
@@ -64,35 +69,58 @@ PriorityEventQueue::enqueue(Event * e, ink_hrtime now)
   e->in_heap = in_heap;
   e->in_idx = in_idx;
   //FIXME: some race will let some cancelled event in pri_queue, but it's acceptable
+  if (e->cancelled && !e->in_the_cancel_queue) {
+    remove(e);
+  }
 }
 
 void 
 PriorityEventQueue::remove(Event * e)
 {
-  ink_assert(e->in_the_priority_queue && (e->in_heap >=1) && (e->in_heap <= 3));
+  ink_assert(e->in_the_priority_queue);
   e->in_the_priority_queue = 0;
   switch (e->in_heap) {
+    case 0:
+      running.remove(e);
+      break;
     case 1:
       tv1[e->in_idx].remove(e);
       break;
     case 2:
       tv2[e->in_idx].remove(e);
       break;
-    case 3: 
+    default: 
       tv3[e->in_idx].remove(e);
   }
+}
+
+Event *
+PriorityEventQueue::dequeue_ready(ink_hrtime t)
+{
+  Event *e = running.dequeue();
+  if (e) {
+    ink_assert(e->in_the_priority_queue && !e->in_the_prot_queue);
+    e->in_the_priority_queue = 0;
+  }
+  return e;
 }
 
 ink_hrtime 
 PriorityEventQueue::earliest_timeout()
 {
-  int32_t inter = 0;
-  int32_t idx = last_check_time & T_MASK & TVR_MASK;
+  unsigned long tt;
 
-  while (idx < TVR_SIZE && !tv1[idx].head) {
-    idx += 2 * inter++;
-  }
-  return (last_check_time + 1 + inter) * TV_INTER;
+  if (running.head)
+    tt = TV_INTER;
+  else {
+    int32_t inter = 0;
+    int32_t idx = last_check_time & T_MASK & TVR_MASK;
+    while (idx < TVR_SIZE && !tv1[idx].head) {
+      idx += 2 * inter++;
+    }
+    tt = TV_INTER * inter;
+  } 
+  return last_check_time * TV_INTER + tt;
 }
 
 int 
@@ -122,8 +150,6 @@ PriorityEventQueue::cascade(ink_hrtime now, int heap, int index)
 void
 PriorityEventQueue::check_ready(ink_hrtime now, EThread * t)
 { 
-  Event *e;
-
   t->process_cancel_event(now, t);
 
   while (time_after_eq(now, last_check_time * TV_INTER)) {
@@ -132,13 +158,9 @@ PriorityEventQueue::check_ready(ink_hrtime now, EThread * t)
     if (!index && (!cascade(now, 2, INDEX(0))))
       cascade(now, 3, INDEX(1));
 
-    while ((e = tv1[index].dequeue())) {
-      ink_assert(e->in_the_priority_queue && !e->in_the_prot_queue);
-      e->in_the_priority_queue = 0;
-      if (e->cancelled)
-        t->free_event(e);
-      else
-        t->process_event(e, e->callback_event);
+    if (!tv1[index].empty()) {  
+      running.append(tv1[index]);
+      tv1[index].clear();
     }
     ++last_check_time;
   }

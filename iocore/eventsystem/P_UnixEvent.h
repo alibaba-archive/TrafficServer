@@ -26,16 +26,18 @@
 TS_INLINE void
 Event::cancel(Continuation * c)
 {
-  cancel_action(c);
+  if (!cancelled && !in_the_cancel_queue) {
+    ethread->set_event_cancel(this);
+    Action::cancel(c);
+  }
 }
 
 TS_INLINE void
 Event::cancel_action(Continuation * c)
 {
-  if (!cancelled) {
-    ink_assert(!c || c == continuation);
+  if (!cancelled && !in_the_cancel_queue) {
     ethread->set_event_cancel(this);
-    cancelled = true;
+    Action::cancel_action(c);
   }
 }
 
@@ -47,7 +49,7 @@ Event::init(Continuation * c, ink_hrtime atimeout_at, ink_hrtime aperiod)
   period = aperiod;
   immediate = !period && !atimeout_at;
   cancelled = false;
-  in_the_priority_queue = 0;
+  in_the_cancel_queue = 0;
   return this;
 }
 
@@ -63,6 +65,7 @@ Event::Event():
   ethread(0),
   in_the_prot_queue(false),
   in_the_priority_queue(false),
+  in_the_cancel_queue(false),
   immediate(false),
   globally_allocated(true),
   in_heap(false),

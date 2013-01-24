@@ -165,6 +165,11 @@ this_ethread()
 TS_INLINE void
 EThread::free_event(Event * e)
 {
+  if (e->in_the_cancel_queue) {
+    e->in_the_cancel_queue = 0;
+    return;
+  }
+
   ink_assert(!e->in_the_priority_queue && !e->in_the_prot_queue);
   e->mutex = NULL;
   EVENT_FREE(e, eventAllocator, this);
