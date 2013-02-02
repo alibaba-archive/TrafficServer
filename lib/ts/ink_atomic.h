@@ -115,6 +115,13 @@ static inline int ink_atomic_cas_ptr(pvvoidp mem, void* old, void* new_value) { 
 static inline int ink_atomic_increment(pvint32 mem, int value) { return __sync_fetch_and_add(mem, value); }
 static inline void *ink_atomic_increment_ptr(pvvoidp mem, intptr_t value) { return __sync_fetch_and_add((void**)mem, (void*)value); }
 
+// ink_atomic_decrement(ptr, count)
+// Decrement @ptr by @count, returning the previous value.
+template <typename Type, typename Amount> static inline Type
+ink_atomic_decrement(volatile Type * mem, Amount count) {
+  return __sync_fetch_and_sub(mem, (Type)count);
+}
+
 // Special hacks for ARM 32-bit
 #if defined(__arm__) && (SIZEOF_VOIDP == 4)
 extern ProcessMutex __global_death;
@@ -160,7 +167,7 @@ static inline int64_t ink_atomic_increment64(pvint64 mem, int64_t value) { retur
 
 #else /* not gcc > v4.1.2 */
 #error Need a compiler / libc that supports atomic operations, e.g. gcc v4.1.2 or later
-#endif 
+#endif
 
 #endif /* SunPRO CC */
 
