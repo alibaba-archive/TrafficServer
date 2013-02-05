@@ -120,7 +120,7 @@ RemapPlugins::run_single_remap()
     plugin = map->get_plugin(_cur);    //get the nth plugin in our list of plugins
 
   if (plugin) {
-    Debug("url_rewrite", "Remapping rule id: %d matched; running it now", map->map_id);
+    Debug("url_rewrite", "Remapping rule id: %d matched; running it now", map->getRank());
     plugin_retcode = run_plugin(plugin);
   } else if (_cur > 0) {
     _cur++;

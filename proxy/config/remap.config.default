@@ -14,25 +14,16 @@
 # Be aware, doing so makes the proxy a generic, open-relay!
 #
 #  The format is: 
-#      <map_type> client-URL origin-server-URL <tag_value> <filtering>
+#      <map_type> client-URL origin-server-URL
 #
 # Where client-URL and origin-server-URL are both of the format
-#    <scheme>://<host>:<port>/<path_prefix> 
-#
-#  The <tag_value> directive is optional and can be different for different
-#  types of <map_type>. The <filtering arguments> are optional ACL-like
-#  arguments unique for each remap rule
+#    <scheme>://<host>:<port>/<path_prefix>
 #
 #  Six different types of mappings are possible:
-#     map
-#     map_with_referer
-#     map_with_recv_port
-#     reverse_map
-#     redirect
-#     redirect_temporary
+#     map [with_recv_port | reverse]
+#     redirect [temporary]
 #
-#  Each of these map types can be prefixed with the string 'regex_' to indicate
-#  that the rule will have regular expression strings. See the last part of
+#  the rule can have regular expression strings. See the last part of
 #  this description for more information on regex support.
 #
 #  The 'map' mapping is the most straightforward.  Requests that match the
@@ -40,21 +31,17 @@
 #  the page on the remapped URL, but will not be notified of the address
 #  change.
 #
-#  The 'map_with_referer' is an extended version of 'map', which can be used to
-#  activate the so-called "deep linking protection" feature available in
-#  Apache Traffic Server.
-#
-#  The 'map_with_recv_port' is exactly like 'map' except that it uses the port
+#  The 'map with_recv_port' is exactly like 'map' except that it uses the port
 #  at which the request was received to perform the mapping instead of the port
-#  present in the request. When present, 'map_with_recv_port' mappings are
+#  present in the request. When present, 'map with_recv_port' mappings are
 #  checked first. If there is a match, then it is chosen without evaluating the
 #  "regular" forward mapping rules.
 #
-#  The 'reverse_map' mapping is used to rewrite location headers sent by the
+#  The 'map reverse' mapping is used to rewrite location headers sent by the
 #  origin server.  The 'redirect' mapping creates a permanent redirect message
 #  and informs the browser of the URL change.
 #
-#  The 'redirect_temporary' mapping acts in the same way but tells the browser
+#  The 'redirect temporary' mapping acts in the same way but tells the browser
 #  that this redirect is only temporary.  We need to map the URL in reverse
 #  proxy mode so that user agents know to contact Traffic Server and not
 #  attempt to contact the Origin Server directly.
@@ -63,7 +50,7 @@
 #  real content situated at server1.example.com with the rules:
 #
 #    map          http://www.example.com/      http://server1.example.com/
-#    reverse_map  http://server1.example.com/  http://www.example.com/
+#    map reverse  http://server1.example.com/  http://www.example.com/
 #
 #  Or you could permanently redirect users trying to access www.oldserver.com
 #  to www.newserver.com with the following rule:
@@ -74,13 +61,7 @@
 #  URL.  You could use the following rule to divert users away from a failed
 #  server:
 #
-#  redirect_temporary http://broken.firm.com http://working.firm.com
-#
-#  In order to use "deep linking protection" Traffic Server's feature, the
-#  'map_with_referer' mapping scheme must be used. In general, the format of is
-#  the following:
-#
-#     map_with_referer client-URL origin-server-URL redirect-URL regex1 [regex2 ...]
+#  redirect temporary http://broken.firm.com http://working.firm.com
 #
 #  'redirect-URL' is a redirection URL specified according to RFC 2616 and can
 #  contain special formatting instructions for run-time modifications of the
@@ -105,56 +86,11 @@
 #  symbols can be used:
 #
 #    %r - to substitute original "Referer" header string
-#    %f - to substitute client-URL from 'map_with_referer' record
-#    %t - to substitute origin-server-URL from 'map_with_referer' record
+#    %f - to substitute client-URL from 'map' record
+#    %t - to substitute origin-server-URL from 'map' record
 #    %o - to substitute request URL to origin server, which was created a
 #         the result of a mapping operation
 #
-#  Note: There is a special referer type "~*" that can be used in order to
-#  specify that the Referer header is optional in the request.  If "~*" referer
-#  was used in map_with_referer mapping, only requests with Referer header will
-#  be verified for validity.  If the "~" symbol was specified before referer
-#  regular expression, it means that the request with a matching referer header
-#  will be redirected to redirectURL. It can be used to create a so-called
-#  negative referer list.  If "*" was used as a referer regular expression -
-#  all referers are allowed.  Various combinations of "*" and "~" in a referer
-#  list can be used to create different filtering rules.
-#
-#  Examples: 
-#    map_with_referer http://y.foo.bar.com/x/yy/  http://foo.bar.com/x/yy/ http://games.bar.com/new_games .*\.bar\.com www.bar-friends.com
-#
-#  Explanation: Referer header must be in the request, only ".*\.bar\.com"
-#  and "www.bar-friends.com" are allowed.
-#  
-#    map_with_referer http://y.foo.bar.com/x/yy/  http://foo.bar.com/x/yy/ http://games.bar.com/new_games * ~.*\.evil\.com
-#
-#  Explanation: Referer header must be in the request but all referers are
-#  allowed except ".*\.evil\.com".
-#
-#    map_with_referer http://y.foo.bar.com/x/yy/  http://foo.bar.com/x/yy/ http://games.bar.com/error ~* * ~.*\.evil\.com
-#
-#  Explanation: Referer header is optional. However, if Referer header exists,
-#  only request from ".*\.evil\.com" will be redirected to redirect-URL.
-#
-#  There are optional filtering arguments that can be specified at the end of the mapping definition line:
-#
-#    @action=allow|deny
-#    @src_ip=IP-address
-#    @method=HTTP method string (CONNECT|DELETE|GET|HEAD|ICP_QUERY|OPTIONS|POST|PURGE|PUT|TRACE|PUSH)
-#    @plugin=<plugin_path>
-#    @pparam=<plugin_param>
-#
-#  There is no limitation for the number of filtering arguments.
-#
-#  Example:
-#    map http://foo.cow.com/ http://bar.cow.com @src_ip=10.72.118.51-10.72.118.62 @method=GET @method=DELETE @src_ip=192.168.0.1-192.168.0.254 @action=allow @method=PUT
-#
-#
-# ToDo: This has to be documented.
-# .defflt  disable_all @action=deny @src_ip=0.0.0.1-254.254.254.254
-# .defflt  disable_delete_purge @action=deny @method=delete @method=purge
-# .useflt  disable_all
-# .useflt  disable_delete_purge
 #
 #  Regex support: Regular expressions can be specified in the rules with the
 #  following limitations:

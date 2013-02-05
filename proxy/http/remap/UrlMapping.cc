@@ -22,19 +22,57 @@
  */
 
 #include "ink_port.h"
+#include "ACLMethodIpCheckList.h"
+#include "ACLRefererCheckList.h"
 #include "UrlMapping.h"
+#include "HttpConfig.h"
 
 /**
  *
 **/
 url_mapping::url_mapping(int rank /* = 0 */)
-  : from_path_len(0), fromURL(), toUrl(), homePageRedirect(false), unique(false), default_redirect_url(false),
-    optional_referer(false), negative_referer(false), wildcard_from_scheme(false),
-    tag(NULL), filter_redirect_url(NULL), referer_list(0),
-    redir_chunk_list(0), filter(NULL), _plugin_count(0), _rank(rank)
+  : fromURL(), toUrl(), homePageRedirect(false), 
+    unique(false), default_redirect_url(false),
+    wildcard_from_scheme(false),
+    filter_redirect_url(NULL), 
+    redir_chunk_list(0), _plugin_count(0), overridableHttpConfig(NULL), 
+    _needCheckRefererHost(false), _aclMethodIpCheckListCount(0), 
+    _aclRefererCheckListCount(0), _rank(rank)
 {
   memset(_plugin_list, 0, sizeof(_plugin_list));
   memset(_instance_data, 0, sizeof(_instance_data));
+  memset(_aclMethodIpCheckLists, 0, sizeof(_aclMethodIpCheckLists));
+  memset(_aclRefererCheckLists, 0, sizeof(_aclRefererCheckLists));
+}
+
+
+/**
+ *
+**/
+url_mapping::~url_mapping()
+{
+  redirect_tag_str *rc;
+
+  filter_redirect_url = (char *)ats_free_null(filter_redirect_url);
+
+  while ((rc = redir_chunk_list) != 0) {
+    redir_chunk_list = rc->next;
+    delete rc;
+  }
+
+  // Delete all instance data
+  for (unsigned int i = 0; i < _plugin_count; ++i) {
+    delete_instance(i);
+  }
+
+  // Destroy the URLs
+  fromURL.destroy();
+  toUrl.destroy();
+
+  if (overridableHttpConfig != NULL) {
+    delete overridableHttpConfig;
+    overridableHttpConfig = NULL;
+  }
 }
 
 
@@ -68,6 +106,83 @@ url_mapping::get_plugin(unsigned int index) const
   return _plugin_list[index];
 }
 
+int url_mapping::checkMethodIp(const ACLContext & context) {
+  int result;
+  int action;
+  result = ACL_ACTION_NONE_INT;
+  for (int i=0; i<_aclMethodIpCheckListCount; i++) {
+    action = _aclMethodIpCheckLists[i]->check(context);
+    if (action == ACL_ACTION_DENY_INT) {
+      return action;
+    }
+    if (action == ACL_ACTION_ALLOW_INT) {
+      result = action;
+    }
+  }
+
+  return result;
+}
+
+int url_mapping::checkReferer(const ACLContext & context) {
+  int result;
+  int action;
+  result = ACL_ACTION_NONE_INT;
+  for (int i=0; i<_aclRefererCheckListCount; i++) {
+    action = _aclRefererCheckLists[i]->check(context);
+    if (action == ACL_ACTION_DENY_INT) {
+      return action;
+    }
+    if (action == ACL_ACTION_ALLOW_INT) {
+      result = action;
+    }
+  }
+
+  return result;
+}
+
+int url_mapping::setMethodIpCheckLists(ACLMethodIpCheckList **checkLists, 
+    const int count)
+{
+  if (count < 0) {
+    return EINVAL;
+  }
+
+  if (count > MAX_ACL_CHECKLIST_COUNT) {
+    return ENOSPC;
+  }
+
+  _aclMethodIpCheckListCount = count;
+  for (int i=0; i<count; i++) {
+    _aclMethodIpCheckLists[i] = checkLists[i];
+  }
+
+  return 0;
+}
+
+int url_mapping::setRefererCheckLists(ACLRefererCheckList **checkLists, 
+    const int count)
+{
+  if (count < 0) {
+    return EINVAL;
+  }
+
+  if (count > MAX_ACL_CHECKLIST_COUNT) {
+    return ENOSPC;
+  }
+
+  _needCheckRefererHost = false;
+  _aclRefererCheckListCount = count;
+  for (int i=0; i<count; i++) {
+    _aclRefererCheckLists[i] = checkLists[i];
+
+    if (checkLists[i]->needCheckHost()) {
+      _needCheckRefererHost = true;
+    }
+  }
+
+  return 0;
+}
+
 /**
  *
 **/
@@ -81,44 +196,6 @@ url_mapping::delete_instance(unsigned int index)
     p->fp_tsremap_delete_instance(ih);
 }
 
-
-/**
- *
-**/
-url_mapping::~url_mapping()
-{
-  referer_info *r;
-  redirect_tag_str *rc;
-  acl_filter_rule *afr;
-
-  tag = (char *)ats_free_null(tag);
-  filter_redirect_url = (char *)ats_free_null(filter_redirect_url);
-
-  while ((r = referer_list) != 0) {
-    referer_list = r->next;
-    delete r;
-  }
-
-  while ((rc = redir_chunk_list) != 0) {
-    redir_chunk_list = rc->next;
-    delete rc;
-  }
-
-  // Delete all instance data
-  for (unsigned int i = 0; i < _plugin_count; ++i)
-    delete_instance(i);
-
-  // Delete filters
-  while ((afr = filter) != NULL) {
-    filter = afr->next;
-    delete afr;
-  }
-
-  // Destroy the URLs
-  fromURL.destroy();
-  toUrl.destroy();
-}
-
 void
 url_mapping::Print()
 {
@@ -126,10 +203,10 @@ url_mapping::Print()
 
   fromURL.string_get_buf(from_url_buf, (int) sizeof(from_url_buf));
   toUrl.string_get_buf(to_url_buf, (int) sizeof(to_url_buf));
-  printf("\t %s %s=> %s %s <%s> [plugins %s enabled; running with %u plugins]\n", from_url_buf,
-         unique ? "(unique)" : "", to_url_buf,
-         homePageRedirect ? "(R)" : "", tag ? tag : "",
-         _plugin_count > 0 ? "are" : "not", _plugin_count);
+  printf("\t %s %s=> %s %s [plugins %s enabled; running with %u plugins]\n", 
+      from_url_buf, unique ? "(unique)" : "", to_url_buf,
+      homePageRedirect ? "(R)" : "", _plugin_count > 0 ? "are" : "not", 
+      _plugin_count);
 }
 
 /**
@@ -175,61 +252,3 @@ redirect_tag_str::parse_format_redirect_url(char *url)
   return list;
 }
 
-
-/**
- *
-**/
-referer_info::referer_info(char *_ref, bool *error_flag, char *errmsgbuf, int errmsgbuf_size)
-  : next(0),
-    referer(0),
-    referer_size(0),
-    any(false),
-    negative(false),
-    regx_valid(false)
-{
-  const char *error;
-  int erroffset;
-
-  if (error_flag)
-    *error_flag = false;
-  regx = NULL;
-
-  if (_ref) {
-    if (*_ref == '~') {
-      negative = true;
-      _ref++;
-    }
-    if ((referer = ats_strdup(_ref)) != 0) {
-      referer_size = strlen(referer);
-      if (!strcmp(referer, "*"))
-        any = true;
-      else {
-        regx = pcre_compile(referer, PCRE_CASELESS, &error, &erroffset, NULL);
-        if (!regx) {
-          if (errmsgbuf && (errmsgbuf_size - 1) > 0)
-            ink_strlcpy(errmsgbuf, error, errmsgbuf_size);
-          if (error_flag)
-            *error_flag = true;
-        } else
-          regx_valid = true;
-      }
-    }
-  }
-}
-
-
-/**
- *
-**/
-referer_info::~referer_info()
-{
-  ats_free(referer);
-  referer = 0;
-  referer_size = 0;
-
-  if (regx_valid) {
-    pcre_free(regx);
-    regx = NULL;
-    regx_valid = false;
-  }
-}

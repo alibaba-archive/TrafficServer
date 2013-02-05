@@ -1,0 +1,40 @@
+
+   acl define debug deny {
+       src_ip  0.0.0.1-127.0.0.0
+       src_ip  128.0.0.0-192.167.255.255
+       src_ip  192.168.1.1-254.254.254.254
+       method GET|POST
+   }
+ 
+   acl define whitelist allow {
+       redirect_url http://www.example.com/forbidden.jpg
+       referer empty
+       referer domain example.com|mydomain.com|foo.com
+   }
+
+   http localhost:8080 {
+      acl check debug
+      map /cache-internal/ http://{cache-internal}
+      map /cache/ http://{cache}
+      map /stat/ http://{stat}
+      map /test/ http://{test}
+      map /hostdb/ http://{hostdb}
+      map /net/ http://{net}
+      map /http/ http://{http}
+      map /migrate/ http://{migrate}
+   }
+
+   map http://(.*):8080/  http://$1.example.com/
+
+   map http://(.*)/  http://$1.example.com/ {
+       acl check whitelist
+       acl deny all
+
+       config records  {
+         set proxy.config.http.cache.cache_responses_to_cookies=0
+         set "proxy.config.http.response_server_str=my cache server"
+         set proxy.config.http.keep_alive_enabled_in=1
+         set proxy.config.http.transaction_active_timeout_out=300
+       }
+   }
+

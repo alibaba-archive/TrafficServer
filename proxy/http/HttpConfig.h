@@ -399,8 +399,9 @@ struct HttpConfigPortRange
 // and State (txn) structure. It allows for certain configs
 // to be overridable per transaction more easily.
 struct OverridableHttpConfigParams {
-  OverridableHttpConfigParams()
-    :  maintain_pristine_host_hdr(0), chunking_enabled(0),
+  OverridableHttpConfigParams(const bool needFreeProxyResponseServerString = false)
+    :  need_free_proxy_response_server_string(needFreeProxyResponseServerString), 
+       maintain_pristine_host_hdr(0), chunking_enabled(0),
        negative_caching_enabled(0), cache_when_to_revalidate(0),
        keep_alive_enabled_in(0), keep_alive_enabled_out(0), keep_alive_post_out(0),
        share_server_sessions(0), fwd_proxy_auth_to_parent(0),
@@ -434,6 +435,15 @@ struct OverridableHttpConfigParams {
        proxy_response_server_string(NULL), proxy_response_server_string_len(0),
        cache_heuristic_lm_factor(0.0), freshness_fuzz_prob(0.0)
   { }
+
+  ~OverridableHttpConfigParams() {
+    if (need_free_proxy_response_server_string && proxy_response_server_string != NULL) {
+      ats_free(proxy_response_server_string);
+      proxy_response_server_string = NULL;
+    }
+  }
+
+  bool need_free_proxy_response_server_string;
 
   // A few rules here:
   //   1. Place all MgmtByte configs before all other configs
@@ -715,7 +725,6 @@ public:
   ////////////////////////////
   // HTTP Referer filtering //
   ////////////////////////////
-  MgmtByte referer_filter_enabled;
   MgmtByte referer_format_redirect;
 
   ////////////////////////////////////////////////////////
@@ -942,7 +951,6 @@ HttpConfigParams::HttpConfigParams()
     request_hdr_max_size(0),
     response_hdr_max_size(0),
     push_method_enabled(0),
-    referer_filter_enabled(0),
     referer_format_redirect(0),
     accept_encoding_filter_enabled(0),
     client_transparency_enabled(0),

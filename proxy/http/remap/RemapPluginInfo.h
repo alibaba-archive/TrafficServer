@@ -71,10 +71,10 @@ public:
   _tsremap_do_remap *fp_tsremap_do_remap;
   _tsremap_os_response *fp_tsremap_os_response;
 
-  remap_plugin_info(char *_path);
+  remap_plugin_info(const char *_path);
   ~remap_plugin_info();
 
-  remap_plugin_info *find_by_path(char *_path);
+  remap_plugin_info *find_by_path(const char *_path);
   void add_to_list(remap_plugin_info * pi);
   void delete_my_list();
 };

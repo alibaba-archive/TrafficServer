@@ -24,7 +24,6 @@
 #ifndef _URL_MAPPING_H_
 #define _URL_MAPPING_H_
 
-#include "AclFiltering.h"
 #include "Main.h"
 #include "Error.h"
 #include "URL.h"
@@ -38,23 +37,7 @@
 
 static const unsigned int MAX_REMAP_PLUGIN_CHAIN = 10;
 
-
-/**
- * Used to store http referer strings (and/or regexp)
-**/
-class referer_info
-{
-public:
-  referer_info(char *_ref, bool * error_flag = NULL, char *errmsgbuf = NULL, int errmsgbuf_size = 0);
-   ~referer_info();
-  referer_info *next;
-  char *referer;
-  int referer_size;
-  bool any;                     /* any flag '*' */
-  bool negative;                /* negative referer '~' */
-  bool regx_valid;
-  pcre* regx;
-};
+#define MAX_ACL_CHECKLIST_COUNT   2
 
 /**
  *
@@ -81,6 +64,11 @@ public:
   static redirect_tag_str *parse_format_redirect_url(char *url);
 };
 
+struct ACLContext;
+class ACLMethodIpCheckList;
+class ACLRefererCheckList;
+struct OverridableHttpConfigParams;
+
 /**
  * Used to store the mapping for class UrlRewrite
 **/
@@ -97,27 +85,50 @@ public:
   void delete_instance(unsigned int index);
   void Print();
 
-  int from_path_len;
+  inline int getRank() const { 
+    return _rank;
+  }
+
+  inline bool needCheckMethodIp() const {
+    return _aclMethodIpCheckListCount > 0;
+  }
+
+  inline bool needCheckReferer() const {
+    return _aclRefererCheckListCount > 0;
+  }
+
+  inline bool needCheckRefererHost() const {
+    return _needCheckRefererHost;
+  }
+
+  int checkMethodIp(const ACLContext & context);
+  int checkReferer(const ACLContext & context);
+
+  int setMethodIpCheckLists(ACLMethodIpCheckList **checkLists, 
+      const int count);
+
+  int setRefererCheckLists(ACLRefererCheckList **checkLists, 
+      const int count);
+
   URL fromURL;
   URL toUrl; // Default TO-URL (from remap.config)
   bool homePageRedirect;
   bool unique;                  // INKqa11970 - unique mapping
   bool default_redirect_url;
-  bool optional_referer;
-  bool negative_referer;
   bool wildcard_from_scheme;    // from url is '/foo', only http or https for now
-  char *tag;                    // tag
   char *filter_redirect_url;    // redirect url when referer filtering enabled
-  unsigned int map_id;
-  referer_info *referer_list;
   redirect_tag_str *redir_chunk_list;
-  acl_filter_rule *filter;      // acl filtering (list of rules)
   unsigned int _plugin_count;
   LINK(url_mapping, link); // For use with the main Queue linked list holding all the mapping
-
-  int getRank() const { return _rank; };
+  OverridableHttpConfigParams *overridableHttpConfig;
 
 private:
+  bool _needCheckRefererHost;
+  int _aclMethodIpCheckListCount;
+  int _aclRefererCheckListCount;
+  ACLMethodIpCheckList *_aclMethodIpCheckLists[MAX_ACL_CHECKLIST_COUNT];
+  ACLRefererCheckList *_aclRefererCheckLists[MAX_ACL_CHECKLIST_COUNT];
+
   remap_plugin_info* _plugin_list[MAX_REMAP_PLUGIN_CHAIN];
   void* _instance_data[MAX_REMAP_PLUGIN_CHAIN];
   int _rank;
@@ -137,8 +148,8 @@ public:
 
   ~UrlMappingContainer() { deleteToURL(); }
   
-  URL *getToURL() const { return _toURLPtr; };
-  url_mapping *getMapping() const { return _mapping; };
+  inline URL *getToURL() const { return _toURLPtr; };
+  inline url_mapping *getMapping() const { return _mapping; };
 
   void set(url_mapping *m) { 
     deleteToURL();

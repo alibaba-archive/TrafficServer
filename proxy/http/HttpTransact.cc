@@ -802,10 +802,8 @@ HttpTransact::StartRemapRequest(State* s)
   }
 
   if (url_remap_mode == URL_REMAP_DEFAULT || url_remap_mode == URL_REMAP_ALL) {
-    if (s->http_config_param->referer_filter_enabled) {
-      s->filter_mask = URL_REMAP_FILTER_REFERER;
-      if (s->http_config_param->referer_format_redirect)
-        s->filter_mask |= URL_REMAP_FILTER_REDIRECT_FMT;
+    if (s->http_config_param->referer_format_redirect) {
+      s->filter_mask |= URL_REMAP_FILTER_REDIRECT_FMT;
     }
   }
 

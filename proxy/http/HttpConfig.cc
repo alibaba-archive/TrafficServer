@@ -1326,7 +1326,6 @@ HttpConfig::startup()
   HttpEstablishStaticConfigByte(c.oride.send_http11_requests, "proxy.config.http.send_http11_requests");
 
   // HTTP Referer Filtering
-  HttpEstablishStaticConfigByte(c.referer_filter_enabled, "proxy.config.http.referer_filter");
   HttpEstablishStaticConfigByte(c.referer_format_redirect, "proxy.config.http.referer_format_redirect");
 
   // HTTP Accept_Encoding filtering (depends on User-Agent)
@@ -1590,7 +1589,6 @@ HttpConfig::reconfigure()
   params->reverse_proxy_no_host_redirect_len =
     params->reverse_proxy_no_host_redirect ? strlen(params->reverse_proxy_no_host_redirect) : 0;
 
-  params->referer_filter_enabled = INT_TO_BOOL(m_master.referer_filter_enabled);
   params->referer_format_redirect = INT_TO_BOOL(m_master.referer_format_redirect);
 
   params->accept_encoding_filter_enabled = INT_TO_BOOL(m_master.accept_encoding_filter_enabled);

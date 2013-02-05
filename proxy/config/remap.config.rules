@@ -1,0 +1,102 @@
+   directives:
+     scheme(SCHEME): http | https | tunnel
+     access control(ACL): acl
+     mapping & action(MAPPING): map | redirect
+     config parameters(CONFIG): config
+     add plugin(PLUGIN): plugin
+  
+   directive defines:  
+     http <hostname and port> {
+       ACL
+       MAPPING
+     }
+     
+     https <hostname and port> {
+       ACL
+       MAPPING
+     }
+
+     tunnel <hostname and port> {
+       ACL
+       MAPPING
+     }
+     
+     acl define <acl-name> <allow | deny> {
+         redirect_url <url>
+             redirect to the url when denied
+         method <method>
+             multi method splited by |
+             HTTP method (CONNECT|DELETE|GET|HEAD|ICP_QUERY|OPTIONS|POST|PURGE|PUT|TRACE|PUSH)
+         src_ip <ip>
+             source IP-address, support ip range as format: from-to, ip/mask
+         referer <empty | regex | host | domain> <param>
+             empty: matched when no referer header or the referer field is empty
+             regex: regex match with referer field
+                 referer regex <regex>
+             host: only match the hostname of the referer field, multi hostname splited by |
+                 referer host <hostname or hostname list>
+             domain: only match the domain of the referer field, the domain do NOT start with dot(.), multi domain splited by |
+                 referer domain <domain or domain list>
+     }
+     * acl-name: case sensitive
+     * method, src_ip and referer can occur more than once
+     * method and src_ip can occur seperately, also can occur same time which means must match both.
+     * referer: referer header check, you should config redirect_url directive when config referer redirective
+     
+     acl redirect_url <url>
+     acl check: acl check <acl-name>
+     acl <allow | deny> <src_ip | method | referer | all> <params | all>
+     
+     examples:
+       acl redirect_url http://www.example.com/fobbiden.png
+       acl allow method GET
+       acl deny  method all
+       acl allow src_ip 127.0.0.1
+       acl allow src_ip 192.168.0.1-192.168.0.254
+       acl deny src_ip all
+       acl allow referer empty
+       acl allow referer domain taobao.com
+       acl allow referer domain taobaocdn.com
+       acl deny referer all
+     
+       acl check blacklist
+       acl allow all
+     
+     ACL match rules:
+       * match the acl rule one by one, allow or deny the request by the action of the rule (allow or deny)
+       * allow the request when no rule matches
+       * response HTTP status 403 when denied by method and (or) src_ip checking;
+         response HTTP status 302 and set the HTTP location to redirect_url when denied by referer checking
+
+     config <records | hosting | cache-control | congestion> {
+       set <param>=<value>
+     }
+     only support 61 parameters of records
+     TODO: hosting, cache-control and congestion
+     
+     plugin <plugin-filename> <space-split-params>
+     
+     map [with_recv_port | reverse]: <public url or url path> <origin_url> {
+        ACL
+        CONFIG
+        PLUGIN
+     }
+     
+     redirect [temporary]: <public url or url path> <origin_url> {
+        ACL
+        CONFIG
+        PLUGIN
+     }
+     
+     Notice:
+       * remap.config will be checked strictly, so traffic server can't startup if load remap.config fail
+       * all of directives can occur more than once
+       * the last one will be used when redirect_url occurs more than once in a block
+       * SCHEME directives are the top directives
+       * MAPPING directives not only occurs in SCHEME block, and also occurs in top level
+       * acl define is the top directive
+       * config, plugin and acl (redirect_url | check | allow | deny) can't occur in top level
+       * the braces of MAPPING directives are optional
+       * the value of parameter should be quoted by double quotes which contains space characters, 
+         such as: config records "proxy.config.http.response_server_str=nginx server"
+
