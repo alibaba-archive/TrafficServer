@@ -136,6 +136,14 @@ bool MappingManager::isRegex(const char *str, const int length)
   const char *start;
   const char *end;
 
+  if (length == 0) {
+    return false;
+  }
+
+  if (*str == '^' || memchr(str, '$', length) != NULL) {
+    return true;
+  }
+
   if (memchr(str, '*', length) != NULL) {
     return true;
   }
@@ -236,6 +244,8 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
     return EINVAL;
   }
 
+  char buff[4096];
+  StringValue svUrl;
   StringValue fromHost;
   if (fromScheme.length == 0) {
     const SchemeParams *parentSchemeParams;
@@ -243,12 +253,18 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
             mappingParams->getParent())) != NULL)
     {
       const StringValue *host = parentSchemeParams->getHost();
-      char buff[host->length + fromUrl->length + 16];
-      StringValue svUrl;
+      if (16 + host->length + fromUrl->length >= (int)sizeof(buff)) {
+        fprintf(stderr, "from url is too long, host length: %d, "
+            "uri length: %d!\n", host->length, fromUrl->length);
+        return ENOSPC;
+      }
+
+      fromScheme.str = parentSchemeParams->getScheme();
+      fromScheme.length = strlen(fromScheme.str);
 
       svUrl.str = buff;
       svUrl.length = sprintf(buff, "%s://%.*s", 
-          parentSchemeParams->getScheme(), host->length, host->str);
+          fromScheme.str, host->length, host->str);
       if (*fromUrl->str != '/') {
         *(buff + svUrl.length++) = '/';
       }
@@ -256,7 +272,9 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
       svUrl.length += fromUrl->length;
 
       svUrl.strdup(&mappingEntry->_fromUrl);
-      fromHost = *host;
+      fromUrl = &svUrl;
+      fromHost.str = fromUrl->str + fromScheme.length + 3;
+      fromHost.length = host->length;
     }
     else {
       fromUrl->strdup(&mappingEntry->_fromUrl);
@@ -305,6 +323,25 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
     //printf("%.*s is REGEX!\n", mappingEntry->_fromUrl.length, mappingEntry->_fromUrl.str);
     mappingEntry->_flags |= MAPPING_FLAG_REGEX;
     mappingEntry->_simpleRegexRange = this->isRegexSimpleRange(&fromHost);
+    if (*(fromHost.str + fromHost.length - 1) == '$') {
+      const char *pColon = (const char *)memchr(fromHost.str, ':', fromHost.length);
+      if (pColon != NULL) {  //such as example.com:8080$, remove the $
+        int urlLength;
+        int remainLen;
+        urlLength = sprintf((char *)mappingEntry->_fromUrl.str, "%.*s://%.*s", 
+            fromScheme.length, fromScheme.str, fromHost.length - 1, fromHost.str);
+       
+        remainLen = fromUrl->length - (urlLength + 1);
+        if (remainLen > 0) {
+          memcpy((char *)mappingEntry->_fromUrl.str + urlLength, 
+              fromUrl->str + urlLength + 1, remainLen);
+          urlLength += remainLen;
+          *((char *)mappingEntry->_fromUrl.str + urlLength) = '\0';
+        }
+
+        mappingEntry->_fromUrl.length = urlLength;
+      }
+    }
   }
 
   return 0;
@@ -550,10 +587,13 @@ int MappingManager::expand()
       continue;
     }
 
+    int fromHostLen = fromHostEnd - fromHostStart;
     //convert regex escaped char \. to .
-    if (memchr(fromHostStart, '\\', fromHostEnd - fromHostStart) != NULL) {
+    if (*fromHostStart == '^' || memchr(fromHostStart, '$', fromHostLen)
+        != NULL || memchr(fromHostStart, '\\', fromHostLen) != NULL)
+    {
       int urlLen;
-      char urlBuff[2048];
+      char urlBuff[4096];
 
       if (fromUrl.length >= (int)sizeof(urlBuff)) {
         fprintf(stderr, "from url tool long, exceeds %d!\n", 
@@ -569,14 +609,15 @@ int MappingManager::expand()
       urlLen = sprintf(urlBuff, "%.*s", 
           (int)(fromHostStart - fromUrl.str), fromUrl.str);
 
+      int startOffset = *fromHostStart == '^' ? 1 : 0;   //skip start char ^
       const char *pSrc;
       char *pDest;
       pDest = urlBuff + urlLen;
-      for (pSrc=fromHostStart; pSrc<fromHostEnd; pSrc++) {
+      for (pSrc=fromHostStart+startOffset; pSrc<fromHostEnd; pSrc++) {
         if (*pSrc == '\\' && *(pSrc + 1) == '.') {
           *pDest++ = *(++pSrc);
         }
-        else {
+        else if (*pSrc != '$') {  //skip the $
           *pDest++ = *pSrc;
         }
       }

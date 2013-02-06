@@ -641,9 +641,10 @@ UrlRewrite::SuffixMappings * UrlRewrite::_getSuffixMappings(
   const char *to_host_str;
   int to_host_len;
   int regex_len;
+  int startOffset = *src_host == '^' ? 1 : 0;  //regex start char ^
 
-  have_group = (*src_host == '(');
-  regex_len = have_group ? 4 : 2;
+  have_group = (*(src_host + startOffset) == '(');
+  regex_len = startOffset + (have_group ? 4 : 2);
 
   to_host_str = new_mapping->toUrl.host_get(&to_host_len);
   bool tourl_need_replace = memchr(to_host_str, '$', to_host_len) != NULL;
@@ -688,6 +689,7 @@ bool UrlRewrite::_convertToSuffix(MappingsStore &store,
     url_mapping *new_mapping, char *src_host, int *err_no)
 {
   int src_host_len;
+  int startOffset = *src_host == '^' ? 1 : 0;  //regex start char ^
 
   *err_no = 0;
   src_host_len = strlen(src_host);
@@ -695,11 +697,13 @@ bool UrlRewrite::_convertToSuffix(MappingsStore &store,
   char host_suffix[1024];
   char *remain_str;
   int remain_len;
-  int regex_len = (*src_host == '(') ? 4 : 2;
-  remain_str = src_host + regex_len;
-  remain_len = src_host_len - regex_len;
+  int regex_len = (*(src_host + startOffset) == '(') ? 4 : 2;
+  remain_str = src_host + startOffset + regex_len;
+  remain_len = (src_host + src_host_len) - remain_str;
 
-  if (memchr(remain_str, '\\', remain_len) != NULL) {
+  if (remain_len > 0 && (*(remain_str + remain_len - 1) == '$' ||
+      memchr(remain_str, '\\', remain_len) != NULL))
+  {
     if (remain_len >= (int)sizeof(host_suffix)) {
       fprintf(stderr, "src hostname %s is too long, exceeds %d", 
           src_host, (int)sizeof(host_suffix));
@@ -713,6 +717,9 @@ bool UrlRewrite::_convertToSuffix(MappingsStore &store,
 
     pDest = host_suffix;
     host_end = remain_str + remain_len;
+    if (*(host_end - 1) == '$') {
+      --host_end; //skip regex end char $
+    }
     for (pSrc=remain_str; pSrc<host_end; pSrc++) {
       if (*pSrc == '\\' && *(pSrc + 1) == '.') {
         *pDest++ = *(++pSrc);
@@ -797,7 +804,10 @@ UrlRewrite::_addToStore(MappingsStore &store, url_mapping *new_mapping,
   bool retval = false;
   if (is_cur_mapping_regex) {
     bool suffix = false;
-    if (strncmp(src_host, ".*", 2) == 0 || strncmp(src_host, "(.*)", 4) == 0) {
+    int offset = *src_host == '^' ? 1 : 0;  //regex start char ^
+    if (strncmp(src_host + offset, ".*", 2) == 0 ||
+        strncmp(src_host + offset, "(.*)", 4) == 0)
+    {
       int result;
       if (_convertToSuffix(store, new_mapping, src_host, &result)) {
         retval = true;
@@ -860,9 +870,8 @@ UrlRewrite::BuildTable()
   int fromSchemeLen, toSchemeLen;
   const char *fromHost, *toHost;
   int fromHostLen, toHostLen;
-  char *map_from, *map_from_start;
-  char *map_to, *map_to_start;
-  const char *tmp;              // Appease the DEC compiler
+  const char *map_from, *map_from_start;
+  const char *map_to, *map_to_start;
   char *fromHost_lower = NULL;
   char *fromHost_lower_ptr = NULL;
   char fromHost_lower_buf[1024];
@@ -985,31 +994,30 @@ UrlRewrite::BuildTable()
 
     new_mapping = NEW(new url_mapping(mappingEntry->getLineNo()));  // use line # for rank for now
 
-    map_from = (char *)mappingEntry->getFromUrl()->str;
-    length = UrlWhack(map_from, &origLength);
+    map_from = mappingEntry->getFromUrl()->str;
+    length = UrlWhack((char *)map_from, &origLength);
 
     // FIX --- what does this comment mean?
     //
     // URL::create modified map_from so keep a point to
     //   the beginning of the string
-    if ((tmp = (map_from_start = map_from)) != NULL && length > 2 && tmp[length - 1] == '/' && tmp[length - 2] == '/') {
+    if (length > 2 && map_from[length - 1] == '/' && map_from[length - 2] == '/') {
       new_mapping->unique = true;
       length -= 2;
     }
 
+    map_from_start = map_from;
     new_mapping->fromURL.create(NULL);
-    new_mapping->fromURL.parse_no_path_component_breakdown(tmp, length);
+    new_mapping->fromURL.parse_no_path_component_breakdown(map_from, length);
+    *((char *)map_from_start + origLength) = '\0';  // Unwhack
 
-    map_from_start[origLength] = '\0';  // Unwhack
-
-    map_to = (char *)mappingEntry->getToUrl()->str;
-    length = UrlWhack(map_to, &origLength);
+    map_to = mappingEntry->getToUrl()->str;
+    length = UrlWhack((char *)map_to, &origLength);
     map_to_start = map_to;
-    tmp = map_to;
 
     new_mapping->toUrl.create(NULL);
-    new_mapping->toUrl.parse_no_path_component_breakdown(tmp, length);
-    map_to_start[origLength] = '\0';    // Unwhack
+    new_mapping->toUrl.parse_no_path_component_breakdown(map_to, length);
+    *((char *)map_to_start + origLength) = '\0';    // Unwhack
 
     fromScheme = new_mapping->fromURL.scheme_get(&fromSchemeLen);
     // If the rule is "/" or just some other relative path
