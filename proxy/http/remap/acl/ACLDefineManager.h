@@ -37,7 +37,7 @@ class ACLDefineManager {
     DynamicArray<ACLDefineChecker *> *commit();
     void rollback();
 
-    static void freeDefineCheckers(DynamicArray<ACLDefineChecker *> 
+    static void freeDefineCheckers(DynamicArray<ACLDefineChecker *>
         *defineCheckers);
 
   protected:

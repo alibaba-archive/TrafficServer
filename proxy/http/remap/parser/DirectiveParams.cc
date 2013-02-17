@@ -10,11 +10,11 @@
 #include "DirectiveParams.h"
 
 
-DirectiveParams::DirectiveParams(const int lineNo, const char *lineStr, 
-        const int lineLen, DirectiveParams *parent, 
-        RemapDirective *directive, const char *paramStr, 
-        const int paramLen, const bool bBlock) : _parent(parent), 
-  _directive(directive), _bBlock(bBlock), 
+DirectiveParams::DirectiveParams(const int lineNo, const char *lineStr,
+        const int lineLen, DirectiveParams *parent,
+        RemapDirective *directive, const char *paramStr,
+        const int paramLen, const bool bBlock) : _parent(parent),
+  _directive(directive), _bBlock(bBlock),
   _paramCount(0), _next(NULL)
 {
   _lineInfo.lineNo = lineNo;
@@ -52,7 +52,7 @@ int DirectiveParams::init()
 {
   const char *p;
   const char *pEnd;
- 
+
   _paramCount = 0;
   pEnd = _paramStr.str + _paramStr.length;
   p = _paramStr.str;
@@ -67,7 +67,7 @@ int DirectiveParams::init()
 
     if (_paramCount >= MAX_PARAM_NUM) {
         fprintf(stderr, "file: "__FILE__", line: %d, "
-            "too much parameters! config line: %.*s\n", __LINE__, 
+            "too much parameters! config line: %.*s\n", __LINE__,
             _lineInfo.line.length, _lineInfo.line.str);
         return ENOSPC;
     }
@@ -80,7 +80,7 @@ int DirectiveParams::init()
 
       if (p == pEnd) {
         fprintf(stderr, "file: "__FILE__", line: %d, "
-            "unmatched quote! config line: %.*s\n", __LINE__, 
+            "unmatched quote! config line: %.*s\n", __LINE__,
             _lineInfo.line.length, _lineInfo.line.str);
         return EINVAL;
       }
@@ -101,7 +101,7 @@ int DirectiveParams::init()
   return 0;
 }
 
-int DirectiveParams::getFirstParam(const char *paramStr, const int paramLen, 
+int DirectiveParams::getFirstParam(const char *paramStr, const int paramLen,
     StringValue *firstParam)
 {
   const char *p;
@@ -126,12 +126,12 @@ int DirectiveParams::getFirstParam(const char *paramStr, const int paramLen,
   return 0;
 }
 
-int DirectiveParams::split(const StringValue *sv, const char seperator, 
+int DirectiveParams::split(const StringValue *sv, const char seperator,
     StringValue *outputs, const int maxCount, int *count)
 {
   const char *p;
   const char *pEnd;
- 
+
   *count = 0;
   pEnd = sv->str + sv->length;
   p = sv->str;
@@ -146,7 +146,7 @@ int DirectiveParams::split(const StringValue *sv, const char seperator,
 
     if (*count >= maxCount) {
         fprintf(stderr, "file: "__FILE__", line: %d, "
-            "too much parameters! config line: %.*s\n", __LINE__, 
+            "too much parameters! config line: %.*s\n", __LINE__,
             _lineInfo.line.length, _lineInfo.line.str);
         return ENOSPC;
     }
@@ -159,7 +159,7 @@ int DirectiveParams::split(const StringValue *sv, const char seperator,
 
       if (p == pEnd) {
         fprintf(stderr, "file: "__FILE__", line: %d, "
-            "unmatched quote! config line: %.*s\n", __LINE__, 
+            "unmatched quote! config line: %.*s\n", __LINE__,
             _lineInfo.line.length, _lineInfo.line.str);
         return EINVAL;
       }

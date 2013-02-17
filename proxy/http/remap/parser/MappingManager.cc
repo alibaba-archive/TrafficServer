@@ -2,7 +2,7 @@
 #include "SchemeParams.h"
 #include "MappingManager.h"
 
-int MappingManager::loadCheckLists(const DirectiveParams *rootParams, 
+int MappingManager::loadCheckLists(const DirectiveParams *rootParams,
         ACLCheckListContainer *checkLists)
 {
   int result;
@@ -95,7 +95,7 @@ bool MappingManager::getScheme(const StringValue *url, StringValue *scheme)
     return false;
   }
 
-  if ((url->str + url->length) - colon >= 3 && 
+  if ((url->str + url->length) - colon >= 3 &&
     *(colon + 1) == '/' && *(colon + 2) == '/')
   {
     scheme->str = url->str;
@@ -111,7 +111,7 @@ bool MappingManager::getScheme(const StringValue *url, StringValue *scheme)
 }
 
 bool MappingManager::findCharPair(const char *str, const int length,
-    const char left, const char right, 
+    const char left, const char right,
     const char **start, const char **end)
 {
   *start = (const char *)memchr(str, left, length);
@@ -120,7 +120,7 @@ bool MappingManager::findCharPair(const char *str, const int length,
     return false;
   }
 
-  if ((*end=(const char *)memchr(*start + 1, right, (str + 
+  if ((*end=(const char *)memchr(*start + 1, right, (str +
             length) - (*start + 1))) != NULL)
   {
     (*end)++;
@@ -228,7 +228,7 @@ bool MappingManager::isRegexSimpleRange(const StringValue *sv)
   return true;
 }
 
-int MappingManager::loadMappingUrls(MappingEntry *mappingEntry, 
+int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
     const MappingParams *mappingParams)
 {
   const StringValue * fromUrl = mappingParams->getFromUrl();
@@ -239,7 +239,7 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
 
   this->getScheme(fromUrl, &fromScheme);
   if (!this->getScheme(toUrl, &toScheme)) {
-    fprintf(stderr, "invalid to url: %.*s, expect scheme\n", 
+    fprintf(stderr, "invalid to url: %.*s, expect scheme\n",
         toUrl->length, toUrl->str);
     return EINVAL;
   }
@@ -263,7 +263,7 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
       fromScheme.length = strlen(fromScheme.str);
 
       svUrl.str = buff;
-      svUrl.length = sprintf(buff, "%s://%.*s", 
+      svUrl.length = sprintf(buff, "%s://%.*s",
           fromScheme.str, host->length, host->str);
       if (*fromUrl->str != '/') {
         *(buff + svUrl.length++) = '/';
@@ -281,13 +281,13 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
     }
   }
   else {
-    if (!(fromScheme.equalsIgnoreCase(DIRECTVIE_NAME_HTTP, 
+    if (!(fromScheme.equalsIgnoreCase(DIRECTVIE_NAME_HTTP,
             sizeof(DIRECTVIE_NAME_HTTP) - 1) || fromScheme.equalsIgnoreCase(
-            DIRECTVIE_NAME_HTTPS, sizeof(DIRECTVIE_NAME_HTTPS) - 1) || 
-          fromScheme.equalsIgnoreCase(DIRECTVIE_NAME_TUNNEL, 
+            DIRECTVIE_NAME_HTTPS, sizeof(DIRECTVIE_NAME_HTTPS) - 1) ||
+          fromScheme.equalsIgnoreCase(DIRECTVIE_NAME_TUNNEL,
             sizeof(DIRECTVIE_NAME_TUNNEL) - 1)))
     {
-      fprintf(stderr, "invalid scheme: %.*s of from url: %.*s\n", 
+      fprintf(stderr, "invalid scheme: %.*s of from url: %.*s\n",
           fromScheme.length, fromScheme.str, fromUrl->length, fromUrl->str);
       return EINVAL;
     }
@@ -304,13 +304,13 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
     }
   }
 
-  if (!(toScheme.equalsIgnoreCase(DIRECTVIE_NAME_HTTP, 
+  if (!(toScheme.equalsIgnoreCase(DIRECTVIE_NAME_HTTP,
         sizeof(DIRECTVIE_NAME_HTTP) - 1) || toScheme.equalsIgnoreCase(
-        DIRECTVIE_NAME_HTTPS, sizeof(DIRECTVIE_NAME_HTTPS) - 1) || 
-        toScheme.equalsIgnoreCase(DIRECTVIE_NAME_TUNNEL, 
+        DIRECTVIE_NAME_HTTPS, sizeof(DIRECTVIE_NAME_HTTPS) - 1) ||
+        toScheme.equalsIgnoreCase(DIRECTVIE_NAME_TUNNEL,
           sizeof(DIRECTVIE_NAME_TUNNEL) - 1)))
   {
-    fprintf(stderr, "invalid scheme: %.*s of to url: %.*s\n", 
+    fprintf(stderr, "invalid scheme: %.*s of to url: %.*s\n",
         toScheme.length, toScheme.str, toUrl->length, toUrl->str);
     return EINVAL;
   }
@@ -328,12 +328,12 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
       if (pColon != NULL) {  //such as example.com:8080$, remove the $
         int urlLength;
         int remainLen;
-        urlLength = sprintf((char *)mappingEntry->_fromUrl.str, "%.*s://%.*s", 
+        urlLength = sprintf((char *)mappingEntry->_fromUrl.str, "%.*s://%.*s",
             fromScheme.length, fromScheme.str, fromHost.length - 1, fromHost.str);
-       
+
         remainLen = fromUrl->length - (urlLength + 1);
         if (remainLen > 0) {
-          memcpy((char *)mappingEntry->_fromUrl.str + urlLength, 
+          memcpy((char *)mappingEntry->_fromUrl.str + urlLength,
               fromUrl->str + urlLength + 1, remainLen);
           urlLength += remainLen;
           *((char *)mappingEntry->_fromUrl.str + urlLength) = '\0';
@@ -347,7 +347,7 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
   return 0;
 }
 
-int MappingManager::loadPlugins(MappingEntry *mappingEntry, 
+int MappingManager::loadPlugins(MappingEntry *mappingEntry,
     const MappingParams *mappingParams)
 {
   const PluginParams *pluginParams;
@@ -361,7 +361,7 @@ int MappingManager::loadPlugins(MappingEntry *mappingEntry,
         return ENOMEM;
       }
 
-      if (pluginInfo->duplicate(mappingEntry->_plugins.items + 
+      if (pluginInfo->duplicate(mappingEntry->_plugins.items +
             mappingEntry->_plugins.count) == NULL)
       {
         return ENOMEM;
@@ -375,7 +375,7 @@ int MappingManager::loadPlugins(MappingEntry *mappingEntry,
   return 0;
 }
 
-int MappingManager::addConfig(DynamicArray<ConfigKeyValue> *config, 
+int MappingManager::addConfig(DynamicArray<ConfigKeyValue> *config,
     const ConfigKeyValue *configKV)
 {
   if (!config->checkSize()) {
@@ -389,7 +389,7 @@ int MappingManager::addConfig(DynamicArray<ConfigKeyValue> *config,
   return 0;
 }
 
-int MappingManager::loadConfig(MappingEntry *mappingEntry, 
+int MappingManager::loadConfig(MappingEntry *mappingEntry,
     const ConfigParams *configParams)
 {
   int index;
@@ -434,7 +434,7 @@ int MappingManager::loadConfig(MappingEntry *mappingEntry,
   }
 }
 
-int MappingManager::loadConfigs(MappingEntry *mappingEntry, 
+int MappingManager::loadConfigs(MappingEntry *mappingEntry,
     const MappingParams *mappingParams)
 {
   int result;
@@ -455,7 +455,7 @@ int MappingManager::loadConfigs(MappingEntry *mappingEntry,
   return 0;
 }
 
-void MappingManager::addCheckLists(MappingEntry *mappingEntry, 
+void MappingManager::addCheckLists(MappingEntry *mappingEntry,
     ACLCheckListContainer *checkLists)
 {
   if (checkLists->methodIpCheckList != NULL) {
@@ -467,7 +467,7 @@ void MappingManager::addCheckLists(MappingEntry *mappingEntry,
   }
 }
 
-int MappingManager::loadMapping(const MappingParams *mappingParams, 
+int MappingManager::loadMapping(const MappingParams *mappingParams,
     ACLCheckListContainer *parentCheckLists)
 {
   int result;
@@ -477,7 +477,7 @@ int MappingManager::loadMapping(const MappingParams *mappingParams,
   }
 
   MappingEntry *mappingEntry = new MappingEntry(
-      mappingParams->getLineInfo()->lineNo, mappingParams->getType(), 
+      mappingParams->getLineInfo()->lineNo, mappingParams->getType(),
       mappingParams->getFlags());
   if (mappingEntry == NULL) {
     return ENOMEM;
@@ -512,7 +512,7 @@ int MappingManager::loadMapping(const MappingParams *mappingParams,
   return result;
 }
 
-int MappingManager::getHostname(const StringValue *url, 
+int MappingManager::getHostname(const StringValue *url,
     const char **start, const char **end)
 {
     *start = strstr(url->str, "//");
@@ -522,7 +522,7 @@ int MappingManager::getHostname(const StringValue *url,
     }
 
     *start += 2;
-    *end = (const char *)memchr(*start, '/', 
+    *end = (const char *)memchr(*start, '/',
         (url->str + url->length) - *start);
     if (*end == NULL) {
       *end = url->str + url->length;
@@ -596,7 +596,7 @@ int MappingManager::expand()
       char urlBuff[4096];
 
       if (fromUrl.length >= (int)sizeof(urlBuff)) {
-        fprintf(stderr, "from url tool long, exceeds %d!\n", 
+        fprintf(stderr, "from url tool long, exceeds %d!\n",
             (int)sizeof(urlBuff));
         result = _mappings.add(*mappingEntry) ?  0 : ENOMEM;
         if (result != 0) {
@@ -606,7 +606,7 @@ int MappingManager::expand()
         continue;
       }
 
-      urlLen = sprintf(urlBuff, "%.*s", 
+      urlLen = sprintf(urlBuff, "%.*s",
           (int)(fromHostStart - fromUrl.str), fromUrl.str);
 
       int startOffset = *fromHostStart == '^' ? 1 : 0;   //skip start char ^
@@ -643,7 +643,7 @@ int MappingManager::expand()
     chStart = *(rangeStart + 1);
     chEnd = *(rangeStart + 3);
     if (chStart > chEnd) {
-      fprintf(stderr, "invalid char range from %c to %c", 
+      fprintf(stderr, "invalid char range from %c to %c",
           chStart, chEnd);
 
       result = _mappings.add(*mappingEntry) ?  0 : ENOMEM;
@@ -689,7 +689,7 @@ int MappingManager::expand()
       newFromUrl = (char *)malloc(newEntry->_fromUrl.length + 1);
       if (newFromUrl == NULL) {
         result = errno != 0 ? errno : ENOMEM;
-        fprintf(stderr, "malloc %d bytes fail, error info: %s", 
+        fprintf(stderr, "malloc %d bytes fail, error info: %s",
             newEntry->_fromUrl.length + 1, strerror(result));
         return result;
       }
@@ -705,7 +705,7 @@ int MappingManager::expand()
         newToUrl = (char *)malloc(allocSize);
         if (newToUrl == NULL) {
           result = errno != 0 ? errno : ENOMEM;
-          fprintf(stderr, "malloc %d bytes fail, error info: %s", 
+          fprintf(stderr, "malloc %d bytes fail, error info: %s",
               allocSize, strerror(result));
           return result;
         }
@@ -734,14 +734,14 @@ int MappingManager::expand()
             const char *fromHostEnd;
             int fromHostLen;
 
-            this->getHostname(&newEntry->_fromUrl, 
+            this->getHostname(&newEntry->_fromUrl,
                 &fromHostStart, &fromHostEnd);
             fromHostLen = fromHostEnd - fromHostStart;
             allocSize += fromHostLen;
             newToUrl = (char *)realloc(newToUrl, allocSize);
             if (newToUrl == NULL) {
               result = errno != 0 ? errno : ENOMEM;
-              fprintf(stderr, "malloc %d bytes fail, error info: %s", 
+              fprintf(stderr, "malloc %d bytes fail, error info: %s",
                   allocSize, strerror(result));
               return result;
             }

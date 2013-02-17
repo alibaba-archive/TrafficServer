@@ -120,7 +120,7 @@ public:
     int regex_list_min_rank;
 
     bool empty() {
-      return ((hash_lookup == NULL) && (suffix_trie == NULL) && 
+      return ((hash_lookup == NULL) && (suffix_trie == NULL) &&
           regex_list.empty());
     }
   };
@@ -188,7 +188,7 @@ public:
 
   int UrlWhack(char *toWhack, int *origLength);
 
-  int load_remap_plugin(const PluginInfo *plugin, const MappingEntry *mappingEntry, 
+  int load_remap_plugin(const PluginInfo *plugin, const MappingEntry *mappingEntry,
       url_mapping *mp, char *errbuf, int errbufsize);
 
   int nohost_rules;
@@ -218,28 +218,28 @@ private:
 
   void _doRemap(UrlMappingContainer &mapping_container, URL *request_url);
 
-  bool _mappingLookup(MappingsStore &mappings, URL *request_url, 
+  bool _mappingLookup(MappingsStore &mappings, URL *request_url,
       int request_port, const char *request_host,
       int request_host_len, UrlMappingContainer &mapping_container);
 
-  url_mapping *_tableLookup(InkHashTable * h_table, URL * request_url, 
+  url_mapping *_tableLookup(InkHashTable * h_table, URL * request_url,
     char *request_host_key);
 
-  bool _suffixMappingLookup(HostnameTrie<SuffixMappings> *suffix_trie, 
-    URL *request_url, const char *request_host, const int request_host_len, 
+  bool _suffixMappingLookup(HostnameTrie<SuffixMappings> *suffix_trie,
+    URL *request_url, const char *request_host, const int request_host_len,
     const char *request_host_key, int host_key_len, int rank_ceiling,
     UrlMappingContainer &mapping_container);
 
 
-  bool _regexMappingLookup(RegexMappingList &regex_mappings, 
+  bool _regexMappingLookup(RegexMappingList &regex_mappings,
       URL * request_url, int request_port, const char *request_host,
       int request_host_len, int rank_ceiling,
       UrlMappingContainer &mapping_container);
 
-  int _expandSubstitutions(int *matches_info, const RegexMapping *reg_map, 
+  int _expandSubstitutions(int *matches_info, const RegexMapping *reg_map,
       const char *matched_string, char *dest_buf, int dest_buf_size);
 
-  bool _processRegexMappingConfig(const char *from_host_lower, 
+  bool _processRegexMappingConfig(const char *from_host_lower,
       url_mapping *new_mapping, RegexMapping *reg_map);
 
   void _destroyTable(InkHashTable *h_table);
@@ -248,22 +248,22 @@ private:
   inline bool _addToStore(MappingsStore &store, url_mapping *new_mapping, char *src_host,
                           bool is_cur_mapping_regex, int &count);
 
-  SuffixMappings *_getSuffixMappings(url_mapping *new_mapping, 
+  SuffixMappings *_getSuffixMappings(url_mapping *new_mapping,
       const char *src_host, const int src_host_len,
       const int src_host_remain_len);
 
-  bool _convertToSuffix(MappingsStore &store, url_mapping *new_mapping, 
+  bool _convertToSuffix(MappingsStore &store, url_mapping *new_mapping,
       char *src_host, int *err_no);
 
-  bool _setToUrlHostname(const SuffixMappings *suffixMappings, 
-    const char *request_host, const int request_host_len, 
+  bool _setToUrlHostname(const SuffixMappings *suffixMappings,
+    const char *request_host, const int request_host_len,
     UrlMappingContainer &mapping_container);
 
-  bool _getRecordsConfig(url_mapping *new_mapping, 
-      const DynamicArray<ConfigKeyValue> *configs, 
+  bool _getRecordsConfig(url_mapping *new_mapping,
+      const DynamicArray<ConfigKeyValue> *configs,
       HttpConfigParams *httpConfig);
 
-  inline int _getHostnameKey(URL *url, const char *src_host, 
+  inline int _getHostnameKey(URL *url, const char *src_host,
       char *buff, const int buffSize, int request_port = 0);
 };
 

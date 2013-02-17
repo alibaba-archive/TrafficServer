@@ -25,7 +25,7 @@
 #define ACL_STR_EMPTY  "empty"
 #define ACL_STR_UNKOWN "UNKOWN"
 
-#define ACL_SEPERATOR_CHAR '|' 
+#define ACL_SEPERATOR_CHAR '|'
 
 #define ACL_METHOD_FLAG_NONE      0
 #define ACL_METHOD_FLAG_CONNECT   (1 << 0)
@@ -110,7 +110,7 @@ class ACLMethodParams : public DirectiveParams {
        return _methodFlags;
      }
 
-     static const char *getMethodString(const int methodFlags, 
+     static const char *getMethodString(const int methodFlags,
          char *buff, int *len);
 
   protected:
@@ -197,27 +197,27 @@ class ACLParams : public DirectiveParams {
      virtual ~ACLParams() {}
   protected:
      inline int getACLAction(StringValue *sv) {
-       if (sv->equals(ACL_SECOND_DIRECTIVE_DEFINE_STR, 
+       if (sv->equals(ACL_SECOND_DIRECTIVE_DEFINE_STR,
              sizeof(ACL_SECOND_DIRECTIVE_DEFINE_STR) - 1))
        {
          return ACL_SECOND_DIRECTIVE_DEFINE_INT;
        }
-       if (sv->equals(ACL_SECOND_DIRECTIVE_CHECK_STR, 
+       if (sv->equals(ACL_SECOND_DIRECTIVE_CHECK_STR,
              sizeof(ACL_SECOND_DIRECTIVE_CHECK_STR) - 1))
        {
          return ACL_SECOND_DIRECTIVE_CHECK_INT;
        }
-       if (sv->equals(ACL_SECOND_DIRECTIVE_ALLOW_STR, 
+       if (sv->equals(ACL_SECOND_DIRECTIVE_ALLOW_STR,
              sizeof(ACL_SECOND_DIRECTIVE_ALLOW_STR) - 1))
        {
          return ACL_SECOND_DIRECTIVE_ALLOW_INT;
        }
-       if (sv->equals(ACL_SECOND_DIRECTIVE_DENY_STR, 
+       if (sv->equals(ACL_SECOND_DIRECTIVE_DENY_STR,
              sizeof(ACL_SECOND_DIRECTIVE_DENY_STR) - 1))
        {
          return ACL_SECOND_DIRECTIVE_DENY_INT;
        }
-       if (sv->equals(ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR, 
+       if (sv->equals(ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR,
              sizeof(ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR) - 1))
        {
          return ACL_SECOND_DIRECTIVE_REDIRECT_URL_INT;

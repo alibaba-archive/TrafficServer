@@ -30,10 +30,10 @@ ACLDefineChecker::~ACLDefineChecker()
 void ACLDefineChecker::print(const char *prefix)
 {
   printf("\tacl %s %s %s {\n", ACL_SECOND_DIRECTIVE_DEFINE_STR, _aclName,
-     (_action == ACL_ACTION_ALLOW_INT ? ACL_ACTION_ALLOW_STR : 
+     (_action == ACL_ACTION_ALLOW_INT ? ACL_ACTION_ALLOW_STR :
      ACL_ACTION_DENY_STR));
   if (*_redirectUrl != '\0') {
-    printf("\t\t%s %s\n", ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR, 
+    printf("\t\t%s %s\n", ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR,
         _redirectUrl);
   }
 
@@ -67,8 +67,8 @@ bool ACLDefineChecker::init(const ACLDefineParams *defineParams)
     if ((redirectUrlParams=dynamic_cast<const ACLRedirectUrlParams *>
           (children)) != NULL)
     {
-      snprintf(_redirectUrl, sizeof(_redirectUrl), "%.*s", 
-          redirectUrlParams->getUrl()->length, 
+      snprintf(_redirectUrl, sizeof(_redirectUrl), "%.*s",
+          redirectUrlParams->getUrl()->length,
           redirectUrlParams->getUrl()->str);
     }
     else if ((methodParams=dynamic_cast<const ACLMethodParams *>

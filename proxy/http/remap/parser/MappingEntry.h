@@ -16,8 +16,8 @@ class MappingEntry {
   friend class MappingManager;
 
   public:
-    MappingEntry(const int lineNo, const int type, const int flags) : 
-      _needFree(true), _simpleRegexRange(false), 
+    MappingEntry(const int lineNo, const int type, const int flags) :
+      _needFree(true), _simpleRegexRange(false),
       _lineNo(lineNo), _type(type), _flags(flags)
     {
     }
@@ -96,7 +96,7 @@ class MappingEntry {
     }
 
     bool hasChildren() const {
-      if (_aclMethodIpCheckLists.count > 0 || 
+      if (_aclMethodIpCheckLists.count > 0 ||
           _aclRefererCheckLists.count > 0 || _plugins.count > 0)
       {
         return true;
@@ -131,7 +131,7 @@ class MappingEntry {
     int _lineNo; //line no
     int _type;  //map or redirect
     int _flags; //regex, reverse etc
-    
+
     StringValue _fromUrl;
     StringValue _toUrl;
 

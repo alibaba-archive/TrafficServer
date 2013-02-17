@@ -41,7 +41,7 @@ class RemapDirective {
   friend class RemapParser;
 
   protected:
-    RemapDirective(const char *name, const int type, 
+    RemapDirective(const char *name, const int type,
         const int minParamCount, const int maxParamCount);
 
   public:
@@ -65,8 +65,8 @@ class RemapDirective {
 
     virtual int check(DirectiveParams *params, const bool bBlock);
 
-    virtual DirectiveParams *newDirectiveParams(const int lineNo, 
-        const char *lineStr, const int lineLen, DirectiveParams *parent, 
+    virtual DirectiveParams *newDirectiveParams(const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
 
   protected:

@@ -9,8 +9,8 @@ class SchemeDirective : public RemapDirective {
     SchemeDirective(const char *name);
     ~SchemeDirective();
 
-    DirectiveParams *newDirectiveParams(const int lineNo, 
-        const char *lineStr, const int lineLen, DirectiveParams *parent, 
+    DirectiveParams *newDirectiveParams(const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
 };
 

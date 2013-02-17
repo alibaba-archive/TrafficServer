@@ -64,21 +64,21 @@ class DirectiveParams {
   friend class ACLActionParams;
 
   public:
-    DirectiveParams(const int lineNo, const char *lineStr, 
-        const int lineLen, DirectiveParams *parent, 
-        RemapDirective *directive, const char *paramStr, 
+    DirectiveParams(const int lineNo, const char *lineStr,
+        const int lineLen, DirectiveParams *parent,
+        RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     virtual ~DirectiveParams();
 
     int init();
 
-    static int getFirstParam(const char *paramStr, const int paramLen, 
+    static int getFirstParam(const char *paramStr, const int paramLen,
         StringValue *firstParam);
 
     int setParams(const StringValue *params, const int paramCount) {
       if (paramCount < 0 || paramCount > MAX_PARAM_NUM) {
         fprintf(stderr, "file: "__FILE__", line: %d, "
-            "too much parameters: %d! config line: %.*s\n", __LINE__, 
+            "too much parameters: %d! config line: %.*s\n", __LINE__,
             paramCount, _lineInfo.line.length, _lineInfo.line.str);
         return EINVAL;
       }
@@ -104,7 +104,7 @@ class DirectiveParams {
 
     void toString(StringBuffer *sb);
 
-    virtual int parse() { 
+    virtual int parse() {
       return 0;
     }
 
@@ -137,7 +137,7 @@ class DirectiveParams {
     }
 
   protected:
-    int split(const StringValue *sv, const char seperator, 
+    int split(const StringValue *sv, const char seperator,
         StringValue *outputs, const int maxCount, int *count);
     virtual const char *toString(char *buff, int *len);
 

@@ -85,7 +85,7 @@ public:
   void delete_instance(unsigned int index);
   void Print();
 
-  inline int getRank() const { 
+  inline int getRank() const {
     return _rank;
   }
 
@@ -104,10 +104,10 @@ public:
   int checkMethodIp(const ACLContext & context);
   int checkReferer(const ACLContext & context);
 
-  int setMethodIpCheckLists(ACLMethodIpCheckList **checkLists, 
+  int setMethodIpCheckLists(ACLMethodIpCheckList **checkLists,
       const int count);
 
-  int setRefererCheckLists(ACLRefererCheckList **checkLists, 
+  int setRefererCheckLists(ACLRefererCheckList **checkLists,
       const int count);
 
   URL fromURL;
@@ -147,11 +147,11 @@ public:
 
 
   ~UrlMappingContainer() { deleteToURL(); }
-  
+
   inline URL *getToURL() const { return _toURLPtr; };
   inline url_mapping *getMapping() const { return _mapping; };
 
-  void set(url_mapping *m) { 
+  void set(url_mapping *m) {
     deleteToURL();
     _mapping = m;
     _toURLPtr = m ? &(m->toUrl) : NULL;
@@ -166,7 +166,7 @@ public:
     deleteToURL();
     _toURL.create(_heap);
     _toURLPtr = &_toURL;
-    return _toURLPtr; 
+    return _toURLPtr;
   }
 
   void deleteToURL() {
@@ -187,7 +187,7 @@ private:
   URL *_toURLPtr;
   URL _toURL;
   HdrHeap *_heap;
-  
+
   // non-copyable, non-assignable
   UrlMappingContainer(const UrlMappingContainer &orig);
   UrlMappingContainer &operator =(const UrlMappingContainer &rhs);

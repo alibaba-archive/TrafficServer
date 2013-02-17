@@ -4,8 +4,8 @@
 
 void MappingEntry::print()
 {
-  printf("%03d. %s %s %s %s", _lineNo, (_type == MAPPING_TYPE_MAP) ? 
-      DIRECTVIE_NAME_MAP : DIRECTVIE_NAME_REDIRECT, 
+  printf("%03d. %s %s %s %s", _lineNo, (_type == MAPPING_TYPE_MAP) ?
+      DIRECTVIE_NAME_MAP : DIRECTVIE_NAME_REDIRECT,
       MappingParams::getOptionStr(_flags & (~MAPPING_FLAG_REGEX)),
       _fromUrl.str, _toUrl.str);
 
@@ -58,14 +58,14 @@ void MappingEntry::print()
     }
 
     if (configs->count == 1) {
-      printf("\t%s %s %s=%s\n", DIRECTVIE_NAME_CONFIG, configTypeCaption, 
+      printf("\t%s %s %s=%s\n", DIRECTVIE_NAME_CONFIG, configTypeCaption,
           configs->items[0].key.str, configs->items[0].value.str);
       continue;
     }
 
     printf("\t%s %s {\n", DIRECTVIE_NAME_CONFIG, configTypeCaption);
     for (int k=0; k<configs->count; k++) {
-      printf("\t\t%s %s=%s\n", DIRECTVIE_NAME_CONFIG_SET, 
+      printf("\t\t%s %s=%s\n", DIRECTVIE_NAME_CONFIG_SET,
           configs->items[k].key.str, configs->items[k].value.str);
     }
     printf("\t}\n");

@@ -25,8 +25,8 @@ int ACLRefererCheckList::load(const DirectiveParams *parentParams)
     if ((redirectUrlParams=dynamic_cast<const ACLRedirectUrlParams *>
           (children)) != NULL)
     {
-      snprintf(_redirectUrl, sizeof(_redirectUrl), "%.*s", 
-          redirectUrlParams->getUrl()->length, 
+      snprintf(_redirectUrl, sizeof(_redirectUrl), "%.*s",
+          redirectUrlParams->getUrl()->length,
           redirectUrlParams->getUrl()->str);
       lastChecker = NULL;
     }
@@ -36,8 +36,8 @@ int ACLRefererCheckList::load(const DirectiveParams *parentParams)
       lastChecker = ACLDefineManager::getInstance()->find(
           checkParams->getAclName());
       if (lastChecker == NULL) {
-        fprintf(stderr, "Can't find acl name: %.*s!\n", 
-            checkParams->getAclName()->length, 
+        fprintf(stderr, "Can't find acl name: %.*s!\n",
+            checkParams->getAclName()->length,
             checkParams->getAclName()->str);
         return ENOENT;
       }
@@ -63,7 +63,7 @@ int ACLRefererCheckList::load(const DirectiveParams *parentParams)
       {
         ACLRefererChecker *refererChecker;
         if (lastChecker == NULL || !((refererChecker=dynamic_cast<
-                ACLRefererChecker *>(lastChecker)) != NULL && 
+                ACLRefererChecker *>(lastChecker)) != NULL &&
               refererChecker->getAction() == action))
         {
           refererChecker = new ACLRefererChecker(action);
@@ -71,7 +71,7 @@ int ACLRefererCheckList::load(const DirectiveParams *parentParams)
             return ENOMEM;
           }
 
-          this->addChecker(_checkers + ACL_FILED_INDEX_REFERER, 
+          this->addChecker(_checkers + ACL_FILED_INDEX_REFERER,
               refererChecker);
         }
 

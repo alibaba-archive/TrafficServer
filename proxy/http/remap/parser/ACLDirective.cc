@@ -1,7 +1,7 @@
 #include "ACLDirective.h"
 #include "ACLParams.h"
 
-ACLDirective::ACLDirective() : 
+ACLDirective::ACLDirective() :
   RemapDirective(DIRECTVIE_NAME_ACL, DIRECTIVE_TYPE_BOTH, 2, 4)
 {
   int index = 0;
@@ -18,8 +18,8 @@ ACLDirective::ACLDirective() :
   this->_childrenCount = index;
 }
 
-DirectiveParams *ACLDirective::newDirectiveParams(const int lineNo, 
-    const char *lineStr, const int lineLen, DirectiveParams *parent, 
+DirectiveParams *ACLDirective::newDirectiveParams(const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
     const char *paramStr, const int paramLen, const bool bBlock)
 {
   StringValue firstParam;
@@ -29,34 +29,34 @@ DirectiveParams *ACLDirective::newDirectiveParams(const int lineNo,
     return NULL;
   }
 
-  if (firstParam.equals(ACL_SECOND_DIRECTIVE_DEFINE_STR, 
+  if (firstParam.equals(ACL_SECOND_DIRECTIVE_DEFINE_STR,
         sizeof(ACL_SECOND_DIRECTIVE_DEFINE_STR) - 1))
   {
-    return new ACLDefineParams(lineNo, lineStr, lineLen, parent, this, 
+    return new ACLDefineParams(lineNo, lineStr, lineLen, parent, this,
               paramStr, paramLen, bBlock);
   }
-  else if (firstParam.equals(ACL_SECOND_DIRECTIVE_CHECK_STR, 
+  else if (firstParam.equals(ACL_SECOND_DIRECTIVE_CHECK_STR,
         sizeof(ACL_SECOND_DIRECTIVE_CHECK_STR) - 1))
   {
-    return new ACLCheckParams(lineNo, lineStr, lineLen, parent, this, 
+    return new ACLCheckParams(lineNo, lineStr, lineLen, parent, this,
               paramStr, paramLen, bBlock);
   }
-  else if (firstParam.equals(ACL_SECOND_DIRECTIVE_ALLOW_STR, 
+  else if (firstParam.equals(ACL_SECOND_DIRECTIVE_ALLOW_STR,
         sizeof(ACL_SECOND_DIRECTIVE_ALLOW_STR) - 1))
   {
-    return new ACLAllowParams(lineNo, lineStr, lineLen, parent, this, 
+    return new ACLAllowParams(lineNo, lineStr, lineLen, parent, this,
               paramStr, paramLen, bBlock);
   }
-  else if (firstParam.equals(ACL_SECOND_DIRECTIVE_DENY_STR, 
+  else if (firstParam.equals(ACL_SECOND_DIRECTIVE_DENY_STR,
         sizeof(ACL_SECOND_DIRECTIVE_DENY_STR) - 1))
   {
-    return new ACLDenyParams(lineNo, lineStr, lineLen, parent, this, 
+    return new ACLDenyParams(lineNo, lineStr, lineLen, parent, this,
               paramStr, paramLen, bBlock);
   }
-  else if (firstParam.equals(ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR, 
+  else if (firstParam.equals(ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR,
         sizeof(ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR) - 1))
   {
-    return new ACLRedirectUrlParams(lineNo, lineStr, lineLen, parent, this, 
+    return new ACLRedirectUrlParams(lineNo, lineStr, lineLen, parent, this,
               paramStr, paramLen, bBlock, false);
   }
   else {
@@ -65,58 +65,58 @@ DirectiveParams *ACLDirective::newDirectiveParams(const int lineNo,
 }
 
 
-ACLRefererDirective::ACLRefererDirective() : 
+ACLRefererDirective::ACLRefererDirective() :
   RemapDirective(DIRECTVIE_NAME_ACL_REFERER, DIRECTIVE_TYPE_STATEMENT, 1, 2)
 {
 }
 
-DirectiveParams *ACLRefererDirective::newDirectiveParams(const int lineNo, 
-    const char *lineStr, const int lineLen, DirectiveParams *parent, 
+DirectiveParams *ACLRefererDirective::newDirectiveParams(const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
     const char *paramStr, const int paramLen, const bool bBlock)
 {
-    return new ACLRefererParams(lineNo, lineStr, lineLen, parent, this, 
+    return new ACLRefererParams(lineNo, lineStr, lineLen, parent, this,
               paramStr, paramLen, bBlock);
 }
 
 
-ACLSrcIpDirective::ACLSrcIpDirective() : 
+ACLSrcIpDirective::ACLSrcIpDirective() :
   RemapDirective(DIRECTVIE_NAME_ACL_SRC_IP, DIRECTIVE_TYPE_STATEMENT, 1, 1)
 {
 }
 
-DirectiveParams *ACLSrcIpDirective::newDirectiveParams(const int lineNo, 
-    const char *lineStr, const int lineLen, DirectiveParams *parent, 
+DirectiveParams *ACLSrcIpDirective::newDirectiveParams(const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
     const char *paramStr, const int paramLen, const bool bBlock)
 {
-    return new ACLSrcIpParams(lineNo, lineStr, lineLen, parent, this, 
+    return new ACLSrcIpParams(lineNo, lineStr, lineLen, parent, this,
               paramStr, paramLen, bBlock);
 }
 
 
-ACLMethodDirective::ACLMethodDirective() : 
+ACLMethodDirective::ACLMethodDirective() :
   RemapDirective(DIRECTVIE_NAME_ACL_METHOD, DIRECTIVE_TYPE_STATEMENT, 1, 1)
 {
 }
 
-DirectiveParams *ACLMethodDirective::newDirectiveParams(const int lineNo, 
-    const char *lineStr, const int lineLen, DirectiveParams *parent, 
+DirectiveParams *ACLMethodDirective::newDirectiveParams(const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
     const char *paramStr, const int paramLen, const bool bBlock)
 {
-    return new ACLMethodParams(lineNo, lineStr, lineLen, parent, this, 
+    return new ACLMethodParams(lineNo, lineStr, lineLen, parent, this,
               paramStr, paramLen, bBlock);
 }
 
 
-ACLRedirectUrlDirective::ACLRedirectUrlDirective() : 
+ACLRedirectUrlDirective::ACLRedirectUrlDirective() :
   RemapDirective(DIRECTVIE_NAME_ACL_REDIRECT_URL, DIRECTIVE_TYPE_STATEMENT, 1, 1)
 {
 }
 
-DirectiveParams *ACLRedirectUrlDirective::newDirectiveParams(const int lineNo, 
-    const char *lineStr, const int lineLen, DirectiveParams *parent, 
+DirectiveParams *ACLRedirectUrlDirective::newDirectiveParams(const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
     const char *paramStr, const int paramLen, const bool bBlock)
 {
-    return new ACLRedirectUrlParams(lineNo, lineStr, lineLen, parent, this, 
+    return new ACLRedirectUrlParams(lineNo, lineStr, lineLen, parent, this,
               paramStr, paramLen, bBlock, true);
 }
 

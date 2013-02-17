@@ -34,12 +34,12 @@ struct StringValue {
 
   StringValue() : str(NULL), length(0) {}
 
-  StringValue(const char *theStr, const int theLength) : 
+  StringValue(const char *theStr, const int theLength) :
     str(theStr), length(theLength)
   {
   }
 
-  StringValue(const StringValue & src) : 
+  StringValue(const StringValue & src) :
     str(src.str), length(src.length)
   {
   }
@@ -49,7 +49,7 @@ struct StringValue {
   }
 
   inline bool equals(const StringValue *sv) const {
-    return (sv->length == this->length && memcmp(sv->str, 
+    return (sv->length == this->length && memcmp(sv->str,
           this->str, sv->length) == 0);
   }
 
@@ -58,7 +58,7 @@ struct StringValue {
   }
 
   inline bool equalsIgnoreCase(const StringValue *sv) const {
-    return (sv->length == this->length && strncasecmp(sv->str, 
+    return (sv->length == this->length && strncasecmp(sv->str,
           this->str, sv->length) == 0);
   }
 
@@ -67,7 +67,7 @@ struct StringValue {
     dest->length = this->length;
     newStr = (char *)malloc(this->length + 1);
     if (newStr == NULL) {
-      fprintf(stderr, "malloc %d bytes fail, error info: %s\n", 
+      fprintf(stderr, "malloc %d bytes fail, error info: %s\n",
           this->length + 1, strerror(errno));
       return NULL;
     }
@@ -158,7 +158,7 @@ struct DynamicArray {
   int allocSize; //alloced item count
   int initSize;  //init capacity
 
-  DynamicArray(const int theInitSize) : 
+  DynamicArray(const int theInitSize) :
     items(NULL), count(0), allocSize(0), initSize(theInitSize)
   {
   }
@@ -166,8 +166,8 @@ struct DynamicArray {
   DynamicArray() : items(NULL), count(0), allocSize(0), initSize(0)
   {
   }
-  
-  DynamicArray(DynamicArray<T> &src) : items(src.items), 
+
+  DynamicArray(DynamicArray<T> &src) : items(src.items),
     count(src.count), allocSize(src.allocSize), initSize(src.initSize)
   {
   }
@@ -198,7 +198,7 @@ struct DynamicArray {
     int bytes = sizeof(T) * dest->allocSize;
     dest->items = (T *)malloc(bytes);
     if (dest->items == NULL) {
-      fprintf(stderr, "malloc %d bytes fail, error info: %s", 
+      fprintf(stderr, "malloc %d bytes fail, error info: %s",
           bytes, strerror(errno));
       return NULL;
     }
@@ -223,7 +223,7 @@ struct DynamicArray {
     int bytes = sizeof(T) * allocSize;
     T * newItems = (T *)malloc(bytes);
     if (newItems == NULL) {
-      fprintf(stderr, "malloc %d bytes fail, error info: %s", 
+      fprintf(stderr, "malloc %d bytes fail, error info: %s",
           bytes, strerror(errno));
       return false;
     }

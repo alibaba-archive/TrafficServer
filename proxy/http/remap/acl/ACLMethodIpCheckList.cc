@@ -28,8 +28,8 @@ int ACLMethodIpCheckList::load(const DirectiveParams *parentParams)
       lastChecker = ACLDefineManager::getInstance()->find(
           checkParams->getAclName());
       if (lastChecker == NULL) {
-        fprintf(stderr, "Can't find acl name: %.*s!\n", 
-            checkParams->getAclName()->length, 
+        fprintf(stderr, "Can't find acl name: %.*s!\n",
+            checkParams->getAclName()->length,
             checkParams->getAclName()->str);
         return ENOENT;
       }
@@ -55,7 +55,7 @@ int ACLMethodIpCheckList::load(const DirectiveParams *parentParams)
       {
         ACLMethodChecker *methodChecker;
         if (lastChecker == NULL || !((methodChecker=dynamic_cast<
-                ACLMethodChecker *>(lastChecker)) != NULL && 
+                ACLMethodChecker *>(lastChecker)) != NULL &&
               methodChecker->getAction() == action))
         {
           methodChecker = new ACLMethodChecker(action);
@@ -63,7 +63,7 @@ int ACLMethodIpCheckList::load(const DirectiveParams *parentParams)
             return ENOMEM;
           }
 
-          this->addChecker(_checkers + ACL_FILED_INDEX_METHOD, 
+          this->addChecker(_checkers + ACL_FILED_INDEX_METHOD,
               methodChecker);
         }
 
@@ -75,7 +75,7 @@ int ACLMethodIpCheckList::load(const DirectiveParams *parentParams)
       {
         ACLSrcIpChecker *srcIpChecker;
         if (lastChecker == NULL || !((srcIpChecker=dynamic_cast<
-                ACLSrcIpChecker *>(lastChecker)) != NULL && 
+                ACLSrcIpChecker *>(lastChecker)) != NULL &&
               srcIpChecker->getAction() == action))
         {
           srcIpChecker = new ACLSrcIpChecker(action);
@@ -83,7 +83,7 @@ int ACLMethodIpCheckList::load(const DirectiveParams *parentParams)
             return ENOMEM;
           }
 
-          this->addChecker(_checkers + ACL_FILED_INDEX_SRC_IP, 
+          this->addChecker(_checkers + ACL_FILED_INDEX_SRC_IP,
               srcIpChecker);
         }
 

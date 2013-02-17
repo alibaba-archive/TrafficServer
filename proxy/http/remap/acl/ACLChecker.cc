@@ -105,7 +105,7 @@ bool ACLSrcIpChecker::add(const StringValue & srcIp)
 {
   SrcIpNode *node  = (SrcIpNode *)malloc(sizeof(SrcIpNode));
   if (node == NULL) {
-    fprintf(stderr, "malloc %d bytes fail, error info: %s", 
+    fprintf(stderr, "malloc %d bytes fail, error info: %s",
         (int)sizeof(SrcIpNode), strerror(errno));
     return false;
   }
@@ -176,7 +176,7 @@ bool ACLRefererRegexChecker::add(const char *regex)
 
   re = pcre_compile(regex, 0, &error, &strIndex, NULL);
   if (re == NULL) {
-    fprintf(stderr, "pcre_compile failed! Regex has error starting at %s", 
+    fprintf(stderr, "pcre_compile failed! Regex has error starting at %s",
         regex + strIndex);
     return false;
   }
@@ -186,7 +186,7 @@ bool ACLRefererRegexChecker::add(const char *regex)
   bytes = sizeof(RegexNode) + (len + 1);
   RegexNode *node  = (RegexNode *)malloc(bytes);
   if (node == NULL) {
-    fprintf(stderr, "malloc %d bytes fail, error info: %s", 
+    fprintf(stderr, "malloc %d bytes fail, error info: %s",
         bytes, strerror(errno));
     pcre_free(re);
     return false;
@@ -223,8 +223,8 @@ bool ACLRefererRegexChecker::match(const ACLContext & context)
   int matches[30];
   RegexNode *node = _regexsHead;
   while (node != NULL) {
-    if (pcre_exec(node->re, NULL, context.refererUrl.str, 
-          context.refererUrl.length, 0, 0, matches, 
+    if (pcre_exec(node->re, NULL, context.refererUrl.str,
+          context.refererUrl.length, 0, 0, matches,
           (sizeof(matches) / sizeof(int))) > 0)
     {
       return true;
@@ -294,7 +294,7 @@ bool ACLRefererChecker::match(const ACLContext & context)
 bool ACLRefererChecker::add(const ACLRefererParams *refererParams)
 {
   int count;
-  const StringValue *parts; 
+  const StringValue *parts;
 
   switch (refererParams->getRefererType()) {
     case ACL_REFERER_TYPE_EMPTY_INT:
@@ -318,7 +318,7 @@ bool ACLRefererChecker::add(const ACLRefererParams *refererParams)
           return false;
         }
       }
-     
+
       count = refererParams->getPartCount();
       parts = refererParams->getParts();
       if (refererParams->getRefererType() == ACL_REFERER_TYPE_HOST_INT) {

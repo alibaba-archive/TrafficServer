@@ -41,9 +41,9 @@ class HostnameTrie
       TrieNode * current_node;
     };
 
-    T *lookupFirst(const char *hostname, const int hostname_len, 
+    T *lookupFirst(const char *hostname, const int hostname_len,
         LookupState * state);
-    T *lookupNext(const char *hostname, const int hostname_len, 
+    T *lookupNext(const char *hostname, const int hostname_len,
         LookupState * state);
     void print();
 
@@ -64,7 +64,7 @@ class HostnameTrie
       }
 
       lastValue = value;
-      while ((value=this->lookupNext(hostname, hostname_len, 
+      while ((value=this->lookupNext(hostname, hostname_len,
               &state)) != NULL)
       {
         lastValue = value;
@@ -234,7 +234,7 @@ int HostnameTrie<T>::allocTrieNode(TrieNode ** node)
     if (*node == NULL) {
         result = errno != 0 ? errno : ENOMEM;
         fprintf(stderr, "file: "__FILE__", line: %d, " \
-                "malloc %d bytes fail, errno: %d, error info: %s\n", 
+                "malloc %d bytes fail, errno: %d, error info: %s\n",
                 __LINE__, (int)sizeof(TrieNode), result, strerror(result));
         return result;
     }
@@ -339,7 +339,7 @@ void HostnameTrie<T>::print()
 }
 
 template<typename T>
-T *HostnameTrie<T>::lookupFirst(const char *hostname, const int hostname_len, 
+T *HostnameTrie<T>::lookupFirst(const char *hostname, const int hostname_len,
     HostnameTrie::LookupState * state)
 {
     if (hostname == NULL || hostname_len == 0) {
@@ -352,12 +352,12 @@ T *HostnameTrie<T>::lookupFirst(const char *hostname, const int hostname_len,
 }
 
 template<typename T>
-T *HostnameTrie<T>::lookupNext(const char *hostname, const int hostname_len, 
+T *HostnameTrie<T>::lookupNext(const char *hostname, const int hostname_len,
     HostnameTrie::LookupState * state)
 {
     int index;
 
-    if (hostname == NULL || hostname_len == 0 || 
+    if (hostname == NULL || hostname_len == 0 ||
             state->p < (const unsigned char *)hostname) {
         return NULL;
     }

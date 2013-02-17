@@ -3,7 +3,7 @@
 
 ACLDefineManager ACLDefineManager::_defineManager;
 
-ACLDefineManager::ACLDefineManager() : _defineCheckers(NULL), 
+ACLDefineManager::ACLDefineManager() : _defineCheckers(NULL),
     _oldDefineCheckers(NULL)
 {
 }
@@ -58,7 +58,7 @@ void ACLDefineManager::print()
 
 static int ACLNameCompare(const void *p1, const void *p2)
 {
-  return strcmp((*((ACLDefineChecker **)p1))->getAclName(), 
+  return strcmp((*((ACLDefineChecker **)p1))->getAclName(),
       (*((ACLDefineChecker **)p2))->getAclName());
 }
 
@@ -74,7 +74,7 @@ ACLDefineChecker *ACLDefineManager::find(const char *aclName)
 
   targetChecker.setAclName(aclName);
   pTargetChecker = &targetChecker;
-  ppFound = (ACLDefineChecker **)bsearch(&pTargetChecker, _defineCheckers->items, 
+  ppFound = (ACLDefineChecker **)bsearch(&pTargetChecker, _defineCheckers->items,
       _defineCheckers->count, sizeof(ACLDefineChecker *), ACLNameCompare);
   if (ppFound == NULL) {
     return NULL;
@@ -112,7 +112,7 @@ int ACLDefineManager::init(const DirectiveParams *rootParams)
       }
 
       if (defineChecker->empty()) {
-        fprintf(stderr, "no acl rule, acl name: %s\n", 
+        fprintf(stderr, "no acl rule, acl name: %s\n",
             defineChecker->getAclName());
         delete defineChecker;
         return ENOENT;
@@ -120,7 +120,7 @@ int ACLDefineManager::init(const DirectiveParams *rootParams)
 
       if (!defineChecker->isValid()) {
         fprintf(stderr, "acl rule is invalid, method / src_ip and referer "\
-            "can't occur same time, acl name: %s\n", 
+            "can't occur same time, acl name: %s\n",
             defineChecker->getAclName());
         delete defineChecker;
         return EINVAL;
@@ -128,19 +128,19 @@ int ACLDefineManager::init(const DirectiveParams *rootParams)
 
       if (defineChecker->isRefererChecker()) {
         if (*(defineChecker->getRedirectUrl()) == '\0') {
-          fprintf(stderr, "Notice: no redirect_url, acl name: %s\n", 
+          fprintf(stderr, "Notice: no redirect_url, acl name: %s\n",
             defineChecker->getAclName());
         }
       }
       else {
         if (*(defineChecker->getRedirectUrl()) != '\0') {
-          fprintf(stderr, "Notice: ignore redirect_url, acl name: %s\n", 
+          fprintf(stderr, "Notice: ignore redirect_url, acl name: %s\n",
             defineChecker->getAclName());
         }
       }
 
       if (this->find(defineChecker->getAclName()) != NULL) {
-        fprintf(stderr, "duplicate acl name: %s\n", 
+        fprintf(stderr, "duplicate acl name: %s\n",
             defineChecker->getAclName());
 
         delete defineChecker;
@@ -152,7 +152,7 @@ int ACLDefineManager::init(const DirectiveParams *rootParams)
       }
 
       if (_defineCheckers->count > 1) {
-        qsort(_defineCheckers->items, _defineCheckers->count, sizeof(ACLDefineChecker *), 
+        qsort(_defineCheckers->items, _defineCheckers->count, sizeof(ACLDefineChecker *),
             ACLNameCompare);
       }
     }

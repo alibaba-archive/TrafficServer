@@ -50,22 +50,22 @@ class ConfigParams : public ConfigSetParams {
      }
 
      static inline int getConfigType(StringValue *sv) {
-       if (sv->equals(CONFIG_TYPE_RECORDS_STR, 
+       if (sv->equals(CONFIG_TYPE_RECORDS_STR,
              sizeof(CONFIG_TYPE_RECORDS_STR) - 1))
        {
          return CONFIG_TYPE_RECORDS_INT;
        }
-       if (sv->equals(CONFIG_TYPE_HOSTING_STR, 
+       if (sv->equals(CONFIG_TYPE_HOSTING_STR,
              sizeof(CONFIG_TYPE_HOSTING_STR) - 1))
        {
          return CONFIG_TYPE_HOSTING_INT;
        }
-       if (sv->equals(CONFIG_TYPE_CACHE_CONTROL_STR, 
+       if (sv->equals(CONFIG_TYPE_CACHE_CONTROL_STR,
              sizeof(CONFIG_TYPE_CACHE_CONTROL_STR) - 1))
        {
          return CONFIG_TYPE_CACHE_CONTROL_INT;
        }
-       if (sv->equals(CONFIG_TYPE_CONGESTION_STR, 
+       if (sv->equals(CONFIG_TYPE_CONGESTION_STR,
              sizeof(CONFIG_TYPE_CONGESTION_STR) - 1))
        {
          return CONFIG_TYPE_CONGESTION_INT;

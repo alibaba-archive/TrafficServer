@@ -29,7 +29,7 @@ class RemapParser {
     }
 
     inline void trimLeft(char *&str, const char *strEnd) {
-      while ((str < strEnd) && (*str == ' ' || *str == '\t' 
+      while ((str < strEnd) && (*str == ' ' || *str == '\t'
             || *str == '\r' || *str == '\n'))
       {
         str++;
@@ -55,7 +55,7 @@ class RemapParser {
 
     inline void getToken(const char *str, const char *strEnd, int *tokenLen) {
       const char *p = str;
-      while ((p < strEnd) && !(*p == ' ' || *p == '\t' 
+      while ((p < strEnd) && !(*p == ' ' || *p == '\t'
             || *p == '\r' || *p == '\n'))
       {
         p++;

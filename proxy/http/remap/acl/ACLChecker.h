@@ -55,7 +55,7 @@ class ACLChecker {
 
     void print() {
       char prefix[64];
-      sprintf(prefix, "%s %s ", DIRECTVIE_NAME_ACL, 
+      sprintf(prefix, "%s %s ", DIRECTVIE_NAME_ACL,
           this->getActionCaption());
       this->print(prefix);
     }
@@ -75,7 +75,7 @@ class ACLAllChecker : public ACLChecker {
     }
 
     void print(const char *prefix) {
-      printf("\t%s %s %s\n", DIRECTVIE_NAME_ACL, 
+      printf("\t%s %s %s\n", DIRECTVIE_NAME_ACL,
           this->getActionCaption(), ACL_STR_ALL);
     }
 };
@@ -99,7 +99,7 @@ class ACLMethodChecker : public ACLChecker {
     void print(const char *prefix) {
         char buff[128];
         int len;
-        printf("\t%s%s %s\n", prefix, DIRECTVIE_NAME_ACL_METHOD, 
+        printf("\t%s%s %s\n", prefix, DIRECTVIE_NAME_ACL_METHOD,
             ACLMethodParams::getMethodString(
               _methodFlags, buff, &len));
     }
@@ -116,7 +116,7 @@ struct SrcIpNode {
 
 class ACLSrcIpChecker: public ACLChecker {
   public:
-    ACLSrcIpChecker(const int action) : ACLChecker(action), 
+    ACLSrcIpChecker(const int action) : ACLChecker(action),
     _srcIpsHead(NULL), _srcIpsTail(NULL) {}
 
     ~ACLSrcIpChecker();
@@ -138,15 +138,15 @@ class ACLSrcIpChecker: public ACLChecker {
         }
 
         if (node->start == node->end) {
-          printf("%s", this->inet_ntop(ntohl(node->start), 
+          printf("%s", this->inet_ntop(ntohl(node->start),
                 buff1, sizeof(buff1)));
         }
         else if (node->start == 0 && node->end == ULONG_MAX) {
           printf("%s", ACL_STR_ALL);
         }
         else {
-          printf("%s-%s", this->inet_ntop(ntohl(node->start), 
-                buff1, sizeof(buff1)), this->inet_ntop(ntohl(node->end), 
+          printf("%s-%s", this->inet_ntop(ntohl(node->start),
+                buff1, sizeof(buff1)), this->inet_ntop(ntohl(node->end),
                 buff2, sizeof(buff2)));
         }
         node = node->next;
@@ -155,7 +155,7 @@ class ACLSrcIpChecker: public ACLChecker {
     }
 
   protected:
-    const char *inet_ntop(const unsigned long addr, 
+    const char *inet_ntop(const unsigned long addr,
         char *buff, const int buffSize)
     {
       struct in_addr ip_addr;
@@ -179,7 +179,7 @@ class ACLRefererEmptyChecker : public ACLChecker {
     }
 
     void print(const char *prefix) {
-        printf("\t%s%s %s\n", prefix, 
+        printf("\t%s%s %s\n", prefix,
             DIRECTVIE_NAME_ACL_REFERER, ACL_STR_EMPTY);
     }
 };
@@ -190,7 +190,7 @@ class ACLRefererHostChecker: public ACLChecker {
     ~ACLRefererHostChecker() {}
 
     bool match(const ACLContext & context) {
-      return _hostTrie.contains(context.refererHostname.str, 
+      return _hostTrie.contains(context.refererHostname.str,
           context.refererHostname.length);
     }
 
@@ -221,7 +221,7 @@ class ACLRefererHostChecker: public ACLChecker {
       for (i=0; i<count; i++) {
         if (*hostnames[i] == '.') {
           if (domainCount++ == 0) {
-            printf("\t%s%s %s ", prefix, DIRECTVIE_NAME_ACL_REFERER, 
+            printf("\t%s%s %s ", prefix, DIRECTVIE_NAME_ACL_REFERER,
                 ACL_REFERER_TYPE_DOMAIN_STR);
           }
           else {
@@ -238,7 +238,7 @@ class ACLRefererHostChecker: public ACLChecker {
       for (i=0; i<count; i++) {
         if (*hostnames[i] != '.') {
           if (hostnameCount++ == 0) {
-            printf("\t%s%s %s ", prefix, DIRECTVIE_NAME_ACL_REFERER, 
+            printf("\t%s%s %s ", prefix, DIRECTVIE_NAME_ACL_REFERER,
                 ACL_REFERER_TYPE_HOST_STR);
           }
           else {
@@ -265,7 +265,7 @@ struct RegexNode {
 
 class ACLRefererRegexChecker: public ACLChecker {
   public:
-    ACLRefererRegexChecker(const int action) : ACLChecker(action), 
+    ACLRefererRegexChecker(const int action) : ACLChecker(action),
     _regexsHead(NULL), _regexsTail(NULL) {}
 
     ~ACLRefererRegexChecker();
@@ -277,7 +277,7 @@ class ACLRefererRegexChecker: public ACLChecker {
     void print(const char *prefix) {
       RegexNode * node = _regexsHead;
       while (node != NULL) {
-        printf("\t%s%s %s %s\n", prefix, DIRECTVIE_NAME_ACL_REFERER, 
+        printf("\t%s%s %s %s\n", prefix, DIRECTVIE_NAME_ACL_REFERER,
             ACL_REFERER_TYPE_REGEX_STR, node->pattern);
         node = node->next;
       }
@@ -297,7 +297,7 @@ class ACLRefererChecker: public ACLChecker {
     bool add(const ACLRefererParams *refererParams);
 
     inline bool empty() {
-      return (!_allMatched && _emptyChecker == NULL && 
+      return (!_allMatched && _emptyChecker == NULL &&
           _hostChecker == NULL && _regexChecker == NULL);
     }
 
@@ -307,7 +307,7 @@ class ACLRefererChecker: public ACLChecker {
 
     void print(const char *prefix) {
       if (_allMatched) {
-        printf("\t%s%s %s\n", prefix, 
+        printf("\t%s%s %s\n", prefix,
             DIRECTVIE_NAME_ACL_REFERER, ACL_STR_ALL);
       }
 

@@ -31,12 +31,12 @@
  *
 **/
 url_mapping::url_mapping(int rank /* = 0 */)
-  : fromURL(), toUrl(), homePageRedirect(false), 
+  : fromURL(), toUrl(), homePageRedirect(false),
     unique(false), default_redirect_url(false),
     wildcard_from_scheme(false),
-    filter_redirect_url(NULL), 
-    redir_chunk_list(0), _plugin_count(0), overridableHttpConfig(NULL), 
-    _needCheckRefererHost(false), _aclMethodIpCheckListCount(0), 
+    filter_redirect_url(NULL),
+    redir_chunk_list(0), _plugin_count(0), overridableHttpConfig(NULL),
+    _needCheckRefererHost(false), _aclMethodIpCheckListCount(0),
     _aclRefererCheckListCount(0), _rank(rank)
 {
   memset(_plugin_list, 0, sizeof(_plugin_list));
@@ -140,7 +140,7 @@ int url_mapping::checkReferer(const ACLContext & context) {
   return result;
 }
 
-int url_mapping::setMethodIpCheckLists(ACLMethodIpCheckList **checkLists, 
+int url_mapping::setMethodIpCheckLists(ACLMethodIpCheckList **checkLists,
     const int count)
 {
   if (count < 0) {
@@ -159,7 +159,7 @@ int url_mapping::setMethodIpCheckLists(ACLMethodIpCheckList **checkLists,
   return 0;
 }
 
-int url_mapping::setRefererCheckLists(ACLRefererCheckList **checkLists, 
+int url_mapping::setRefererCheckLists(ACLRefererCheckList **checkLists,
     const int count)
 {
   if (count < 0) {
@@ -203,9 +203,9 @@ url_mapping::Print()
 
   fromURL.string_get_buf(from_url_buf, (int) sizeof(from_url_buf));
   toUrl.string_get_buf(to_url_buf, (int) sizeof(to_url_buf));
-  printf("\t %s %s=> %s %s [plugins %s enabled; running with %u plugins]\n", 
+  printf("\t %s %s=> %s %s [plugins %s enabled; running with %u plugins]\n",
       from_url_buf, unique ? "(unique)" : "", to_url_buf,
-      homePageRedirect ? "(R)" : "", _plugin_count > 0 ? "are" : "not", 
+      homePageRedirect ? "(R)" : "", _plugin_count > 0 ? "are" : "not",
       _plugin_count);
 }
 

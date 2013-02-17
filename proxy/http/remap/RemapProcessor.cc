@@ -136,7 +136,7 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
     request_header->mark_target_dirty();
 
     url_mapping *map = s->url_map.getMapping();
-    if ((map != NULL) && (map->overridableHttpConfig != NULL) && 
+    if ((map != NULL) && (map->overridableHttpConfig != NULL) &&
         (s->txn_conf != &s->my_txn_conf))
     {
       s->txn_conf = map->overridableHttpConfig;
@@ -176,8 +176,8 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
     ACLContext aclContext;
 
     if (request_header->presence(MIME_PRESENCE_REFERER) &&
-        (referer_str=request_header-> 
-         value_get(MIME_FIELD_REFERER, MIME_LEN_REFERER, 
+        (referer_str=request_header->
+         value_get(MIME_FIELD_REFERER, MIME_LEN_REFERER,
            &aclContext.refererUrl.length)) != NULL) {
       if (aclContext.refererUrl.length >= (int)sizeof(tmp_referer_buf)) {
         aclContext.refererUrl.length = sizeof(tmp_referer_buf) - 1;
@@ -199,20 +199,20 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
               break;
             }
 
-            const char *hostname_end = (const char *)memchr(aclContext.refererHostname.str, 
-                '/', (tmp_referer_buf + aclContext.refererUrl.length) - 
+            const char *hostname_end = (const char *)memchr(aclContext.refererHostname.str,
+                '/', (tmp_referer_buf + aclContext.refererUrl.length) -
                 aclContext.refererHostname.str);
             if (hostname_end != NULL) {
-              aclContext.refererHostname.length = hostname_end - 
+              aclContext.refererHostname.length = hostname_end -
                 aclContext.refererHostname.str;
             }
             else {
-              aclContext.refererHostname.length = (tmp_referer_buf + 
+              aclContext.refererHostname.length = (tmp_referer_buf +
                   aclContext.refererUrl.length) - aclContext.refererHostname.str;
             }
 
             /*
-            Debug("url_rewrite", "referer host: %.*s(%d)", 
+            Debug("url_rewrite", "referer host: %.*s(%d)",
                 aclContext.refererHostname.length, aclContext.refererHostname.str,
                 aclContext.refererHostname.length);
                 */
@@ -229,7 +229,7 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
     aclContext.refererUrl.str = tmp_referer_buf;
 
     if (map->checkReferer(aclContext) == ACL_ACTION_DENY_INT) {
-      Debug("url_rewrite", "ACL referer check denied, referer url: %.*s", 
+      Debug("url_rewrite", "ACL referer check denied, referer url: %.*s",
         aclContext.refererUrl.length, aclContext.refererUrl.str);
 
       if (!map->default_redirect_url) {
@@ -251,7 +251,7 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
               case 't':
                 remapped_host = (rc->type == 'f') ?
                   map->fromURL.string_get_buf(tmp_buf, (int)sizeof(tmp_buf), &from_len) :
-                  ((s->url_map).getToURL())->string_get_buf(tmp_buf, 
+                  ((s->url_map).getToURL())->string_get_buf(tmp_buf,
                   (int)sizeof(tmp_buf), &from_len);
                 if (remapped_host && from_len > 0) {
                   c = tmp_buf;
@@ -269,7 +269,7 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
             };
 
             if (c != NULL && len < (int)(sizeof(tmp_redirect_buf) - 1)) {
-              len += snprintf(tmp_redirect_buf + len, 
+              len += snprintf(tmp_redirect_buf + len,
                   sizeof(tmp_redirect_buf) - len, "%s", c);
             }
           }

@@ -18,8 +18,8 @@ class MapDirective : public MappingDirective {
     MapDirective();
     ~MapDirective() {}
 
-    DirectiveParams *newDirectiveParams(const int lineNo, 
-        const char *lineStr, const int lineLen, DirectiveParams *parent, 
+    DirectiveParams *newDirectiveParams(const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
 };
 
@@ -29,8 +29,8 @@ class RedirectDirective : public MappingDirective {
     RedirectDirective();
     ~RedirectDirective() {}
 
-    DirectiveParams *newDirectiveParams(const int lineNo, 
-        const char *lineStr, const int lineLen, DirectiveParams *parent, 
+    DirectiveParams *newDirectiveParams(const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
 };
 

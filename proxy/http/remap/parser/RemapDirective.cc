@@ -9,7 +9,7 @@
 #include <errno.h>
 #include "RemapDirective.h"
 
-RemapDirective::RemapDirective(const char *name, const int type, 
+RemapDirective::RemapDirective(const char *name, const int type,
     const int minParamCount, const int maxParamCount) : _name(name),
   _type(type), _minParamCount(minParamCount), _maxParamCount(maxParamCount),
   _childrenCount(0), _forSearchChild(NULL)
@@ -37,17 +37,17 @@ RemapDirective::~RemapDirective()
   }
 }
 
-DirectiveParams *RemapDirective::newDirectiveParams(const int lineNo, 
-    const char *lineStr, const int lineLen, DirectiveParams *parent, 
+DirectiveParams *RemapDirective::newDirectiveParams(const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
     const char *paramStr, const int paramLen, const bool bBlock)
 {
-  return new DirectiveParams(lineNo, lineStr, lineLen, parent, 
+  return new DirectiveParams(lineNo, lineStr, lineLen, parent,
       this, paramStr, paramLen, bBlock);
 }
 
 static int compare(const void *p1, const void *p2)
 {
-  return strcmp((*((RemapDirective **)p1))->getName(), 
+  return strcmp((*((RemapDirective **)p1))->getName(),
       (*((RemapDirective **)p2))->getName());
 }
 
@@ -62,7 +62,7 @@ RemapDirective *RemapDirective::getChild(const char *name)
   }
 
   RemapDirective **found;
-  found = (RemapDirective **)bsearch(&_forSearchChild, _children, 
+  found = (RemapDirective **)bsearch(&_forSearchChild, _children,
       _childrenCount, sizeof(RemapDirective *), compare);
   if (found != NULL) {
     return *found;
@@ -78,14 +78,14 @@ int RemapDirective::check(DirectiveParams *params, const bool bBlock)
 
   if (_type == DIRECTIVE_TYPE_BLOCK && !bBlock) {
     fprintf(stderr, "file: "__FILE__", line: %d, "
-        "expect block { and }! config line: %.*s\n", __LINE__, 
+        "expect block { and }! config line: %.*s\n", __LINE__,
         params->_lineInfo.line.length, params->_lineInfo.line.str);
     return EINVAL;
   }
 
   if (_type == DIRECTIVE_TYPE_STATEMENT && bBlock) {
     fprintf(stderr, "file: "__FILE__", line: %d, "
-        "unexpect block { and }! config line: %.*s\n", __LINE__, 
+        "unexpect block { and }! config line: %.*s\n", __LINE__,
         params->_lineInfo.line.length, params->_lineInfo.line.str);
     return EINVAL;
   }
@@ -96,16 +96,16 @@ int RemapDirective::check(DirectiveParams *params, const bool bBlock)
 
   if (params->_paramCount < _minParamCount) {
     fprintf(stderr, "file: "__FILE__", line: %d, "
-        "parameter count: %d < %d, config line: %.*s\n", __LINE__, 
-        params->_paramCount, _minParamCount, params->_lineInfo.line.length, 
+        "parameter count: %d < %d, config line: %.*s\n", __LINE__,
+        params->_paramCount, _minParamCount, params->_lineInfo.line.length,
         params->_lineInfo.line.str);
     return EINVAL;
   }
 
   if (_maxParamCount > 0 && params->_paramCount > _maxParamCount) {
     fprintf(stderr, "file: "__FILE__", line: %d, "
-        "parameter count: %d > %d, config line: %.*s\n", __LINE__, 
-        params->_paramCount, _maxParamCount, params->_lineInfo.line.length, 
+        "parameter count: %d > %d, config line: %.*s\n", __LINE__,
+        params->_paramCount, _maxParamCount, params->_lineInfo.line.length,
         params->_lineInfo.line.str);
     return EINVAL;
   }

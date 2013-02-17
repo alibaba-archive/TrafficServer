@@ -4,7 +4,7 @@
 #include "PluginDirective.h"
 #include "MappingParams.h"
 
-MappingDirective::MappingDirective(const char *name) : 
+MappingDirective::MappingDirective(const char *name) :
   RemapDirective(name, DIRECTIVE_TYPE_BOTH, 2, 3)
 {
   int index = 0;
@@ -19,12 +19,12 @@ MapDirective::MapDirective() : MappingDirective(DIRECTVIE_NAME_MAP)
 {
 }
 
-DirectiveParams *MapDirective::newDirectiveParams(const int lineNo, 
-    const char *lineStr, const int lineLen, DirectiveParams *parent, 
+DirectiveParams *MapDirective::newDirectiveParams(const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
     const char *paramStr, const int paramLen, const bool bBlock)
 
 {
-  return new MapParams(lineNo, lineStr, lineLen, parent, this, 
+  return new MapParams(lineNo, lineStr, lineLen, parent, this,
       paramStr, paramLen, bBlock);
 }
 
@@ -32,11 +32,11 @@ RedirectDirective::RedirectDirective() : MappingDirective(DIRECTVIE_NAME_REDIREC
 {
 }
 
-DirectiveParams *RedirectDirective::newDirectiveParams(const int lineNo, 
-    const char *lineStr, const int lineLen, DirectiveParams *parent, 
+DirectiveParams *RedirectDirective::newDirectiveParams(const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
     const char *paramStr, const int paramLen, const bool bBlock)
 {
-  return new RedirectParams(lineNo, lineStr, lineLen, parent, this, 
+  return new RedirectParams(lineNo, lineStr, lineLen, parent, this,
       paramStr, paramLen, bBlock);
 }
 

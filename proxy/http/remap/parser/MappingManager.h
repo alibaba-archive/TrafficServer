@@ -44,48 +44,48 @@ class MappingManager {
     }
 
     static bool findCharPair(const char *str, const int length,
-        const char left, const char right, 
+        const char left, const char right,
         const char **start, const char **end);
 
-    static inline bool findCharPair(const StringValue *sv, 
-        const char left, const char right, 
+    static inline bool findCharPair(const StringValue *sv,
+        const char left, const char right,
         const char **start, const char **end)
     {
-      return findCharPair(sv->str, sv->length, 
+      return findCharPair(sv->str, sv->length,
           left, right, start, end);
     }
 
- 
+
   protected:
-    int loadMapping(const MappingParams *mappingParams, 
+    int loadMapping(const MappingParams *mappingParams,
         ACLCheckListContainer *parentCheckLists);
 
-    int loadCheckLists(const DirectiveParams *rootParams, 
+    int loadCheckLists(const DirectiveParams *rootParams,
         ACLCheckListContainer *checkLists);
 
-    void addCheckLists(MappingEntry *mappingEntry, 
+    void addCheckLists(MappingEntry *mappingEntry,
         ACLCheckListContainer *checkLists);
 
-    int loadMappingUrls(MappingEntry *mappingEntry, 
+    int loadMappingUrls(MappingEntry *mappingEntry,
         const MappingParams *mappingParams);
 
     bool getScheme(const StringValue *url, StringValue *scheme);
 
-    int loadPlugins(MappingEntry *mappingEntry, 
+    int loadPlugins(MappingEntry *mappingEntry,
         const MappingParams *mappingParams);
 
-    int loadConfigs(MappingEntry *mappingEntry, 
+    int loadConfigs(MappingEntry *mappingEntry,
         const MappingParams *mappingParams);
 
     int loadConfig(MappingEntry *mappingEntry,
         const ConfigParams *configParams);
 
-    int addConfig(DynamicArray<ConfigKeyValue> *config, 
+    int addConfig(DynamicArray<ConfigKeyValue> *config,
         const ConfigKeyValue *configKV);
 
     bool isRegexSimpleRange(const StringValue *sv);
 
-   int getHostname(const StringValue *url, 
+   int getHostname(const StringValue *url,
         const char **start, const char **end);
 
     DynamicArray<MappingEntry *> _mappings;

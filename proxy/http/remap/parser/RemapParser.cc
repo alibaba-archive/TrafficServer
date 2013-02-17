@@ -140,8 +140,8 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
             break;
           }
           else if (notMatchBlocks < 0) {
-            fprintf(stderr, "file: "__FILE__", line: %d, " 
-                "unexpect }, config line: %.*s", __LINE__, 
+            fprintf(stderr, "file: "__FILE__", line: %d, "
+                "unexpect }, config line: %.*s", __LINE__,
                 (int)(lineEnd - line), line);
             return EINVAL;
           }
@@ -157,8 +157,8 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
       }
 
       if (notMatchBlocks != 0) {
-        fprintf(stderr, "file: "__FILE__", line: %d, " 
-            "expect }, config line: %.*s", __LINE__, 
+        fprintf(stderr, "file: "__FILE__", line: %d, "
+            "expect }, config line: %.*s", __LINE__,
             (int)(lineEnd - line), line);
         return EINVAL;
       }
@@ -170,8 +170,8 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
 
     getToken(line, lineEnd, &tokenLen);
     if (tokenLen >= (int)sizeof(directiveName)) {
-        fprintf(stderr, "file: "__FILE__", line: %d, " 
-            "ignore too long directive: %.*s, config line: %.*s", __LINE__, 
+        fprintf(stderr, "file: "__FILE__", line: %d, "
+            "ignore too long directive: %.*s, config line: %.*s", __LINE__,
             tokenLen, line, (int)(lineEnd - line), line);
         return EINVAL;
     }
@@ -180,15 +180,15 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
     *(directiveName + tokenLen) = '\0';
     pChildDirective = params->_directive->getChild(directiveName);
     if (pChildDirective == NULL) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " 
-          "unkown directive: %s, config line: %.*s", __LINE__, 
+      fprintf(stderr, "file: "__FILE__", line: %d, "
+          "unkown directive: %s, config line: %.*s", __LINE__,
           directiveName, (int)(lineEnd - line), line);
       return EINVAL;
     }
 
     //fprintf(stderr, "%d %.*s\n", lineNo, tokenLen, line);
 
-    //fprintf(stderr, "parent: %d, current: %d\n", 
+    //fprintf(stderr, "parent: %d, current: %d\n",
     //    params->_lineInfo.lineNo, lineNo);
 
     paramStr = line + tokenLen;
@@ -196,8 +196,8 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
       paramStr++;
     }
     pChildParams = pChildDirective->newDirectiveParams(
-        params->_lineInfo.lineNo + lineNo, line, 
-        lineEnd - line, params, paramStr, 
+        params->_lineInfo.lineNo + lineNo, line,
+        lineEnd - line, params, paramStr,
         paramEnd - paramStr, bBlock);
     if ((result=pChildDirective->check(pChildParams, bBlock)) != 0) {
       delete pChildParams;

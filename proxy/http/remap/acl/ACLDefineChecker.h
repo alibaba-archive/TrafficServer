@@ -13,7 +13,7 @@ class ACLDefineChecker : public ACLChecker {
     bool match(const ACLContext & context);
 
     inline bool empty() const {
-      return (_methodChecker == NULL && _srcIpChecker == NULL && 
+      return (_methodChecker == NULL && _srcIpChecker == NULL &&
           _refererChecker == NULL);
     }
 
@@ -50,7 +50,7 @@ class ACLDefineChecker : public ACLChecker {
     }
 
     inline bool needCheckRefererHost() const {
-      return _refererChecker != NULL && 
+      return _refererChecker != NULL &&
         _refererChecker->needCheckRefererHost();
     }
 
