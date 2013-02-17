@@ -405,7 +405,7 @@ HostDBInfo()
   , md5_low(0), md5_high(0) {
     app.allotment.application1 = 0;
     app.allotment.application2 = 0;
-    memset(&data, sizeof(data), 0);
+    memset(&data, 0, sizeof(data));
     return;
   }
 };
