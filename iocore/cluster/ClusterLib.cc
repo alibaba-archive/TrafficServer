@@ -118,7 +118,7 @@ cluster_disable(ClusterHandler * ch, ClusterVConnection * vc, ClusterVConnState 
       disable_timeout = !vc->read.enabled;
     }
     if (disable_timeout) {
-      vc->inactivity_timeout->cancel_event(vc);
+      vc->inactivity_timeout->cancel();
       vc->inactivity_timeout = NULL;
     }
   }

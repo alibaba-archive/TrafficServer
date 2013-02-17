@@ -281,9 +281,9 @@ ClusterHandler::close_ClusterVConnection(ClusterVConnection * vc)
   // Close down a ClusterVConnection
   //
   if (vc->inactivity_timeout)
-    vc->inactivity_timeout->cancel_event(vc);
+    vc->inactivity_timeout->cancel(vc);
   if (vc->active_timeout)
-    vc->active_timeout->cancel_event(vc);
+    vc->active_timeout->cancel(vc);
   if (vc->read.queue)
     ClusterVC_remove_read(vc);
   if (vc->write.queue)

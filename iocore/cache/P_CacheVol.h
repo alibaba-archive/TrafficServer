@@ -824,7 +824,7 @@ TS_INLINE void
 Vol::cancel_trigger()
 {
   if (trigger) {
-    trigger->cancel();
+    trigger->cancel_action();
     trigger = NULL;
   }
 }

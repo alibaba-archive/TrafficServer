@@ -729,7 +729,7 @@ TS_INLINE void
 CacheVC::cancel_trigger()
 {
   if (trigger) {
-    trigger->cancel();
+    trigger->cancel_action();
     trigger = NULL;
   }
 }

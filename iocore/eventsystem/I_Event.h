@@ -212,7 +212,6 @@ public:
   unsigned int immediate:1;
   unsigned int globally_allocated:1;
   unsigned int in_heap:4;
-  unsigned int in_idx:16;
   int callback_event;
 
   ink_hrtime timeout_at;
@@ -232,7 +231,6 @@ public:
 
 
   Event *init(Continuation * c, ink_hrtime atimeout_at = 0, ink_hrtime aperiod = 0);
-  void cancel_event(Continuation * c = NULL);
 
 #ifdef ENABLE_TIME_TRACE
   ink_hrtime start_time;
@@ -248,7 +246,6 @@ private:
 
 public:
   LINK(Event, link);
-  LINK(Event, clink);
 
   /*-------------------------------------------------------*\
   | UNIX/non-NT Interface                                   |

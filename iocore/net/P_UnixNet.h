@@ -399,7 +399,7 @@ read_disable(NetHandler * nh, UnixNetVConnection * vc)
 #ifdef INACTIVITY_TIMEOUT
   if (vc->inactivity_timeout) {
     if (!vc->write.enabled) {
-      vc->inactivity_timeout->cancel_event(vc);
+      vc->inactivity_timeout->cancel_action();
       vc->inactivity_timeout = NULL;
     }
   }
@@ -418,7 +418,7 @@ write_disable(NetHandler * nh, UnixNetVConnection * vc)
 #ifdef INACTIVITY_TIMEOUT
   if (vc->inactivity_timeout) {
     if (!vc->read.enabled) {
-      vc->inactivity_timeout->cancel_event(vc);
+      vc->inactivity_timeout->cancel_action();
       vc->inactivity_timeout = NULL;
     }
   }

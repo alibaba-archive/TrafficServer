@@ -1073,7 +1073,7 @@ CacheSync::mainEvent(int event, Event *e)
   NOWARN_UNUSED(event);
 
   if (trigger) {
-    trigger->cancel();
+    trigger->cancel_action();
     trigger = NULL;
   }
 
