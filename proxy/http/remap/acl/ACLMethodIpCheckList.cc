@@ -104,16 +104,21 @@ int ACLMethodIpCheckList::load(const DirectiveParams *parentParams)
 
 int ACLMethodIpCheckList::check(const ACLContext & context)
 {
-  int action;
-
-  action = ACLCheckList::check(_checkers[ACL_FILED_INDEX_METHOD].head, context);
-  if (action == ACL_ACTION_DENY_INT) {
-    return action;
+  int action1 = ACLCheckList::check(_checkers[ACL_FILED_INDEX_METHOD].head, context);
+  if (action1 == ACL_ACTION_DENY_INT) {
+    return action1;
   }
 
-  return ACLCheckList::check(_checkers[ACL_FILED_INDEX_SRC_IP].head, context);
-  if (action != ACL_ACTION_NONE_INT) {
-    return action;
+  int action2 = ACLCheckList::check(_checkers[ACL_FILED_INDEX_SRC_IP].head, context);
+  if (action2 == ACL_ACTION_DENY_INT) {
+    return action2;
+  }
+
+  if (action1 != ACL_ACTION_NONE_INT) {
+    return action1;
+  }
+  if (action2 != ACL_ACTION_NONE_INT) {
+    return action2;
   }
 
   return ACLCheckList::check(_checkers[ACL_FILED_INDEX_WHOLE_METHOD_IP].head, context);

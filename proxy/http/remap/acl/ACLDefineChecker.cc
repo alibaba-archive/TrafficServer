@@ -116,23 +116,23 @@ bool ACLDefineChecker::init(const ACLDefineParams *defineParams)
 
 bool ACLDefineChecker::match(const ACLContext & context)
 {
-  if (_methodChecker != NULL) {
-    if (!_methodChecker->match(context)) {
-      return false;
-    }
-  }
-
-  if (_srcIpChecker != NULL) {
-    if (!_srcIpChecker->match(context)) {
-      return false;
-    }
-  }
-
   if (_refererChecker != NULL) {
     return _refererChecker->match(context);
   }
   else {
-    return false;
+    if (_methodChecker != NULL) {
+      if (!_methodChecker->match(context)) {
+        return false;
+      }
+    }
+
+    if (_srcIpChecker != NULL) {
+      if (!_srcIpChecker->match(context)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 }
 
