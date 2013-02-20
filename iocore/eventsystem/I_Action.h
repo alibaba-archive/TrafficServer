@@ -147,28 +147,6 @@ public:
 #endif
   }
 
-  /**
-    Cancels the asynchronous operation represented by this action.
-
-    This method is called by state machines willing to cancel an
-    ongoing asynchronous operation. There are certain rules that
-    must be followed in order to cancel an action (see the Remarks
-    section).
-
-    @param c Continuation associated with this Action.
-
-  */
-  void cancel_action(Continuation * c = NULL) {
-    ink_assert(!c || c == continuation);
-#ifdef DEBUG
-    ink_assert(!cancelled);
-    cancelled = true;
-#else
-    if (!cancelled)
-      cancelled = true;
-#endif
-  }
-
   Continuation *operator =(Continuation * acont)
   {
     continuation = acont;

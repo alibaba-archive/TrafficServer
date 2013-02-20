@@ -141,6 +141,11 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_CONFIG, "proxy.config.user_name", RECD_STRING, "nobody", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
+  {RECT_CONFIG, "proxy.config.event.cancel_limit", RECD_INT, "10", RECU_NULL, RR_NULL, RECC_INT, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.event.cancel_delay", RECD_INT, "5", RECU_NULL, RR_NULL, RECC_INT, NULL, RECA_NULL}
+  ,
+
 
   //##############################################################################
   //#
