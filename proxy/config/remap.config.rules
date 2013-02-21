@@ -73,10 +73,16 @@
      }
      only support 61 parameters of records
      TODO: hosting, cache-control and congestion
-     
+    
+     plugin <plugin-filename> <space-split-params>
      plugin <plugin-filename> <space-split-params> {
-       param [base64] { parameter_value }
+       param [base64] value
+       param [base64] {
+         value
+       }
      }
+     the value can be multi-line when in braces
+     the parameter's value is decoded when pass to remap plugin
      
      map [with_recv_port | reverse]: <public url or url path> <origin_url> {
         ACL

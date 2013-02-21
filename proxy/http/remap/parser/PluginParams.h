@@ -17,7 +17,7 @@ class PluginParams : public DirectiveParams {
     ~PluginParams() {}
     int parse(const char *blockStat, const char *blockEnd);
 
-    bool combineParams();
+    int combineParams();
 
     const PluginInfo *getPluginInfo() const {
       return &_pluginInfo;

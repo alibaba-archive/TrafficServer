@@ -40,10 +40,10 @@ const char *PluginParams::toString(char *buff, int *len)
   return (const char *)buff;
 }
 
-bool PluginParams::combineParams()
+int PluginParams::combineParams()
 {
   if (_paramsCombined) {
-    return true;
+    return 0;
   }
 
   const PluginParamParams *paramParams;
@@ -54,7 +54,7 @@ bool PluginParams::combineParams()
          fprintf(stderr, "file: "__FILE__", line: %d, " \
              "too many puglin parameters, exceeds: %d\n",
              __LINE__, MAX_PARAM_NUM - 1);
-         return false;
+         return E2BIG;
        }
 
        _pluginInfo.params[_pluginInfo.paramCount++] = *(paramParams->getParamValue());
@@ -64,7 +64,7 @@ bool PluginParams::combineParams()
   }
 
   _paramsCombined = true;
-  return true;
+  return 0;
 }
 
 PluginParamParams::PluginParamParams(const int lineNo, const char *lineStr,

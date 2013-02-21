@@ -358,14 +358,15 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
 int MappingManager::loadPlugins(MappingEntry *mappingEntry,
     const MappingParams *mappingParams)
 {
+  int result;
   const PluginParams *pluginParams;
   const DirectiveParams *children = mappingParams->getChildren();
   while (children != NULL) {
     if ((pluginParams=dynamic_cast<const PluginParams *>(
             children)) != NULL)
     {
-      if (!((PluginParams *)pluginParams)->combineParams()) {
-        return E2BIG;
+      if ((result=((PluginParams *)pluginParams)->combineParams()) != 0) {
+        return result;
       }
 
       const PluginInfo *pluginInfo = pluginParams->getPluginInfo();
