@@ -277,6 +277,13 @@ int ACLRefererParams::parse(const char *blockStat, const char *blockEnd)
         _refererType = ACL_REFERER_TYPE_DOMAIN_INT;
       }
     }
+    else {
+      fprintf(stderr, "file: "__FILE__", line: %d, " \
+          "invalid referer parameter: %.*s! config line no: %d, line: %.*s\n",
+          __LINE__, sv->length, sv->str, _lineInfo.lineNo,
+          _lineInfo.line.length, _lineInfo.line.str);
+      return EINVAL;
+    }
   }
 
   return 0;
