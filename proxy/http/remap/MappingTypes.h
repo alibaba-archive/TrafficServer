@@ -81,6 +81,7 @@ struct StringValue {
   void free() {
     if (this->str != NULL) {
       ::free((void *)(this->str));
+      this->str = NULL;
       this->length = 0;
     }
   }

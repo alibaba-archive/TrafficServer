@@ -152,6 +152,10 @@ bool MappingManager::isRegex(const char *str, const int length)
     return true;
   }
 
+  if (memchr(str, '|', length) != NULL) {
+    return true;
+  }
+
   if (memchr(str, '?', length) != NULL) {
     return true;
   }
@@ -165,6 +169,10 @@ bool MappingManager::isRegex(const char *str, const int length)
   }
 
   if (findCharPair(str, length, '[', ']', &start, &end)) {
+    return true;
+  }
+
+  if (findCharPair(str, length, '{', '}', &start, &end)) {
     return true;
   }
 
@@ -356,6 +364,10 @@ int MappingManager::loadPlugins(MappingEntry *mappingEntry,
     if ((pluginParams=dynamic_cast<const PluginParams *>(
             children)) != NULL)
     {
+      if (!((PluginParams *)pluginParams)->combineParams()) {
+        return E2BIG;
+      }
+
       const PluginInfo *pluginInfo = pluginParams->getPluginInfo();
       if (!mappingEntry->_plugins.checkSize()) {
         return ENOMEM;

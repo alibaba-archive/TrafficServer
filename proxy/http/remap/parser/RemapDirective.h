@@ -18,15 +18,16 @@
 #define DIRECTIVE_TYPE_BLOCK     2
 #define DIRECTIVE_TYPE_BOTH      3
 
-#define DIRECTVIE_NAME_HTTP       "http"
-#define DIRECTVIE_NAME_HTTPS      "https"
-#define DIRECTVIE_NAME_TUNNEL     "tunnel"
-#define DIRECTVIE_NAME_MAP        "map"
-#define DIRECTVIE_NAME_REDIRECT   "redirect"
-#define DIRECTVIE_NAME_PLUGIN     "plugin"
-#define DIRECTVIE_NAME_ACL        "acl"
-#define DIRECTVIE_NAME_CONFIG     "config"
-#define DIRECTVIE_NAME_CONFIG_SET "set"
+#define DIRECTVIE_NAME_HTTP         "http"
+#define DIRECTVIE_NAME_HTTPS        "https"
+#define DIRECTVIE_NAME_TUNNEL       "tunnel"
+#define DIRECTVIE_NAME_MAP          "map"
+#define DIRECTVIE_NAME_REDIRECT     "redirect"
+#define DIRECTVIE_NAME_PLUGIN       "plugin"
+#define DIRECTVIE_NAME_PLUGIN_PARAM "param"
+#define DIRECTVIE_NAME_ACL          "acl"
+#define DIRECTVIE_NAME_CONFIG       "config"
+#define DIRECTVIE_NAME_CONFIG_SET   "set"
 
 #define DIRECTVIE_NAME_ACL_METHOD       "method"
 #define DIRECTVIE_NAME_ACL_SRC_IP       "src_ip"
@@ -47,19 +48,23 @@ class RemapDirective {
   public:
     virtual ~RemapDirective();
 
-    inline const char *getName() {
+    inline const char *getName() const {
       return _name;
     }
 
-    inline int getType() {
+    inline int getType() const {
       return _type;
     }
 
-    inline int getMinParamCount() {
+    inline int getChildrenCount() const {
+      return _childrenCount;
+    }
+
+    inline int getMinParamCount() const {
       return _minParamCount;
     }
 
-    inline int getMaxParamCount() {
+    inline int getMaxParamCount() const {
       return _maxParamCount;
     }
 

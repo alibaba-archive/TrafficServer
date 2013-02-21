@@ -62,6 +62,7 @@ class DirectiveParams {
   friend class RemapDirective;
   friend class RemapParser;
   friend class ACLActionParams;
+  friend class PluginParams;
 
   public:
     DirectiveParams(const int lineNo, const char *lineStr,
@@ -104,7 +105,7 @@ class DirectiveParams {
 
     void toString(StringBuffer *sb);
 
-    virtual int parse() {
+    virtual int parse(const char *blockStat, const char *blockEnd) {
       return 0;
     }
 

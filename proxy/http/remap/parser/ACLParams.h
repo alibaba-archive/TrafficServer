@@ -80,7 +80,7 @@ class ACLRedirectUrlParams : public DirectiveParams {
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock, const bool primaryDirective);
      ~ACLRedirectUrlParams() {}
-     int parse();
+     int parse(const char *blockStat, const char *blockEnd);
 
      const StringValue * getUrl() const {
        return &_url;
@@ -102,7 +102,7 @@ class ACLMethodParams : public DirectiveParams {
         const int paramLen, const bool bBlock);
      ~ACLMethodParams() {}
 
-     int parse();
+     int parse(const char *blockStat, const char *blockEnd);
 
      static int getMethodFlag(const StringValue *sv);
 
@@ -128,7 +128,7 @@ class ACLSrcIpParams : public DirectiveParams {
 
      ~ACLSrcIpParams() {}
 
-     int parse();
+     int parse(const char *blockStat, const char *blockEnd);
 
      inline const StringValue * getIp() const {
        return &_ip;
@@ -146,7 +146,7 @@ class ACLRefererParams : public DirectiveParams {
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
      ~ACLRefererParams() {}
-     int parse();
+     int parse(const char *blockStat, const char *blockEnd);
 
      inline int getRefererType() const {
        return _refererType;
@@ -254,7 +254,7 @@ class ACLDefineParams : public DirectiveParams {
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~ACLDefineParams() {}
-    int parse();
+    int parse(const char *blockStat, const char *blockEnd);
 
     inline int getAction() const {
       return _action;
@@ -292,7 +292,7 @@ class ACLCheckParams : public DirectiveParams {
         const int paramLen, const bool bBlock);
     ~ACLCheckParams() {}
 
-    int parse();
+    int parse(const char *blockStat, const char *blockEnd);
 
     const StringValue * getAclName() const {
       return &_aclName;
@@ -318,7 +318,7 @@ class ACLActionParams : public DirectiveParams {
       }
     }
 
-    int parse();
+    int parse(const char *blockStat, const char *blockEnd);
 
   public:
     inline int getAction() const {

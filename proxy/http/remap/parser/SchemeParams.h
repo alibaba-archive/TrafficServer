@@ -12,7 +12,7 @@ class SchemeParams : public DirectiveParams {
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~SchemeParams() {}
-    int parse();
+    int parse(const char *blockStat, const char *blockEnd);
 
     const char *getScheme() const {
       return _directive->getName();

@@ -204,13 +204,13 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
       return result;
     }
 
-    if ((result=pChildParams->parse()) != 0) {
+    if ((result=pChildParams->parse(blockStart, blockEnd)) != 0) {
       delete pChildParams;
       return result;
     }
 
     params->addChild(pChildParams);
-    if (bBlock) {
+    if (bBlock && pChildDirective->getChildrenCount() > 0) {
       if ((result=parse(pChildParams, blockStatementStart, blockEnd - 1)) != 0) {
         return result;
       }

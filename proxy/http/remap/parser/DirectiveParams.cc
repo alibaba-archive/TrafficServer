@@ -69,7 +69,7 @@ int DirectiveParams::init()
         fprintf(stderr, "file: "__FILE__", line: %d, "
             "too much parameters! config line: %.*s\n", __LINE__,
             _lineInfo.line.length, _lineInfo.line.str);
-        return ENOSPC;
+        return E2BIG;
     }
 
     if (*p == '"') {

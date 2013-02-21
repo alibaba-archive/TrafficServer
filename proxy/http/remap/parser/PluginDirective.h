@@ -14,5 +14,15 @@ class PluginDirective : public RemapDirective {
         const char *paramStr, const int paramLen, const bool bBlock);
 };
 
+class PluginParamDirective : public RemapDirective {
+  public:
+    PluginParamDirective();
+    ~PluginParamDirective();
+
+    DirectiveParams *newDirectiveParams(const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
+        const char *paramStr, const int paramLen, const bool bBlock);
+};
+
 #endif
 

@@ -74,7 +74,9 @@
      only support 61 parameters of records
      TODO: hosting, cache-control and congestion
      
-     plugin <plugin-filename> <space-split-params>
+     plugin <plugin-filename> <space-split-params> {
+       param [base64] { parameter_value }
+     }
      
      map [with_recv_port | reverse]: <public url or url path> <origin_url> {
         ACL

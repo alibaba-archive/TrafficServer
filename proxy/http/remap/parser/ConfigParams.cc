@@ -36,7 +36,7 @@ int ConfigSetParams::parseKV(StringValue *sv)
   return 0;
 }
 
-int ConfigSetParams::parse()
+int ConfigSetParams::parse(const char *blockStat, const char *blockEnd)
 {
   return this->parseKV(&_params[0]);
 }
@@ -57,7 +57,7 @@ ConfigParams::ConfigParams(const int lineNo, const char *lineStr,
 {
 }
 
-int ConfigParams::parse()
+int ConfigParams::parse(const char *blockStat, const char *blockEnd)
 {
   StringValue *svType = &_params[0];
   _config_type = this->getConfigType(svType);
