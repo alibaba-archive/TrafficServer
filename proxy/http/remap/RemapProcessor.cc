@@ -199,12 +199,21 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
               break;
             }
 
-            const char *hostname_end = (const char *)memchr(aclContext.refererHostname.str,
-                '/', (tmp_referer_buf + aclContext.refererUrl.length) -
+            const char *hostname_end = (const char *)memchr(
+                aclContext.refererHostname.str, '/',
+                (tmp_referer_buf + aclContext.refererUrl.length) -
                 aclContext.refererHostname.str);
             if (hostname_end != NULL) {
               aclContext.refererHostname.length = hostname_end -
                 aclContext.refererHostname.str;
+
+              const char *colon = (const char *)memchr(
+                  aclContext.refererHostname.str, ':',
+                  aclContext.refererHostname.length);
+              if (colon != NULL) {
+                aclContext.refererHostname.length = colon -
+                  aclContext.refererHostname.str;
+              }
             }
             else {
               aclContext.refererHostname.length = (tmp_referer_buf +
@@ -215,7 +224,7 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
             Debug("url_rewrite", "referer host: %.*s(%d)",
                 aclContext.refererHostname.length, aclContext.refererHostname.str,
                 aclContext.refererHostname.length);
-                */
+            */
           } while (0);
         }
       }
