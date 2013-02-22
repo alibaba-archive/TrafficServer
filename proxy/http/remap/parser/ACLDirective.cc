@@ -26,6 +26,9 @@ DirectiveParams *ACLDirective::newDirectiveParams(const int lineNo,
   if (DirectiveParams::getFirstParam(paramStr, paramLen, &firstParam)
       != 0)
   {
+    fprintf(stderr, "file: "__FILE__", line: %d, " \
+        "empty acl parameter! config line no: %d, line: %.*s\n",
+        __LINE__, lineNo, lineLen, lineStr);
     return NULL;
   }
 
@@ -60,6 +63,9 @@ DirectiveParams *ACLDirective::newDirectiveParams(const int lineNo,
               paramStr, paramLen, bBlock, false);
   }
   else {
+    fprintf(stderr, "file: "__FILE__", line: %d, " \
+        "invalid acl parameter: %.*s! config line no: %d, line: %.*s\n",
+        __LINE__, firstParam.length, firstParam.str, lineNo, lineLen, lineStr);
     return NULL;
   }
 }

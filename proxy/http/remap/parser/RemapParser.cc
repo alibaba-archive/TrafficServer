@@ -199,6 +199,10 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
         params->_lineInfo.lineNo + lineNo, line,
         lineEnd - line, params, paramStr,
         paramEnd - paramStr, bBlock);
+    if (pChildParams == NULL) {
+      return EINVAL;
+    }
+
     if ((result=pChildDirective->check(pChildParams, bBlock)) != 0) {
       delete pChildParams;
       return result;
