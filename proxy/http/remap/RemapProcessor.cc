@@ -206,18 +206,18 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
             if (hostname_end != NULL) {
               aclContext.refererHostname.length = hostname_end -
                 aclContext.refererHostname.str;
-
-              const char *colon = (const char *)memchr(
-                  aclContext.refererHostname.str, ':',
-                  aclContext.refererHostname.length);
-              if (colon != NULL) {
-                aclContext.refererHostname.length = colon -
-                  aclContext.refererHostname.str;
-              }
             }
             else {
               aclContext.refererHostname.length = (tmp_referer_buf +
                   aclContext.refererUrl.length) - aclContext.refererHostname.str;
+            }
+
+            const char *colon = (const char *)memchr(
+                aclContext.refererHostname.str, ':',
+                aclContext.refererHostname.length);
+            if (colon != NULL) {
+              aclContext.refererHostname.length = colon -
+                aclContext.refererHostname.str;
             }
 
             /*
