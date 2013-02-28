@@ -125,7 +125,7 @@ public:
     }
   };
 
-  void PerformACLFiltering(HttpTransact::State * s, url_mapping * mapping);
+  int PerformACLFiltering(HttpTransact::State * s, url_mapping * mapping);
   url_mapping *SetupPacMapping();       // manager proxy-autconfig mapping
   url_mapping *SetupBackdoorMapping();
   void PrintStore(MappingsStore &store);

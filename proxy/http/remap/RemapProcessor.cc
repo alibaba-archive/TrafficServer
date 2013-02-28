@@ -166,8 +166,11 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
   if (!map) {
     return false;
   }
+
   // Do fast ACL filtering (it is safe to check map here)
-  rewrite_table->PerformACLFiltering(s, map);
+  if (rewrite_table->PerformACLFiltering(s, map) == ACL_ACTION_DENY_INT) {
+    return false;
+  }
 
   // Check referer filtering rules
   if (map->needCheckReferer())

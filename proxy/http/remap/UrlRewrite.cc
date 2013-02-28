@@ -482,16 +482,16 @@ UrlRewrite::ReverseMap(HTTPHdr *response_header)
 
 
 /** Perform fast ACL filtering. */
-void
+int
 UrlRewrite::PerformACLFiltering(HttpTransact::State *s, url_mapping *map)
 {
   if (unlikely(!s || s->acl_filtering_performed || !s->client_connection_enabled)) {
-    return;
+    return ACL_ACTION_NONE_INT;
   }
 
   s->acl_filtering_performed = true;    // small protection against reverse mapping
   if (!map->needCheckMethodIp()) {
-    return;
+    return ACL_ACTION_ALLOW_INT;
   }
 
   ACLContext aclContext;
@@ -504,6 +504,8 @@ UrlRewrite::PerformACLFiltering(HttpTransact::State *s, url_mapping *map)
     Debug("url_rewrite", "matched ACL filter rule, denying request");
     s->client_connection_enabled = false;
   }
+
+  return action;
 }
 
 /**
