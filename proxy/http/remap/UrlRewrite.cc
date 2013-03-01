@@ -793,6 +793,7 @@ bool UrlRewrite::_convertToSuffix(MappingsStore &store,
 
   if (!suffixMappings->mapping_paths.Insert(new_mapping)) {
     Warning("Could not insert new mapping");
+    *err_no = EEXIST;
     return false;
   }
 
