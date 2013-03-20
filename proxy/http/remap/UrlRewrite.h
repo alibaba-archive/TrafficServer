@@ -119,6 +119,11 @@ public:
     int suffix_trie_min_rank;
     int regex_list_min_rank;
 
+    MappingsStore() : hash_lookup(NULL), suffix_trie(NULL),
+      suffix_trie_min_rank(-1), regex_list_min_rank(-1)
+    {
+    }
+
     bool empty() {
       return ((hash_lookup == NULL) && (suffix_trie == NULL) &&
           regex_list.empty());

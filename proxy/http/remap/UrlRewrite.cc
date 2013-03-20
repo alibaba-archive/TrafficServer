@@ -105,11 +105,6 @@ UrlRewrite::UrlRewrite(const char *file_var_in)
    num_rules_forward_with_recv_port(0), remap_pi_list(NULL), _valid(false),
    _oldDefineCheckers(NULL)
 {
-
-  forward_mappings.hash_lookup = reverse_mappings.hash_lookup =
-    permanent_redirects.hash_lookup = temporary_redirects.hash_lookup =
-    forward_mappings_with_recv_port.hash_lookup = NULL;
-
   char *config_file = NULL;
 
   ink_assert(file_var_in != NULL);
@@ -902,24 +897,6 @@ UrlRewrite::BuildTable()
   permanent_redirects.hash_lookup = ink_hash_table_create(InkHashTableKeyType_String);
   temporary_redirects.hash_lookup = ink_hash_table_create(InkHashTableKeyType_String);
   forward_mappings_with_recv_port.hash_lookup = ink_hash_table_create(InkHashTableKeyType_String);
-
-  forward_mappings.suffix_trie = NULL;
-  reverse_mappings.suffix_trie = NULL;
-  permanent_redirects.suffix_trie = NULL;
-  temporary_redirects.suffix_trie = NULL;
-  forward_mappings_with_recv_port.suffix_trie = NULL;
-
-  forward_mappings.suffix_trie_min_rank = -1;
-  reverse_mappings.suffix_trie_min_rank = -1;
-  permanent_redirects.suffix_trie_min_rank = -1;
-  temporary_redirects.suffix_trie_min_rank = -1;
-  forward_mappings_with_recv_port.suffix_trie_min_rank = -1;
-
-  forward_mappings.regex_list_min_rank = -1;
-  reverse_mappings.regex_list_min_rank = -1;
-  permanent_redirects.regex_list_min_rank = -1;
-  temporary_redirects.regex_list_min_rank = -1;
-  forward_mappings_with_recv_port.regex_list_min_rank = -1;
 
   int result;
   RemapParser parser;
