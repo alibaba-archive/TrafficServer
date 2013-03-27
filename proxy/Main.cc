@@ -98,7 +98,7 @@ extern "C" int plock(int);
 // Global Data
 //
 #define DEFAULT_NUMBER_OF_THREADS         ink_number_of_processors()
-#define DEFAULT_NUMBER_OF_UDP_THREADS     1
+#define DEFAULT_NUMBER_OF_UDP_THREADS     0
 #define DEFAULT_NUMBER_OF_SSL_THREADS     0
 #define DEFAULT_NUM_ACCEPT_THREADS        0
 #define DEFAULT_NUM_TASK_THREADS          0
@@ -1688,7 +1688,13 @@ main(int argc, char **argv)
     HttpProxyPort::loadDefaultIfEmpty();
 
     cacheProcessor.start();
-    udpNet.start(num_of_udp_threads);
+
+    // UDP net-threads are turned off by default.
+    if (!num_of_udp_threads)
+      TS_ReadConfigInteger(num_of_udp_threads, "proxy.config.udp.threads");
+    if (num_of_udp_threads)
+      udpNet.start(num_of_udp_threads);
+
     sslNetProcessor.start(getNumSSLThreads());
 
 #ifndef INK_NO_LOG
