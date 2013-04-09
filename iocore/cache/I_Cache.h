@@ -77,6 +77,7 @@ struct CacheProcessor:public Processor
 
   int dir_check(bool fix);
   int db_check(bool fix);
+  int belong_to_me(CacheKey *key);
 
   inkcoreapi Action *lookup(Continuation *cont, CacheKey *key, bool cluster_cache_local,
                             bool local_only = false,

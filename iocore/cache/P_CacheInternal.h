@@ -1361,6 +1361,20 @@ CacheProcessor::lookup(Continuation *cont, CacheKey *key, bool cluster_cache_loc
   return caches[frag_type]->lookup(cont, key, frag_type, hostname, host_len);
 }
 
+TS_INLINE int
+CacheProcessor::belong_to_me(CacheKey *key)
+{
+#ifdef CLUSTER_CACHE
+  if (cache_clustering_enabled > 0) {
+    INK_MD5 url_md5 = *key;
+
+    if (cluster_machine_at_depth(cache_hash(url_md5)))
+      return 0;
+  }
+#endif
+  return 1;
+}
+
 TS_INLINE inkcoreapi Action *
 CacheProcessor::open_read(Continuation *cont, CacheKey *key, bool cluster_cache_local, CacheFragType frag_type, char *hostname, int host_len)
 {

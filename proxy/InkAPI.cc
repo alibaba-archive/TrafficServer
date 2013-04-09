@@ -6576,6 +6576,26 @@ TSCacheDataTypeReady(TSCacheDataType type, int *is_ready)
   return TS_SUCCESS;
 }
 
+/*
+ * To check whether the cache key belongs to me.
+ * If yes, belong_to_me will be set to 1,
+ * otherwise set to 0.
+ * NOTE: user should make sure cache is ready
+ *       before calling this function.
+ */
+TSReturnCode
+TSCacheBelongToMe(TSCacheKey key, int *belong_to_me)
+{
+  sdk_assert(sdk_sanity_check_cachekey(key) == TS_SUCCESS);
+  sdk_assert(sdk_sanity_check_null_ptr((void*)belong_to_me) == TS_SUCCESS);
+
+  CacheInfo *info = (CacheInfo *) key;
+
+  *belong_to_me = cacheProcessor.belong_to_me(&info->cache_key);
+
+  return TS_SUCCESS;
+}
+
 /* Cache VConnections */
 TSAction
 TSCacheRead(TSCont contp, TSCacheKey key)
