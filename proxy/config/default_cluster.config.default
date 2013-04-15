@@ -1,0 +1,25 @@
+# Default Cluster Configuration file
+#
+# This file should be filled manually.
+#
+# This file designates the machines which make up the *DEFAULT* cluster
+# proper.  Data and load are distributed among these machines.
+#
+############################################################################
+# Number
+# IP:Port
+# ...
+############################################################################
+# Number = { 0, 1 ... } where 0 is a stand-alone proxy
+# IP:Port = IP address: cluster accept port number
+#
+# Example 1: stand-alone proxy
+# 0
+#
+# Example 2: 3 machines
+# 3
+# 127.1.2.3:83
+# 127.1.2.4:83
+# 127.1.2.5:83
+#
+0

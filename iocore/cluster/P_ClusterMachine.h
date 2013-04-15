@@ -73,6 +73,9 @@ struct ClusterMachine: public Server
 
   Link<ClusterMachine> link;
 
+
+  // used by default_cluster_config_change()
+  ClusterMachine(unsigned int ip, int port);
   // default for localhost
   ClusterMachine(char *hostname = NULL, unsigned int ip = 0, int acluster_port = 0);
   ~ClusterMachine();

@@ -240,6 +240,7 @@ struct Cluster
   //
   // Cluster Configuration
   //
+  void init_default_configuration();
 
   // Register callback for a cluster configuration change.
   // calls cont->handleEvent(EVENT_CLUSTER_CHANGE);
@@ -271,6 +272,7 @@ struct Cluster
   // accepting cluster connections.
   //
   SLL<ClusterConfiguration> configurations;
+  ClusterConfiguration *default_configuration;
 
   Cluster();
 };

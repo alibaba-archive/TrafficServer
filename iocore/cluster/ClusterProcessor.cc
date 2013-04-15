@@ -780,6 +780,9 @@ ClusterProcessor::init()
   PeriodicClusterEvent->init();
 
   this_cluster = NEW(new Cluster);
+  if (cluster_type == 1) {
+    this_cluster->init_default_configuration();
+  }
   ClusterConfiguration *cc = NEW(new ClusterConfiguration);
   this_cluster->configurations.push(cc);
   cc->n_machines = 1;

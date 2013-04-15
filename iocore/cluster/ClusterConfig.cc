@@ -278,6 +278,75 @@ machine_config_change(const char *name, RecDataT data_type, RecData data, void *
   return 0;
 }
 
+static int
+cmp_MachineListElement(const void *a, const void *b)
+{
+  MachineListElement *e1, *e2;
+
+  e1 = (MachineListElement *)a;
+  e2 = (MachineListElement *)b;
+
+  if (e1->ip < e2->ip)
+    return -1;
+  else if (e1->ip > e2->ip)
+    return 1;
+  else {
+    Fatal("Duplicated ip in default cluster config: %u.%u.%u.%u\n",
+          DOT_SEPARATED(e1->ip));
+    return 0;
+  }
+}
+
+int
+default_cluster_config_change(const char *name, RecDataT data_type, RecData data, void *cookie)
+{
+  NOWARN_UNUSED(name);
+  NOWARN_UNUSED(data_type);
+  NOWARN_UNUSED(cookie);
+
+  char *filename = (char *) data.rec_string;
+  ClusterConfiguration *cc, *old_cc;
+
+  Note("(re)read default cluster config file: %s\n", filename);
+
+  MachineList *ml = read_MachineList(filename);
+  if (ml == NULL) {
+    Warning("can't find machine list in: %s\n", filename);
+    return 0;
+  }
+  qsort(ml->machine, ml->n, sizeof(ml->machine[0]), cmp_MachineListElement);
+
+  ClusterMachine *this_machine = this_cluster_machine();
+  if (ml->find(this_machine->ip, this_machine->cluster_port) == NULL) {
+    ink_release_assert(!"Can't find this machine in default cluster config");
+  }
+
+  cc = NEW(new ClusterConfiguration);
+  cc->n_machines = ml->n;
+  memset(cc->hash_table, 0, CLUSTER_HASH_TABLE_SIZE);
+
+  for (int i = 0; i < ml->n; i++) {
+    cc->machines[i] = NEW(new ClusterMachine(ml->machine[i].ip,
+                                             ml->machine[i].port));
+  }
+  build_cluster_hash_table(cc);
+
+  old_cc = this_cluster()->default_configuration;
+  this_cluster()->default_configuration = cc;
+
+  /*
+   * TODO: We need to make the deleting of old_cc safely,
+   * as it could be accessed by other threads at the same time.
+   */
+  for (int i = 0; old_cc && i < old_cc->n_machines; i++) {
+    delete old_cc->machines[i];
+  }
+  delete old_cc;
+
+  free_MachineList(ml);
+  return 0;
+}
+
 void
 do_machine_config_change(void *d, const char *s)
 {
@@ -559,8 +628,23 @@ initialize_thread_for_cluster(EThread * e)
 /*************************************************************************/
 // Cluster member functions (Public Class)
 /*************************************************************************/
-Cluster::Cluster()
+Cluster::Cluster():default_configuration(NULL)
 {
+}
+
+void
+Cluster::init_default_configuration()
+{
+  RecData data;
+  char config_filename[PATH_NAME_MAX] = "";
+  const char *var_name = "proxy.config.cluster.default_cluster_configuration";
+
+  // TODO: we may need to update default configuration dynamically.
+  //IOCORE_RegisterConfigUpdateFunc(var_name, default_cluster_config_change, (void *)NULL);
+  IOCORE_ReadConfigString(config_filename, var_name, sizeof(config_filename) - 1);
+
+  data.rec_string = config_filename;
+  default_cluster_config_change(var_name, RECD_STRING, data, (void *)NULL);
 }
 
 // End of ClusterConfig.cc

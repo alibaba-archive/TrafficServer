@@ -30,6 +30,7 @@ dist_sysconf_DATA =	\
   ae_ua.config.default \
   cache.config.default \
   cluster.config.default \
+  default_cluster.config.default \
   congestion.config.default \
   health_check.config.default \
   hosting.config.default \
