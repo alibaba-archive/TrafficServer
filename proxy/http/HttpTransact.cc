@@ -7305,9 +7305,61 @@ HttpTransact::what_is_document_freshness(State *s, HTTPHdr* client_request, HTTP
   //HTTPValCacheControl *cc;
   //const char *cc_val;
   int fresh_limit;
+  const char *ptr;
+  MIMEField *field;
   ink_time_t current_age, response_date;;
   uint32_t cc_mask, cooked_cc_mask;
   uint32_t os_specifies_revalidate;
+
+  // Check Owner-Left-Time in header
+  HTTPHdr *hdr = s->cache_info.object_read->response_get();
+
+  DUMP_HEADER("http_hdrs", hdr, s->state_machine_id, "Check Owner-Left-Time");
+
+  if ((field = hdr->field_find(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME))) {
+    int len, found;
+    char value[48];
+    unsigned int ip;
+    ink_hrtime left_time, latest_left_time = 0;
+
+    ptr = mime_field_value_get(field, &len);
+    if (len >= 48) {
+      Warning("Owner-Left-Time, unexpected length:%d, try to refresh\n", len);
+      return (FRESHNESS_STALE);
+    }
+
+    strncpy(value, ptr, len);
+    value[len] = '\0';
+    sscanf(value, "%u:%"PRId64"", &ip, &left_time);
+
+    found = ink_hash_table_lookup(this_cluster()->machines_left_time_ht,
+                                  (InkHashTableKey)ip,
+                                  (InkHashTableValue *)&latest_left_time);
+
+    DebugTxn("http_hdrs", "Owner-Left-Time, ip:%u, left:%ld, latest_left:%ld\n",
+             ip, left_time, latest_left_time);
+
+    ///////////////////////////////////////////////////////////////
+    //                     When to refresh                       //
+    //-------------------------------------------------------------
+    //|          | left_time: 0 |        left_tiime: > 0          |
+    //|----------|--------------|---------------------------------|
+    //|found = 0 |      x       |          (a)REFRESH             |
+    //|----------|--------------|---------------------------------|
+    //|          |              | * left_time < latest_left_time: |
+    //|          |              |          (b)REFRESH             |
+    //|found = 1 |      x       |                                 |
+    //|          |              | * left_time >= latest_left_time:|
+    //|          |              |             x                   |
+    //-------------------------------------------------------------
+    // (a)REFRESH: This mache restarted, the owner machine may
+    //             have left twice before this machine restarted.
+    // (b)REFRESH: The owner machine had left twice.
+    if ((!found && left_time) || left_time < latest_left_time) {
+      DebugTxn("http_hdrs", "Owner-Left-Time, cache should be refreshed, found:%d\n", found);
+      return (FRESHNESS_STALE);
+    }
+  }
 
   //////////////////////////////////////////////////////
   // If config file has a ttl-in-cache field set,     //
