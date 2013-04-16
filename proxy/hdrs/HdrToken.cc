@@ -179,6 +179,7 @@ const char *_hdrtoken_strs[] = {
   "X-ID",
   
   // Header extensions
+  "Owner-Left-Time",
   "X-Forwarded-For",
   "TE",
 };
@@ -306,6 +307,7 @@ HdrTokenFieldInfo _hdrtoken_strs_field_initializers[] = {
   {"Xref", MIME_SLOTID_NONE, MIME_PRESENCE_XREF, HTIF_NONE},
   {"@DataInfo", MIME_SLOTID_NONE, MIME_PRESENCE_INT_DATA_INFO, HTIF_NONE},
   {"X-ID", MIME_SLOTID_NONE, MIME_PRESENCE_NONE, (HTIF_COMMAS | HTIF_MULTVALS | HTIF_HOPBYHOP)},
+  {"Owner-Left-Time", MIME_SLOTID_NONE, MIME_PRESENCE_OWNER_LEFT_TIME, (HTIF_COMMAS | HTIF_MULTVALS)},
   {"X-Forwarded-For", MIME_SLOTID_NONE, MIME_PRESENCE_NONE, (HTIF_COMMAS | HTIF_MULTVALS)},
   {NULL, 0, 0, 0}
 };
@@ -505,6 +507,7 @@ const char *_hdrtoken_commonly_tokenized_strs[] = {
   "X-ID",
   
   // Header extensions
+  "Owner-Left-Time",
   "X-Forwarded-For",
   "TE",
 };

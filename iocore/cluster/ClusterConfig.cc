@@ -614,6 +614,26 @@ cluster_machine_at_depth(unsigned int hash, int *pprobe_depth, ClusterMachine **
 }
 
 //
+// Returns either a machine or NULL.
+// Finds a machine according the default cluster configuration
+//
+ClusterMachine *
+cluster_machine_by_default(unsigned int hash)
+{
+  ClusterConfiguration *cc;
+
+  if (!cache_clustering_enabled)
+    return NULL;
+
+  if (!(cc = this_cluster()->default_configuration))
+    return NULL;
+
+  ClusterMachine *m = cc->machine_hash(hash);
+
+  return (m != this_cluster_machine()) ? m : NULL;
+}
+
+//
 // initialize_thread_for_cluster()
 //   This is not required since we have a separate handler
 //   for each machine-machine pair, the pointers to which are

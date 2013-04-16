@@ -154,6 +154,7 @@ const char *MIME_FIELD_WWW_AUTHENTICATE;
 const char *MIME_FIELD_XREF;
 const char *MIME_FIELD_INT_DATA_INFO;
 const char *MIME_FIELD_X_ID;
+const char *MIME_FIELD_OWNER_LEFT_TIME;
 const char *MIME_FIELD_X_FORWARDED_FOR;
 
 const char *MIME_VALUE_BYTES;
@@ -262,6 +263,7 @@ int MIME_LEN_WWW_AUTHENTICATE;
 int MIME_LEN_XREF;
 int MIME_LEN_INT_DATA_INFO;
 int MIME_LEN_X_ID;
+int MIME_LEN_OWNER_LEFT_TIME;
 int MIME_LEN_X_FORWARDED_FOR;
 
 int MIME_WKSIDX_ACCEPT;
@@ -336,6 +338,7 @@ int MIME_WKSIDX_WWW_AUTHENTICATE;
 int MIME_WKSIDX_XREF;
 int MIME_WKSIDX_INT_DATA_INFO;
 int MIME_WKSIDX_X_ID;
+int MIME_WKSIDX_OWNER_LEFT_TIME;
 int MIME_WKSIDX_X_FORWARDED_FOR;
 
 
@@ -678,6 +681,7 @@ mime_init()
     MIME_FIELD_XREF = hdrtoken_string_to_wks("Xref");
     MIME_FIELD_INT_DATA_INFO = hdrtoken_string_to_wks("@DataInfo");
     MIME_FIELD_X_ID = hdrtoken_string_to_wks("X-ID");
+    MIME_FIELD_OWNER_LEFT_TIME = hdrtoken_string_to_wks("Owner-Left-Time");
     MIME_FIELD_X_FORWARDED_FOR = hdrtoken_string_to_wks("X-Forwarded-For");
 
 
@@ -753,6 +757,7 @@ mime_init()
     MIME_LEN_XREF = hdrtoken_wks_to_length(MIME_FIELD_XREF);
     MIME_LEN_INT_DATA_INFO = hdrtoken_wks_to_length(MIME_FIELD_INT_DATA_INFO);
     MIME_LEN_X_ID = hdrtoken_wks_to_length(MIME_FIELD_X_ID);
+    MIME_LEN_OWNER_LEFT_TIME = hdrtoken_wks_to_length(MIME_FIELD_OWNER_LEFT_TIME);
     MIME_LEN_X_FORWARDED_FOR = hdrtoken_wks_to_length(MIME_FIELD_X_FORWARDED_FOR);
 
     MIME_WKSIDX_ACCEPT = hdrtoken_wks_to_index(MIME_FIELD_ACCEPT);
@@ -826,6 +831,7 @@ mime_init()
     MIME_WKSIDX_WWW_AUTHENTICATE = hdrtoken_wks_to_index(MIME_FIELD_WWW_AUTHENTICATE);
     MIME_WKSIDX_XREF = hdrtoken_wks_to_index(MIME_FIELD_XREF);
     MIME_WKSIDX_X_ID = hdrtoken_wks_to_index(MIME_FIELD_X_ID);
+    MIME_WKSIDX_OWNER_LEFT_TIME = hdrtoken_wks_to_index(MIME_FIELD_OWNER_LEFT_TIME);
     MIME_WKSIDX_X_FORWARDED_FOR = hdrtoken_wks_to_index(MIME_FIELD_X_FORWARDED_FOR);
 
     MIME_VALUE_BYTES = hdrtoken_string_to_wks("bytes");

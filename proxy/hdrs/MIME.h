@@ -366,6 +366,7 @@ extern const char *MIME_FIELD_WWW_AUTHENTICATE;
 extern const char *MIME_FIELD_XREF;
 extern const char *MIME_FIELD_INT_DATA_INFO;
 extern const char *MIME_FIELD_X_ID;
+extern const char *MIME_FIELD_OWNER_LEFT_TIME;
 extern const char *MIME_FIELD_X_FORWARDED_FOR;
 
 extern const char *MIME_VALUE_BYTES;
@@ -463,6 +464,7 @@ extern int MIME_LEN_WWW_AUTHENTICATE;
 extern int MIME_LEN_XREF;
 extern int MIME_LEN_INT_DATA_INFO;
 extern int MIME_LEN_X_ID;
+extern int MIME_LEN_OWNER_LEFT_TIME;
 extern int MIME_LEN_X_FORWARDED_FOR;
 
 extern int MIME_LEN_BYTES;
@@ -560,6 +562,7 @@ extern int MIME_WKSIDX_WWW_AUTHENTICATE;
 extern int MIME_WKSIDX_XREF;
 extern int MIME_WKSIDX_INT_DATA_INFO;
 extern int MIME_WKSIDX_X_ID;
+extern int MIME_WKSIDX_OWNER_LEFT_TIME;
 
 /***********************************************************************
  *                                                                     *

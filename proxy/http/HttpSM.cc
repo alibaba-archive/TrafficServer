@@ -5220,6 +5220,39 @@ HttpSM::perform_cache_write_action()
     if (transform_info.entry == NULL || t_state.api_info.cache_untransformed == true) {
       cache_sm.close_read();
       t_state.cache_info.write_status = HttpTransact::CACHE_WRITE_IN_PROGRESS;
+
+      INK_MD5 url_md5;
+      ClusterMachine *m;
+
+      url_md5 = ((CacheVC *)(cache_sm.cache_write_vc))->first_key;;
+      m = cluster_machine_by_default(cache_hash(url_md5));
+
+      unsigned int ip = m ? m->ip : 0;
+      DebugSM("http_hdrs", "[%" PRId64 "] Owner-Left-Time, OwnerIP:%u.%u.%u.%u\n",
+              sm_id, DOT_SEPARATED(ip));
+
+      // Mark Owner-Left-Time in header if necessary
+      if (m) {
+        int len;
+        char value[48];
+        ink_hrtime left_time = 0;
+
+        ink_hash_table_lookup(this_cluster()->machines_left_time_ht,
+                                      (InkHashTableKey)m->ip,
+                                      (InkHashTableValue *)&left_time);
+
+        MIMEField *field;
+        HTTPHdr *hdr = t_state.cache_info.object_store.response_get();
+        if (!(field= hdr->field_find(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME))) {
+          field = hdr->field_create(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME);
+          hdr->field_attach(field);
+        }
+
+        len = snprintf(value, sizeof(value), "%u:%"PRId64"", m->ip, left_time);
+        hdr->field_value_set(field, value, len);
+        DUMP_HEADER("http_hdrs", hdr, t_state.state_machine_id, "Mark Owner-Left-Time");
+      }
+
       setup_cache_write_transfer(&cache_sm,
                                  server_entry->vc,
                                  &t_state.cache_info.object_store, client_response_hdr_bytes, "cache write");

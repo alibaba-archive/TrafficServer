@@ -127,6 +127,7 @@ info_t fields[] = {
   {"Warning", "MIME_FIELD_WARNING", 0},
   {"Www-Authenticate", "MIME_FIELD_WWW_AUTHENTICATE", 0},
   {"Xref", "MIME_FIELD_XREF", 0},
+  {"Owner-Left-Time", "MIME_FIELD_OWNER_LEFT_TIME", 0},
   {NULL, "MIME_FIELD_EXTENSION", 0},
 };
 

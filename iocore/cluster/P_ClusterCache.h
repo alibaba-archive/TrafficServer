@@ -209,6 +209,12 @@ inkcoreapi ClusterMachine *cluster_machine_at_depth(unsigned int hash, int *prob
                                                     ClusterMachine ** past_probes = NULL);
 
 //
+// Returns either a machine or NULL.
+// Finds a machine according the default cluster configuration
+//
+inkcoreapi ClusterMachine *cluster_machine_by_default(unsigned int hash);
+
+//
 // Cluster
 //   A cluster of machines which act as a single cache.
 //
