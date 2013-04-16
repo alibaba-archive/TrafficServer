@@ -238,6 +238,13 @@ struct Cluster
   }
 
   //
+  // A hash table used to record the latest left time of each machine.
+  // Key: ip, data type: unsigned int
+  // Val: the latest left time, data type: ink_hrtime
+  //
+  InkHashTable *machines_left_time_ht;
+
+  //
   // Cluster Configuration
   //
   void init_default_configuration();

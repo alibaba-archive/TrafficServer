@@ -776,6 +776,11 @@ ClusterHandler::machine_down()
     ClusterConfiguration *cc = configuration_remove_machine(c, machine);
     CLUSTER_DECREMENT_DYN_STAT(CLUSTER_NODES_STAT);
     this_cluster()->configurations.push(cc);
+
+    // Record the latest left time of this machine
+    ink_hash_table_insert(this_cluster()->machines_left_time_ht,
+                          (InkHashTableKey)ip,
+                          (InkHashTableValue)ink_get_hrtime());
   }
   MUTEX_UNTAKE_LOCK(the_cluster_config_mutex, this_ethread());
   MachineList *cc = the_cluster_config();

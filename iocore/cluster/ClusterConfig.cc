@@ -630,6 +630,7 @@ initialize_thread_for_cluster(EThread * e)
 /*************************************************************************/
 Cluster::Cluster():default_configuration(NULL)
 {
+  machines_left_time_ht = ink_hash_table_create(InkHashTableKeyType_Word);
 }
 
 void
