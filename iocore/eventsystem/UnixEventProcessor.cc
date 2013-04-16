@@ -52,7 +52,8 @@ EventProcessor::spawn_event_threads(int n_threads, const char* et_name)
   }
 
   n_thread_groups++;
-  n_ethreads += n_threads;
+  // n_ethreads += n_threads;
+  ink_atomic_increment(&n_ethreads, n_threads);
   Debug("iocore_thread", "Created thread group '%s' id %d with %d threads", et_name, new_thread_group_id, n_threads); 
 
   return new_thread_group_id;
