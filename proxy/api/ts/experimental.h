@@ -74,6 +74,8 @@ extern "C"
   */
   tsapi TSReturnCode TSHttpTxnCntl(TSHttpTxn txnp, TSHttpCntlType cntl, void *data);
 
+  /* Protocols APIs */
+  tsapi void TSVConnCacheHttpInfoGet(TSVConn connp, TSCacheHttpInfo *infop);
 
   /* Protocols APIs */
   tsapi void TSVConnCacheHttpInfoSet(TSVConn connp, TSCacheHttpInfo infop);

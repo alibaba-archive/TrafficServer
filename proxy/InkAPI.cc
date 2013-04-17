@@ -6312,6 +6312,15 @@ TSVConnCacheObjectSizeGet(TSVConn connp)
 }
 
 void
+TSVConnCacheHttpInfoGet(TSVConn connp, TSCacheHttpInfo *infop)
+{
+  sdk_assert(sdk_sanity_check_iocore_structure(connp) == TS_SUCCESS);
+
+  CacheVC *vc = (CacheVC *) connp;
+  vc->get_http_info((CacheHTTPInfo **) infop);
+}
+
+void
 TSVConnCacheHttpInfoSet(TSVConn connp, TSCacheHttpInfo infop)
 {
   sdk_assert(sdk_sanity_check_iocore_structure(connp) == TS_SUCCESS);
