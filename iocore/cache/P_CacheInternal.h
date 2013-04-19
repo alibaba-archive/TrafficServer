@@ -1579,6 +1579,12 @@ CacheProcessor::IsCacheEnabled()
   return CacheProcessor::initialized;
 }
 
+TS_INLINE int
+CacheProcessor::IsCacheClustering()
+{
+  return cache_clustering_enabled;
+}
+
 TS_INLINE unsigned int
 CacheProcessor::IsCacheReady(CacheFragType type)
 {

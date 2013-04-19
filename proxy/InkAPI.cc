@@ -6596,6 +6596,21 @@ TSCacheBelongToMe(TSCacheKey key, int *belong_to_me)
   return TS_SUCCESS;
 }
 
+/*
+ * To check whether the cache clustering is enabled.
+ * If yes, is_cache_clustering will be set to 1,
+ * otherwise set to 0.
+ */
+TSReturnCode
+TSIsCacheClustering(int *is_cache_clustering)
+{
+  sdk_assert(sdk_sanity_check_null_ptr((void*)is_cache_clustering) == TS_SUCCESS);
+
+  *is_cache_clustering = CacheProcessor::IsCacheClustering();
+
+  return TS_SUCCESS;
+}
+
 /* Cache VConnections */
 TSAction
 TSCacheRead(TSCont contp, TSCacheKey key)
