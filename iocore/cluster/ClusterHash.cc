@@ -167,6 +167,27 @@ build_hash_table_bucket(ClusterConfiguration * c)
   }
 }
 
+static void
+adjust_cluster_hash_table(ClusterConfiguration * c)
+{
+  ClusterMachine *m, *mm;
+  ClusterConfiguration *cc = this_cluster()->default_configuration;
+
+  if (!cc)
+    return;
+
+  for (int i = 0; i < CLUSTER_HASH_TABLE_SIZE; i++) {
+
+    m = c->machines[c->hash_table[i]];
+    mm = cc->machines[cc->hash_table[i]];
+
+    if (!mm->dead && !m->equal(mm)) {
+      c->hash_table[i] = c->find_idx(mm->ip, mm->cluster_port);
+      ink_debug_assert(c->hash_table[i] > 0);
+    }
+  }
+}
+
 void
 build_cluster_hash_table(ClusterConfiguration * c)
 {
@@ -174,4 +195,6 @@ build_cluster_hash_table(ClusterConfiguration * c)
     build_hash_table_machine(c);
   else
     build_hash_table_bucket(c);
+
+  adjust_cluster_hash_table(c);
 }

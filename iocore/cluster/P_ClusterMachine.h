@@ -74,6 +74,15 @@ struct ClusterMachine: public Server
   Link<ClusterMachine> link;
 
 
+  bool equal(ClusterMachine *m)
+  {
+    if (ip == m->ip &&
+        (!cluster_port || !m->cluster_port || cluster_port == m->cluster_port)) {
+      return true;
+    }
+    return false;
+  }
+
   // used by default_cluster_config_change()
   ClusterMachine(unsigned int ip, int port);
   // default for localhost

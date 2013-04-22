@@ -169,6 +169,13 @@ struct ClusterConfiguration
     return NULL;
   }
 
+  int find_idx(unsigned int ip, int port = 0) {
+    for (int i = 0; i < n_machines; i++)
+      if (ip == machines[i]->ip && (!port || !machines[i]->cluster_port || machines[i]->cluster_port == port))
+        return i;
+    return -1;
+  }
+
   //
   // Private
   //

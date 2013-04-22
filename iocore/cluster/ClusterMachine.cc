@@ -65,7 +65,7 @@ create_this_cluster_machine()
 }
 
 ClusterMachine::ClusterMachine(unsigned int aip, int aport):
-dead(false),
+dead(true),
 hostname(NULL),
 ip(aip),
 cluster_port(aport),
