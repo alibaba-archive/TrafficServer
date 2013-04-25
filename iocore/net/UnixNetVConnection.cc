@@ -74,7 +74,7 @@ net_activity(UnixNetVConnection *vc, EThread *thread)
     vc->inactivity_timeout->schedule_in(vc->inactivity_timeout_in);
   else {
     if (vc->inactivity_timeout)
-      vc->inactivity_timeout->cancel_event(vc);
+      vc->inactivity_timeout->cancel_action();
     if (vc->inactivity_timeout_in) {
       vc->inactivity_timeout = vc->thread->schedule_in_local(vc, vc->inactivity_timeout_in);
     } else
@@ -101,7 +101,7 @@ close_UnixNetVConnection(UnixNetVConnection *vc, EThread *t)
   vc->con.close();
 #ifdef INACTIVITY_TIMEOUT
   if (vc->inactivity_timeout) {
-    vc->inactivity_timeout->cancel_event(vc);
+    vc->inactivity_timeout->cancel_action(vc);
     vc->inactivity_timeout = NULL;
   }
 #else
@@ -109,7 +109,7 @@ close_UnixNetVConnection(UnixNetVConnection *vc, EThread *t)
 #endif
   vc->inactivity_timeout_in = 0;
   if (vc->active_timeout) {
-    vc->active_timeout->cancel_event(vc);
+    vc->active_timeout->cancel_action(vc);
     vc->active_timeout = NULL;
   }
   vc->active_timeout_in = 0;
@@ -641,7 +641,7 @@ UnixNetVConnection::cancel_OOB()
   UnixNetVConnection *u = (UnixNetVConnection *) this;
   if (u->oob_ptr) {
     if (u->oob_ptr->trigger) {
-      u->oob_ptr->trigger->cancel_event();
+      u->oob_ptr->trigger->cancel_action();
       u->oob_ptr->trigger = NULL;
     }
     delete u->oob_ptr;

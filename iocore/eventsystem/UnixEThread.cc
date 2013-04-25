@@ -42,10 +42,6 @@ struct AIOCallback;
 
 EThread::EThread()
   : generator((uint64_t)ink_get_hrtime_internal() ^ (uint64_t)(uintptr_t)this),
-   event_cancel_list(NULL),
-   event_cancel_delay(0),
-   event_cancel_limit(0),
-   last_cancel_event(0),
    ethreads_to_be_signalled(NULL),
    n_ethreads_to_be_signalled(0),
    main_accept_index(-1),
@@ -53,18 +49,11 @@ EThread::EThread()
    signal_hook(0),
    tt(REGULAR), eventsem(NULL)
 {
-  ink_atomiclist_init(&CancelList, "CancelList", offsetof(Event, clink.next));
   memset(thread_private, 0, PER_THREAD_DATA);
-  IOCORE_ReadConfigInteger(event_cancel_delay, "proxy.config.event.cancel_delay");
-  IOCORE_ReadConfigInteger(event_cancel_limit, "proxy.config.event.cancel_limit");
 }
 
 EThread::EThread(ThreadType att, int anid)
   : generator((uint64_t)ink_get_hrtime_internal() ^ (uint64_t)(uintptr_t)this),
-    event_cancel_list(NULL),
-    event_cancel_delay(0),
-    event_cancel_limit(0),
-    last_cancel_event(0),
     ethreads_to_be_signalled(NULL),
     n_ethreads_to_be_signalled(0),
     main_accept_index(-1),
@@ -75,12 +64,9 @@ EThread::EThread(ThreadType att, int anid)
     eventsem(NULL),
     l1_hash(NULL)
 {
-  ink_atomiclist_init(&CancelList, "CancelList", offsetof(Event, clink.next));
   ethreads_to_be_signalled = (EThread **)ats_malloc(MAX_EVENT_THREADS * sizeof(EThread *));
   memset((char *) ethreads_to_be_signalled, 0, MAX_EVENT_THREADS * sizeof(EThread *));
   memset(thread_private, 0, PER_THREAD_DATA);
-  IOCORE_ReadConfigInteger(event_cancel_delay, "proxy.config.event.cancel_delay");
-  IOCORE_ReadConfigInteger(event_cancel_limit, "proxy.config.event.cancel_limit");
 #if TS_HAS_EVENTFD
   evfd = eventfd(0, O_NONBLOCK | FD_CLOEXEC);
   if (evfd < 0) {
@@ -104,10 +90,6 @@ EThread::EThread(ThreadType att, int anid)
 
 EThread::EThread(ThreadType att, Event * e, ink_sem * sem)
  : generator((uint32_t)((uintptr_t)time(NULL) ^ (uintptr_t) this)),
-   event_cancel_list(NULL),
-   event_cancel_delay(0),
-   event_cancel_limit(0),
-   last_cancel_event(0),
    ethreads_to_be_signalled(NULL),
    n_ethreads_to_be_signalled(0),
    main_accept_index(-1),
@@ -116,10 +98,7 @@ EThread::EThread(ThreadType att, Event * e, ink_sem * sem)
    tt(att), oneevent(e), eventsem(sem)
 {
   ink_assert(att == DEDICATED);
-  ink_atomiclist_init(&CancelList, "CancelList", offsetof(Event, clink.next));
   memset(thread_private, 0, PER_THREAD_DATA);
-  IOCORE_ReadConfigInteger(event_cancel_delay, "proxy.config.event.cancel_delay");
-  IOCORE_ReadConfigInteger(event_cancel_limit, "proxy.config.event.cancel_limit");
 }
 
 
@@ -144,43 +123,6 @@ void
 EThread::set_event_type(EventType et)
 {
   event_types |= (1 << (int) et);
-}
-
-void
-EThread::set_event_cancel(Event * e)
-{
-  /*
-   * only cancel event in this case:
-   * 1. have be inserted in priority queue (e->in_the_priority_queue) && e->timeout_at > now + event_cancel_delay(s)
-   * localQueue Event will be process soon, so don't set cancel. This will be less cancel handler.
-   */
-  if (e->in_the_priority_queue && (e->timeout_at - e->ethread->cur_time) > HRTIME_SECONDS(event_cancel_limit) && !e->cancelled) {
-    /* prevent more threads cancel one event racing */
-    while (!e->cancelled && ink_atomic_cas((int32_t *)(&e->cancelled), false, true)) {
-      ink_atomiclist_push(&CancelList, e);
-      return;
-    }
-  }
-}
-
-void
-EThread::process_cancel_event(ink_hrtime now, EThread * t)
-{
-  Event *e, *e_next;
-
-  if ((now - last_cancel_event) < HRTIME_SECONDS(event_cancel_delay))
-    return;
-
-  last_cancel_event = now;
-  e = event_cancel_list;
-  while (e) {
-    ink_assert((e->ethread == t) && e->cancelled);
-    e_next = e->clink.next;
-    EventQueue.remove(e);
-    free_event(e);
-    e = e_next;
-  }
-  event_cancel_list = (Event *) ink_atomiclist_popall(&CancelList);
 }
 
 void
@@ -264,10 +206,22 @@ EThread::execute() {
               NegativeQueue.insert(e, p);
           }
         }
-
-        // execute all the eligible internal events
-        EventQueue.check_ready(cur_time, this);
-
+        bool done_one;
+        do {
+          done_one = false;
+          // execute all the eligible internal events
+          EventQueue.check_ready(cur_time, this);
+          while ((e = EventQueue.dequeue_ready(cur_time))) {
+            ink_assert(e);
+            ink_assert(e->timeout_at > 0);
+            if (e->cancelled)
+              free_event(e);
+            else {
+              done_one = true;
+              process_event(e, e->callback_event);
+            }
+          }
+        } while (done_one);
         // execute any negative (poll) events
         if (NegativeQueue.head) {
           if (n_ethreads_to_be_signalled)
@@ -313,9 +267,12 @@ EThread::execute() {
           if (!INK_ATOMICLIST_EMPTY(EventQueueExternal.al))
             EventQueueExternal.dequeue_timed(cur_time, next_time, false);
         } else {                // Means there are no negative events
-          next_time = cur_time + EventQueue.earliest_timeout();
-          if ((next_time - cur_time) > THREAD_MAX_HEARTBEAT_MSECONDS * HRTIME_MSECOND)
+          next_time = EventQueue.earliest_timeout();
+          ink_hrtime sleep_time = next_time - cur_time;
+          if (sleep_time > THREAD_MAX_HEARTBEAT_MSECONDS * HRTIME_MSECOND) {
             next_time = cur_time + THREAD_MAX_HEARTBEAT_MSECONDS * HRTIME_MSECOND;
+            sleep_time = THREAD_MAX_HEARTBEAT_MSECONDS * HRTIME_MSECOND;
+          }
           // dequeue all the external events and put them in a local
           // queue. If there are no external events available, do a
           // cond_timedwait.

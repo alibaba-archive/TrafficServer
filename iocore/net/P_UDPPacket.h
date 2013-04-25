@@ -69,7 +69,6 @@ public:
 #if defined(PACKETQUEUE_IMPL_AS_PQLIST) || defined(PACKETQUEUE_IMPL_AS_RING)
   int in_the_priority_queue;
   int in_heap;
-  int in_idx;
 #endif
 
   virtual void UDPPacket_is_abstract() { }

@@ -23,15 +23,6 @@
 
 #ifndef _P_UnixEvent_h_
 #define _P_UnixEvent_h_
-TS_INLINE void
-Event::cancel_event(Continuation * c)
-{
-  if (!cancelled) {
-    ink_assert(!c || c == continuation);
-    ethread->set_event_cancel(this);
-    cancelled = true;
-  }
-}
 
 TS_INLINE Event *
 Event::init(Continuation * c, ink_hrtime atimeout_at, ink_hrtime aperiod)
@@ -41,7 +32,6 @@ Event::init(Continuation * c, ink_hrtime atimeout_at, ink_hrtime aperiod)
   period = aperiod;
   immediate = !period && !atimeout_at;
   cancelled = false;
-  in_the_priority_queue = 0;
   return this;
 }
 
@@ -60,8 +50,6 @@ Event::Event():
   immediate(false),
   globally_allocated(true),
   in_heap(false),
-  in_idx(0),
-  callback_event(0),
   timeout_at(0),
   period(0)
 {
