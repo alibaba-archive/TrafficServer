@@ -65,6 +65,7 @@ struct CacheInfo
   int len;
   time_t pin_in_cache;
   CacheInfoMagic magic;
+  bool cluster_cache_local;
 
     CacheInfo()
   {
@@ -73,6 +74,7 @@ struct CacheInfo
     len = 0;
     pin_in_cache = 0;
     magic = CACHE_INFO_MAGIC_ALIVE;
+    cluster_cache_local = true;
   }
 };
 

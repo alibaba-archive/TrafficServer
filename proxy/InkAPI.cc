@@ -4038,6 +4038,18 @@ TSCacheKeyDestroy(TSCacheKey key)
   return TS_SUCCESS;
 }
 
+TSReturnCode
+TSCacheKeyEnableCluster(TSCacheKey key)
+{
+  sdk_assert(sdk_sanity_check_cachekey(key) == TS_SUCCESS);
+  if (((CacheInfo *) key)->magic != CACHE_INFO_MAGIC_ALIVE)
+    return TS_ERROR;
+
+  CacheInfo *i = (CacheInfo *) key;
+  i->cluster_cache_local = false;
+  return TS_SUCCESS;
+}
+
 TSCacheHttpInfo
 TSCacheHttpInfoCopy(TSCacheHttpInfo infop)
 {
@@ -6316,7 +6328,7 @@ TSVConnCacheHttpInfoGet(TSVConn connp, TSCacheHttpInfo *infop)
 {
   sdk_assert(sdk_sanity_check_iocore_structure(connp) == TS_SUCCESS);
 
-  CacheVC *vc = (CacheVC *) connp;
+  CacheVConnection *vc = (CacheVConnection *) connp;
   vc->get_http_info((CacheHTTPInfo **) infop);
 }
 
@@ -6576,7 +6588,21 @@ TSCacheRead(TSCont contp, TSCacheKey key)
   CacheInfo *info = (CacheInfo *) key;
   Continuation *i = (INKContInternal *) contp;
 
-  return (TSAction)cacheProcessor.open_read(i, &info->cache_key, true, info->frag_type, info->hostname, info->len);
+  return (TSAction)cacheProcessor.open_read(i, &info->cache_key, info->cluster_cache_local,
+        info->frag_type, info->hostname, info->len);
+}
+
+TSAction
+TSHTTPCacheRead(TSCont contp, TSMBuffer url, int cluster_local,
+    TSMBuffer request, TSCacheLookupHttpConfig params)
+{
+  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
+  sdk_assert(sdk_sanity_check_null_ptr((void*)url) == TS_SUCCESS);
+  sdk_assert(sdk_sanity_check_null_ptr((void*)request) == TS_SUCCESS);
+  sdk_assert(sdk_sanity_check_null_ptr((void*)params) == TS_SUCCESS);
+
+  return (TSAction) cacheProcessor.open_read((Continuation *) contp, (URL *) url, cluster_local,
+      (CacheHTTPHdr *) request, (CacheLookupHttpConfig *) params);
 }
 
 TSAction
@@ -7149,6 +7175,45 @@ TSMgmtConfigIntSet(const char *var_name, TSMgmtInt value)
   return TS_SUCCESS;
 }
 
+TSCacheLookupHttpConfig
+TSCacheLookupHttpConfigCreate(void)
+{
+  CacheLookupHttpConfig *config =
+      new (CacheLookupHttpConfigAllocator.alloc()) CacheLookupHttpConfig();
+  HttpConfigParams *http_config_param = HttpConfig::acquire();
+
+  if (http_config_param) {
+    config->cache_global_user_agent_header =
+        http_config_param->global_user_agent_header ? true : false;
+    config->ignore_accept_mismatch =
+        http_config_param->ignore_accept_mismatch ? true : false;
+    config->ignore_accept_language_mismatch =
+        http_config_param->ignore_accept_language_mismatch ? true : false;
+    config->ignore_accept_encoding_mismatch =
+        http_config_param->ignore_accept_encoding_mismatch ? true : false;
+    config->ignore_accept_charset_mismatch =
+        http_config_param->ignore_accept_charset_mismatch ? true : false;
+    config->cache_enable_default_vary_headers =
+        http_config_param->cache_enable_default_vary_headers ? true : false;
+
+    config->cache_vary_default_text =
+        http_config_param->cache_vary_default_text;
+    config->cache_vary_default_images =
+        http_config_param->cache_vary_default_images;
+    config->cache_vary_default_other =
+        http_config_param->cache_vary_default_other;
+  }
+
+  return (TSCacheLookupHttpConfig) config;
+}
+
+TSReturnCode
+TSCacheLookupHttpConfigDestory(TSCacheLookupHttpConfig conf)
+{
+  CacheLookupHttpConfig *config = (CacheLookupHttpConfig *) conf;
+  delete config;
+  return TS_SUCCESS;
+}
 
 /* Alarm */
 /* return type is "int" currently, it should be TSReturnCode */

@@ -151,6 +151,9 @@ extern "C"
   /* ===== Cache ===== */
   tsapi TSReturnCode TSCacheKeyDataTypeSet(TSCacheKey key, TSCacheDataType type);
 
+  tsapi TSReturnCode TSCacheKeyEnableCluster(TSCacheKey key);
+
+  tsapi TSAction TSHTTPCacheRead(TSCont contp, TSMBuffer *url, int cluster_local, TSMBuffer request, TSCacheLookupHttpConfig params);
 
   /* ===== Utility ===== */
   /****************************************************************************
@@ -275,6 +278,10 @@ extern "C"
    *  Set a records.config integer variable
    ****************************************************************************/
   tsapi TSReturnCode TSMgmtConfigIntSet(const char *var_name, TSMgmtInt value);
+
+  tsapi TSCacheLookupHttpConfig TSCacheLookupHttpConfigCreate(void);
+
+  tsapi TSReturnCode TSCacheLookupHttpConfigDestory(TSCacheLookupHttpConfig conf);
 
   /* ----------------------------------------------------------------------
    * Interfaces used by Wireless group
