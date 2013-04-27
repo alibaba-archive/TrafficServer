@@ -5836,15 +5836,6 @@ HttpTransact::is_cache_response_returnable(State* s)
     return false;
   }
 
-  HTTPHdr *hdr = s->cache_info.object_read->response_get();
-  if (hdr->presence(MIME_PRESENCE_CONTENT_LENGTH)) {
-    int64_t cl = hdr->get_content_length();
-    if (s->cache_info.object_read->object_size_get() != cl) {
-      SET_VIA_STRING(VIA_DETAIL_CACHE_LOOKUP, VIA_IN_CACHE_CL_NOT_MATCH);
-      return false;
-    }
-  }
-
   return true;
 }
 
