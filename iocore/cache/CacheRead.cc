@@ -1094,8 +1094,32 @@ CacheVC::openReadStartHead(int event, Event * e)
       }
 
       alternate.copy_shallow(alternate_tmp);
-      alternate.object_key_get(&key);
       doc_len = alternate.object_size_get();
+      // check the doc_len and the C-L
+      if (alternate.response_get()->presence(MIME_PRESENCE_CONTENT_LENGTH)) {
+        if(alternate.response_get()->get_content_length() != (int64_t)doc_len) {
+          HTTPHdr *hdr = alternate.response_get();
+          char b[4096];
+          fprintf(stderr, "+++++++++ %s +++++++++\n", "Content-Length not match doc size");
+          int used, tmp, offset, done;
+          offset = 0;
+
+          do {
+            used = 0;
+            tmp = offset;
+            done = hdr->print (b, 4095, &used, &tmp);
+            offset += used;
+            b[used] = '\0';
+            fprintf (stderr, "%s", b);
+          } while((!done));
+
+          dir_delete(&key, vol, &dir);
+          goto Ldone;
+        }
+      }
+
+      alternate.object_key_get(&key);
+
       if (key == doc->key) {      // is this my data?
         f.single_fragment = doc->single_fragment();
         ink_assert(f.single_fragment);     // otherwise need to read earliest
