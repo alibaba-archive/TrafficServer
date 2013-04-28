@@ -183,7 +183,7 @@ adjust_cluster_hash_table(ClusterConfiguration * c)
 
     if (!mm->dead && !m->equal(mm)) {
       c->hash_table[i] = c->find_idx(mm->ip, mm->cluster_port);
-      ink_debug_assert(c->hash_table[i] > 0);
+      ink_debug_assert(c->hash_table[i] >= 0);
     }
   }
 }
