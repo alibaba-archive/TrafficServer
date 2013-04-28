@@ -644,7 +644,10 @@ cluster_machine_by_default(unsigned int hash)
 
   ClusterMachine *m = cc->machine_hash(hash);
 
-  return (m != this_cluster_machine()) ? m : NULL;
+  if (m->equal(this_cluster_machine()))
+    return NULL;
+
+  return m;
 }
 
 //
