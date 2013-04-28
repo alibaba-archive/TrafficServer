@@ -453,8 +453,11 @@ configuration_add_machine(ClusterConfiguration * c, ClusterMachine * m)
   ink_assert(cc->n_machines < CLUSTER_MAX_MACHINES);
 
   ClusterMachine *mm;
-  mm = this_cluster()->default_configuration->find(m->ip, m->cluster_port);
-  if (mm) mm->dead = false;
+  ClusterConfiguration *def_cc;
+  if ((def_cc = this_cluster()->default_configuration)) {
+    mm = def_cc->find(m->ip, m->cluster_port);
+    if (mm) mm->dead = false;
+  }
 
   build_cluster_hash_table(cc);
   INK_MEMORY_BARRIER;           // commit writes before freeing old hash table
@@ -490,8 +493,11 @@ configuration_remove_machine(ClusterConfiguration * c, ClusterMachine * m)
   cc->changed = ink_get_hrtime();
 
   ClusterMachine *mm;
-  mm = this_cluster()->default_configuration->find(m->ip, m->cluster_port);
-  if (mm) mm->dead = true;
+  ClusterConfiguration *def_cc;
+  if ((def_cc = this_cluster()->default_configuration)) {
+    mm = def_cc->find(m->ip, m->cluster_port);
+    if (mm) mm->dead = true;
+  }
 
   build_cluster_hash_table(cc);
   INK_MEMORY_BARRIER;           // commit writes before freeing old hash table
