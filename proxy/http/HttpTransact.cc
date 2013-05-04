@@ -7336,8 +7336,8 @@ HttpTransact::what_is_document_freshness(State *s, HTTPHdr* client_request, HTTP
                                   (InkHashTableKey)ip,
                                   (InkHashTableValue *)&latest_left_time);
 
-    DebugTxn("http_hdrs", "Owner-Left-Time, ip:%u, left:%ld, latest_left:%ld\n",
-             ip, left_time, latest_left_time);
+    DebugTxn("http_hdrs", "Owner-Left-Time, ip:%u(%u.%u.%u.%u), left:%ld, latest_left:%ld\n",
+             ip, DOT_SEPARATED(ip), left_time, latest_left_time);
 
     ///////////////////////////////////////////////////////////////
     //                     When to refresh                       //

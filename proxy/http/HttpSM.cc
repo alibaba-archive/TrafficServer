@@ -5222,17 +5222,19 @@ HttpSM::perform_cache_write_action()
       t_state.cache_info.write_status = HttpTransact::CACHE_WRITE_IN_PROGRESS;
 
       INK_MD5 url_md5;
-      ClusterMachine *m;
-
-      url_md5 = ((CacheVC *)(cache_sm.cache_write_vc))->first_key;;
+      ClusterMachine *m = NULL;
+      Cache::generate_key(&url_md5, cache_sm.get_lookup_url());
       m = cluster_machine_by_default(cache_hash(url_md5));
 
+      char hexStr[33];
       unsigned int ip = m ? m->ip : 0;
-      DebugSM("http_hdrs", "[%" PRId64 "] Owner-Left-Time, OwnerIP:%u.%u.%u.%u\n",
-              sm_id, DOT_SEPARATED(ip));
+      DebugSM("http_hdrs", "[%" PRId64 "] Owner-Left-Time, OwnerIP:%u(%u.%u.%u.%u), dead:%d, md5:%s\n",
+              sm_id, ip, DOT_SEPARATED(ip), m?m->dead:0, url_md5.toHexStr(hexStr));
 
-      // Mark Owner-Left-Time in header if necessary
-      if (m) {
+      // Mark Owner-Left-Time in header if necessary.
+      // When owner machine is not dead, cache will be written
+      // back to it, so needn't to mark in that case.
+      if (m && m->dead) {
         int len;
         char value[48];
         ink_hrtime left_time = 0;
