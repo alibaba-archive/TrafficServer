@@ -1436,8 +1436,7 @@ UpdateSM::HandleSMEvent(int event, Event * e)
         }
 
         INK_MD5 url_md5;
-        Cache::generate_key(&url_md5, &_EN->_URLhandle, (_EN->_num_request_headers ? _EN->_http_hdr : NULL));
-        Cache::generate_key(&url_md5, &_EN->_URLhandle, _EN->_http_hdr);
+        Cache::generate_key(&url_md5, &_EN->_URLhandle);
         ClusterMachine *m = cluster_machine_at_depth(cache_hash(url_md5));
         if (m) {
           // URL hashed to remote node, do nothing.
