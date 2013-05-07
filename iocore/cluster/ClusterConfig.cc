@@ -311,14 +311,16 @@ default_cluster_config_change(const char *name, RecDataT data_type, RecData data
 
   MachineList *ml = read_MachineList(filename);
   if (ml == NULL) {
-    Warning("can't find machine list in: %s\n", filename);
+    Warning("can't find machine list in: %s, ignore default cluster config\n",
+            filename);
     return 0;
   }
   qsort(ml->machine, ml->n, sizeof(ml->machine[0]), cmp_MachineListElement);
 
   ClusterMachine *this_machine = this_cluster_machine();
   if (ml->find(this_machine->ip, this_machine->cluster_port) == NULL) {
-    ink_release_assert(!"Can't find this machine in default cluster config");
+    Fatal("Can't find this machine(%u.%u.%u.%u) in default cluster config",
+          DOT_SEPARATED(this_machine->ip));
   }
 
   cc = NEW(new ClusterConfiguration);
