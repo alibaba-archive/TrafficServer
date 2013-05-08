@@ -561,6 +561,7 @@ struct ClusterVConnection: public ClusterVConnectionBase
 
   Ptr<ProxyMutex> read_locked;
   Ptr<ProxyMutex> write_locked;
+  SLINK(ClusterVConnection, ready_alink);
 
   // Data buffer for unmarshaled objects from remote node.
   Ptr<IOBufferData> marshal_buf;
@@ -598,6 +599,7 @@ struct ClusterVConnection: public ClusterVConnectionBase
   virtual int get_header(void **ptr, int *len);
   virtual int set_header(void *ptr, int len);
   virtual int get_single_data(void **ptr, int *len);
+  virtual void reenable(VIO *);
 };
 
 //

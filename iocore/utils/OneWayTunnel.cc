@@ -261,6 +261,8 @@ OneWayTunnel::startEvent(int event, void *data)
 
   case VC_EVENT_READ_READY:
     transform(vioSource->buffer, vioTarget->buffer);
+    if (vioTarget->vc_server && (VC_CLUSTER == vioTarget->vc_server->type))
+      vioTarget->vc_server->type = VC_CLUSTER_WRITE;
     vioTarget->reenable();
     ret = VC_EVENT_CONT;
     break;
@@ -287,6 +289,9 @@ OneWayTunnel::startEvent(int event, void *data)
     vioTarget->nbytes = vioTarget->ndone + vioTarget->buffer.reader()->read_avail();
     if (vioTarget->nbytes == vioTarget->ndone)
       goto Ldone;
+
+    if (vioTarget->vc_server && (VC_CLUSTER == vioTarget->vc_server->type))
+      vioTarget->vc_server->type = VC_CLUSTER_WRITE;
     vioTarget->reenable();
     if (!tunnel_peer)
       close_source_vio(0);

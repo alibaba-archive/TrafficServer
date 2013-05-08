@@ -223,6 +223,8 @@ ClusterHandler::ClusterHandler()
   ClusterVConnection ivc;
   ink_atomiclist_init(&external_incoming_open_local,
                       "ExternalIncomingOpenLocalQueue", (char *) &ivc.link.next - (char *) &ivc);
+  ink_atomiclist_init(&write_vcs_ready,
+                      "WriteVcReadyQueue", offsetof(ClusterVConnection, ready_alink.next));
   memset((char *) &callout_cont[0], 0, sizeof(callout_cont));
   memset((char *) &callout_events[0], 0, sizeof(callout_events));
 }
@@ -341,6 +343,12 @@ ClusterHandler::close_ClusterVConnection(ClusterVConnection * vc)
     CLUSTER_SUM_DYN_STAT(CLUSTER_CON_TOTAL_TIME_STAT, now - vc->start_time);
     CLUSTER_SUM_DYN_STAT(CLUSTER_REMOTE_CONNECTION_TIME_STAT, now - vc->start_time);
   }
+
+  if (VC_CLUSTER_WRITE == vc->type) {
+    vc->type = VC_CLUSTER_CLOSED;
+    return;
+  }
+
   clusterVCAllocator_free(vc);
 }
 
@@ -1588,16 +1596,31 @@ ClusterHandler::build_write_descriptors()
   int count_bucket = cur_vcs;
   int tcount = write.msg.count + 2;     // count + descriptor
   int write_descriptors_built = 0;
+  ClusterVConnection *vc, *vc_next;
+
+  // Reschedule some cluster_vc when read done from source OneWayTunnel
+  vc = (ClusterVConnection *)ink_atomiclist_popall(&write_vcs_ready);
+  while (vc) {
+    vc_next = (ClusterVConnection *) vc->ready_alink.next;
+    vc->ready_alink.next = NULL;
+    if (VC_CLUSTER_CLOSED == vc->type)
+      clusterVCAllocator_free(vc);
+    else {
+      cluster_reschedule_offset(this, vc, &vc->write, 0);
+      vc->type = VC_CLUSTER;
+    }
+    vc = vc_next;
+  }
 
   //
   // Build descriptors for connections with stuff to send.
   //
-  ClusterVConnection *vc_next = (ClusterVConnection *) write_vcs[count_bucket].head;
+  vc_next = (ClusterVConnection *) write_vcs[count_bucket].head;
   while (vc_next) {
     enter_exit(&cls_build_writes_entered, &cls_writes_exited);
     if (tcount >= MAX_TCOUNT)
       break;
-    ClusterVConnection *vc = vc_next;
+    vc = vc_next;
     vc_next = (ClusterVConnection *) vc->write.link.next;
     if (valid_for_data_write(vc)) {
       ink_assert(vc->write_locked);     // Acquired in valid_for_data_write()
@@ -2032,6 +2055,7 @@ retry:
 
   int64_t towrite = buf.reader()->read_avail();
   int64_t ntodo = s->vio.ntodo();
+  bool write_vc_signal = false;
 
   if (towrite > ntodo)
     towrite = ntodo;
@@ -2044,6 +2068,7 @@ retry:
     return 0;
   }
   if (buf.writer()->write_avail() && towrite != ntodo) {
+    write_vc_signal = true;
     if (cluster_signal_and_update(VC_EVENT_WRITE_READY, vc, s) == EVENT_DONE)
       return 0;
     ink_assert(s->vio.ntodo() >= 0);
@@ -2088,6 +2113,11 @@ retry:
     if (s->vio.ntodo() <= 0) {
       if (cluster_signal_and_update_locked(VC_EVENT_WRITE_COMPLETE, vc, s) != EVENT_DONE) {
         cluster_reschedule(this, vc, s);
+      }
+    } else {
+      if (!write_vc_signal && buf.writer()->write_avail() && towrite != ntodo) {
+        if (cluster_signal_and_update(VC_EVENT_WRITE_READY, vc, s) == EVENT_DONE)
+          return 0;
       }
     }
   }

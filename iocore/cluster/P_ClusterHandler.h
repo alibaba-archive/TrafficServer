@@ -473,6 +473,7 @@ struct ClusterHandler:public ClusterHandlerBase
   InkAtomicList outgoing_control_al[CLUSTER_CMSG_QUEUES];
   InkAtomicList external_incoming_control;
   InkAtomicList external_incoming_open_local;
+  InkAtomicList write_vcs_ready;
   ClusterCalloutContinuation * callout_cont[MAX_COMPLETION_CALLBACK_EVENTS];
   Event *callout_events[MAX_COMPLETION_CALLBACK_EVENTS];
   Event *cluster_periodic_event;

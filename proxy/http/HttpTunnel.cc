@@ -1094,6 +1094,8 @@ bool HttpTunnel::producer_handler(int event, HttpTunnelProducer * p)
     // Data read from producer, reenable consumers
     for (c = p->consumer_list.head; c; c = c->link.next) {
       if (c->alive) {
+        if (c->vc && (VC_CLUSTER == c->vc->type))
+          c->vc->type = VC_CLUSTER_WRITE;
         c->write_vio->reenable();
       }
     }

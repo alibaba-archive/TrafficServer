@@ -84,6 +84,7 @@ cluster_schedule(ClusterHandler * ch, ClusterVConnection * vc, ClusterVConnState
   if (ns == &vc->read) {
     ClusterVC_enqueue_read(ch->read_vcs[new_bucket], vc);
   } else {
+    vc->type = VC_CLUSTER;
     ClusterVC_enqueue_write(ch->write_vcs[new_bucket], vc);
   }
 }
@@ -100,6 +101,21 @@ cluster_reschedule(ClusterHandler * ch, ClusterVConnection * vc, ClusterVConnSta
     ClusterVC_remove_write(vc);
   cluster_set_priority(ch, ns, ns->priority);
   cluster_schedule(ch, vc, ns);
+}
+
+void
+cluster_reschedule_offset(ClusterHandler * ch, ClusterVConnection * vc, ClusterVConnState * ns, int offset)
+{
+  //
+  // Remove from bucket, computer schedule into cur_vcs + offset bucket
+  //
+  if (ns == &vc->read) {
+    ClusterVC_remove_read(vc);
+    ClusterVC_enqueue_read(ch->read_vcs[(ch->cur_vcs + offset) % CLUSTER_BUCKETS], vc);
+  } else {
+    ClusterVC_remove_write(vc);
+    ClusterVC_enqueue_write(ch->write_vcs[(ch->cur_vcs + offset) % CLUSTER_BUCKETS], vc);
+  }
 }
 
 void

@@ -240,6 +240,7 @@ ClusterVConnection::free()
   write_list_tail = 0;
   write_list_bytes = 0;
   write_bytes_in_transit = 0;
+  type = VC_NULL;
 }
 
 void
@@ -616,6 +617,14 @@ int
 ClusterVConnection::get_disk_io_priority()
 {
   return disk_io_priority;
+}
+
+void
+ClusterVConnection::reenable(VIO * vio)
+{
+  ClusterVConnectionBase::reenable(vio);
+  if (type == VC_CLUSTER_WRITE)
+    ink_atomiclist_push(&ch->write_vcs_ready, (void *)this);
 }
 
 // End of ClusterVConnection.cc

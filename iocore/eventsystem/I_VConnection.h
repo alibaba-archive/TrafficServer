@@ -136,6 +136,15 @@ enum TSApiDataType
   TS_API_DATA_CLOSED
 };
 
+enum TypeVConnection
+{
+  VC_NULL,
+  VC_CLUSTER,
+  VC_CLUSTER_WRITE,
+  VC_CLUSTER_CLOSED
+};
+
+
 extern "C" {
     typedef struct tsapi_vio* TSVIO;
 }
@@ -379,6 +388,7 @@ public:
 
   */
   int lerrno;
+  int type;
 };
 
 struct DummyVConnection: public VConnection

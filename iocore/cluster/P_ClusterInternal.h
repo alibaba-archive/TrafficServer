@@ -46,8 +46,8 @@
 // Configuration Parameters
 /*************************************************************************/
 // Note: MAX_TCOUNT must be power of 2
-#define MAX_TCOUNT         	 128
-#define CONTROL_DATA             (128*1024)
+#define MAX_TCOUNT         	 512
+#define CONTROL_DATA         (512*1024)
 #define READ_BANK_BUF_SIZE 	 DEFAULT_MAX_BUFFER_SIZE
 #define READ_BANK_BUF_INDEX 	 (DEFAULT_BUFFER_SIZES-1)
 #define ALLOC_DATA_MAGIC	 0xA5   // 8 bits in size
@@ -59,7 +59,7 @@
 
   // (see ClusterHandler::mainClusterEvent)
   // this is equivalent to a max of 0.7 seconds
-#define CLUSTER_BUCKETS          64
+#define CLUSTER_BUCKETS          32
 #define CLUSTER_PERIOD           HRTIME_MSECONDS(10)
 
   // Per instance maximum time allotted to cluster thread
@@ -493,6 +493,7 @@ extern void cluster_lower_priority(ClusterHandler *, ClusterVConnState *);
 extern void cluster_raise_priority(ClusterHandler *, ClusterVConnState *);
 extern void cluster_schedule(ClusterHandler *, ClusterVConnection *, ClusterVConnState *);
 extern void cluster_reschedule(ClusterHandler *, ClusterVConnection *, ClusterVConnState *);
+extern void cluster_reschedule_offset(ClusterHandler * ch, ClusterVConnection * vc, ClusterVConnState * ns, int offset);
 extern void cluster_disable(ClusterHandler *, ClusterVConnection *, ClusterVConnState *);
 extern void cluster_update_priority(ClusterHandler *, ClusterVConnection *, ClusterVConnState *, int64_t, int64_t);
 #define CLUSTER_BUMP_NO_REMOVE    -1

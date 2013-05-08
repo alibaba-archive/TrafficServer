@@ -60,7 +60,7 @@ TS_INLINE
 VConnection::VConnection(ProxyMutex * aMutex)
   :
 Continuation(aMutex),
-lerrno(0)
+lerrno(0), type(0)
 {
   SET_HANDLER(0);
 }
