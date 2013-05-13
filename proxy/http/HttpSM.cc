@@ -6835,8 +6835,10 @@ HttpSM::set_next_state()
 
         // Try to remove Owner-Left-Time from header
         // before return to Client.
-        HTTPHdr *hdr = &t_state.hdr_info.client_response;
-        hdr->field_delete(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME);
+        if (cache_clustering_enabled && this_cluster()->default_configuration) {
+          HTTPHdr *hdr = &t_state.hdr_info.client_response;
+          hdr->field_delete(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME);
+        }
 
         t_state.api_next_action = HttpTransact::HTTP_API_SEND_REPONSE_HDR;
         if (hooks_set) {

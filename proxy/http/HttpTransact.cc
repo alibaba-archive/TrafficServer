@@ -7316,7 +7316,8 @@ HttpTransact::what_is_document_freshness(State *s, HTTPHdr* client_request, HTTP
 
   DUMP_HEADER("http_hdrs", hdr, s->state_machine_id, "Check Owner-Left-Time");
 
-  if ((field = hdr->field_find(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME))) {
+  if (cache_clustering_enabled && this_cluster()->default_configuration
+      && (field = hdr->field_find(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME))) {
     int len, found;
     char value[48];
     unsigned int ip;
