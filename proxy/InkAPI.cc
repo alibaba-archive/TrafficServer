@@ -6619,7 +6619,7 @@ TSIsCacheClustering(int *is_cache_clustering)
  *   - default cluster configuration is disable.
  */
 TSReturnCode
-TSCacheOwnerLeftTimeGet(unsigned int owner_ip, ink_hrtime *left_time)
+TSCacheOwnerLeftTimeGet(unsigned int owner_ip, TSHRTime *left_time)
 {
   sdk_assert(sdk_sanity_check_null_ptr((void*)left_time) == TS_SUCCESS);
 
