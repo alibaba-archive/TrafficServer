@@ -222,6 +222,11 @@ inkcoreapi ClusterMachine *cluster_machine_at_depth(unsigned int hash, int *prob
 inkcoreapi ClusterMachine *cluster_machine_by_default(unsigned int hash);
 
 //
+// Returns the latest left_time according the owner_ip.
+//
+inkcoreapi ink_hrtime owner_left_time_get(unsigned int owner_ip);
+
+//
 // Cluster
 //   A cluster of machines which act as a single cache.
 //

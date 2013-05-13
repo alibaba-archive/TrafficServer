@@ -653,6 +653,24 @@ cluster_machine_by_default(unsigned int hash)
 }
 
 //
+// Returns the latest left_time according the owner_ip.
+//
+ink_hrtime
+owner_left_time_get(unsigned int owner_ip)
+{
+  ink_hrtime left_time = 0;
+
+  if (this_cluster()->default_configuration == NULL)
+    return 0;
+
+  ink_hash_table_lookup(this_cluster()->machines_left_time_ht,
+                        (InkHashTableKey)owner_ip,
+                        (InkHashTableValue *)&left_time);
+
+  return left_time;
+}
+
+//
 // initialize_thread_for_cluster()
 //   This is not required since we have a separate handler
 //   for each machine-machine pair, the pointers to which are

@@ -6612,6 +6612,22 @@ TSIsCacheClustering(int *is_cache_clustering)
   return TS_SUCCESS;
 }
 
+/*
+ * Get the lastest left_time according the owner_ip.
+ * left_time would be set to 0 in two situation:
+ *   - This calling machine(not owner machine) restarted.
+ *   - default cluster configuration is disable.
+ */
+TSReturnCode
+TSCacheOwnerLeftTimeGet(unsigned int owner_ip, ink_hrtime *left_time)
+{
+  sdk_assert(sdk_sanity_check_null_ptr((void*)left_time) == TS_SUCCESS);
+
+  *left_time = owner_left_time_get(owner_ip);
+
+  return TS_SUCCESS;
+}
+
 /* Cache VConnections */
 TSAction
 TSCacheRead(TSCont contp, TSCacheKey key)
