@@ -1600,7 +1600,7 @@ ClusterHandler::build_write_descriptors()
     if (VC_CLUSTER_CLOSED == vc->type) {
       vc->type = VC_NULL;
       clusterVCAllocator.free(vc);
-    } else {
+    } else if (!this->dead) {
       cluster_reschedule_offset(this, vc, &vc->write, 0);
       vc->type = VC_CLUSTER;
     }
