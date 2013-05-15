@@ -343,12 +343,6 @@ ClusterHandler::close_ClusterVConnection(ClusterVConnection * vc)
     CLUSTER_SUM_DYN_STAT(CLUSTER_CON_TOTAL_TIME_STAT, now - vc->start_time);
     CLUSTER_SUM_DYN_STAT(CLUSTER_REMOTE_CONNECTION_TIME_STAT, now - vc->start_time);
   }
-
-  if (VC_CLUSTER_WRITE == vc->type) {
-    vc->type = VC_CLUSTER_CLOSED;
-    return;
-  }
-
   clusterVCAllocator_free(vc);
 }
 
@@ -1603,9 +1597,10 @@ ClusterHandler::build_write_descriptors()
   while (vc) {
     vc_next = (ClusterVConnection *) vc->ready_alink.next;
     vc->ready_alink.next = NULL;
-    if (VC_CLUSTER_CLOSED == vc->type)
-      clusterVCAllocator_free(vc);
-    else {
+    if (VC_CLUSTER_CLOSED == vc->type) {
+      vc->type = VC_NULL;
+      clusterVCAllocator.free(vc);
+    } else {
       cluster_reschedule_offset(this, vc, &vc->write, 0);
       vc->type = VC_CLUSTER;
     }

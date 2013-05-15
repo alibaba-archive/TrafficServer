@@ -52,6 +52,11 @@ clusterVCAllocator_free(ClusterVConnection * vc)
   vc->mutex = 0;
   vc->action_ = 0;
   vc->free();
+
+  if (VC_CLUSTER_WRITE == vc->type) {
+    vc->type = VC_CLUSTER_CLOSED;
+    return;
+  }
   clusterVCAllocator.free(vc);
 }
 
@@ -240,7 +245,6 @@ ClusterVConnection::free()
   write_list_tail = 0;
   write_list_bytes = 0;
   write_bytes_in_transit = 0;
-  type = VC_NULL;
 }
 
 void
