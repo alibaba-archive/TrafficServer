@@ -387,10 +387,14 @@ CacheVC::openReadFromWriter(int event, Event * e)
     write_vc->f.readers = 1;
     if (!(write_vc->f.update && write_vc->total_len == 0)) {
       key = write_vc->earliest_key;
-      if (!write_vc->closed)
-        alternate.object_size_set(write_vc->vio.nbytes);
-      else
+      if (!write_vc->closed) {
+        if (write_vc->vio.nbytes == INT64_MAX && alternate.response_get()->presence(MIME_PRESENCE_CONTENT_LENGTH))
+          alternate.object_size_set(alternate.response_get()->get_content_length());
+        else
+          alternate.object_size_set(write_vc->vio.nbytes);
+      } else
         alternate.object_size_set(write_vc->total_len);
+      doc_len = alternate.object_size_get();
     } else {
       key = write_vc->update_key;
       ink_assert(write_vc->closed);
@@ -427,11 +431,11 @@ CacheVC::openReadFromWriter(int event, Event * e)
 #endif //HTTP_CACHE
     DDebug("cache_read_agg", "%p: key: %X non-http passed stage 1", this, first_key.word(1));
     key = write_vc->earliest_key;
+    doc_len = write_vc->vio.nbytes;
 #ifdef HTTP_CACHE
   }
 #endif
   if (write_vc->fragment) {
-    doc_len = write_vc->vio.nbytes;
     last_collision = NULL;
     DDebug("cache_read_agg",
           "%p: key: %X closed: %d, fragment: %d, len: %d starting first fragment",
