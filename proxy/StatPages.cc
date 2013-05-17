@@ -153,13 +153,16 @@ void
 BaseStatPagesHandler::resp_add(const char *fmt, ...)
 {
   va_list args;
-  char buf[16384];
+  char buf[65536];
   int length;
   int size;
 
   va_start(args, fmt);
-  length = vsnprintf(buf, 16384, fmt, args);
+  length = vsnprintf(buf, 65536, fmt, args);
   va_end(args);
+
+  if (length >= 65536)
+    length = 65535;
 
   size = response_size;
   if (size == 0) {
