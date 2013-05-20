@@ -53,7 +53,7 @@ clusterVCAllocator_free(ClusterVConnection * vc)
   vc->action_ = 0;
   vc->free();
 
-  if (VC_CLUSTER_WRITE == vc->type) {
+  if (VC_CLUSTER_WRITE_SCHEDULE == vc->type) {
     vc->type = VC_CLUSTER_CLOSED;
     return;
   }
@@ -627,8 +627,10 @@ void
 ClusterVConnection::reenable(VIO * vio)
 {
   ClusterVConnectionBase::reenable(vio);
-  if (type == VC_CLUSTER_WRITE)
+  if (type == VC_CLUSTER_WRITE) {
+    type = VC_CLUSTER_WRITE_SCHEDULE;
     ink_atomiclist_push(&ch->write_vcs_ready, (void *)this);
+  }
 }
 
 // End of ClusterVConnection.cc

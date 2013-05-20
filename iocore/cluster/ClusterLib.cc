@@ -109,10 +109,10 @@ cluster_reschedule_offset(ClusterHandler * ch, ClusterVConnection * vc, ClusterV
   //
   // Remove from bucket, computer schedule into cur_vcs + offset bucket
   //
-  if (ns == &vc->read) {
+  if (ns == &vc->read && vc->read.queue) {
     ClusterVC_remove_read(vc);
     ClusterVC_enqueue_read(ch->read_vcs[(ch->cur_vcs + offset) % CLUSTER_BUCKETS], vc);
-  } else {
+  } else if (vc->write.queue) {
     ClusterVC_remove_write(vc);
     ClusterVC_enqueue_write(ch->write_vcs[(ch->cur_vcs + offset) % CLUSTER_BUCKETS], vc);
   }
