@@ -928,13 +928,17 @@ UrlRewrite::BuildTable()
   const DynamicArray<ACLRefererCheckList *> *aclRefererCheckList;
   int mappingFlags;
 
-  printf("mapping count: %d\n", mappings.count);
-  mappingManager.print();
+  if (is_debug_tag_set("url_rewrite")) {
+    printf("mapping count: %d\n", mappings.count);
+    mappingManager.print();
+  }
   if ((result=mappingManager.expand()) != 0) {
     Warning("MappingManager::expand fail, error info: %s", strerror(result));
     return result;
   }
-  printf("mapping count after regex range expand: %d\n", mappings.count);
+  if (is_debug_tag_set("url_rewrite")) {
+    printf("mapping count after regex range expand: %d\n", mappings.count);
+  }
 
   HttpConfigParams *httpConfig = HttpConfig::acquire();
   if (httpConfig == NULL) {
