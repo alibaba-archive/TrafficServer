@@ -1433,11 +1433,10 @@ Lagain:
     total_len += avail;
   }
   length = (uint64_t)towrite;
-  if (length > target_fragment_size() && 
-      (length < target_fragment_size() + target_fragment_size() / 4))
-    write_len = target_fragment_size();
-  else
+  if (length < target_fragment_size() + target_fragment_size() / 4)
     write_len = length;
+  else
+    write_len = target_fragment_size();
   bool not_writing = towrite != ntodo && towrite < target_fragment_size();
   if (!called_user) {
     if (not_writing) {
