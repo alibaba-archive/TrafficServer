@@ -36,7 +36,7 @@ useradd -r -u 176 -g ats -d / -s /sbin/nologin \
 ## this will change the default -O3 to -O2.
 #export CFLAGS="$RPM_OPT_FLAGS"
 #export CXXFLAGS="$RPM_OPT_FLAGS"
-./configure --enable-layout=Gentoo --libdir=%{_libdir}/trafficserver --with-tcl=%{_libdir} --with-user=ats --with-group=ats
+./configure --enable-layout=Gentoo --libdir=%{_libdir}/trafficserver --with-tcl=%{_libdir} --with-user=ats --with-group=ats  --enable-reclaimable-freelist
 make %{?_smp_mflags}
 
 %install
