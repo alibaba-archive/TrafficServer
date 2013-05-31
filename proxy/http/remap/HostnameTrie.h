@@ -76,11 +76,11 @@ class HostnameTrie
     bool empty() const {
       for (int i=0; i<VALID_CHAR_NUM; i++) {
         if (_root.children[i] != NULL) {
-          return true;
+          return false;
         }
       }
 
-      return false;
+      return true;
     }
 
     T **getNodes(int *count) {
