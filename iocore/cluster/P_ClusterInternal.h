@@ -46,8 +46,8 @@
 // Configuration Parameters
 /*************************************************************************/
 // Note: MAX_TCOUNT must be power of 2
-#define MAX_TCOUNT         	 512
-#define CONTROL_DATA         (512*1024)
+#define MAX_TCOUNT         	 256
+#define CONTROL_DATA         (256*1024)
 #define READ_BANK_BUF_SIZE 	 DEFAULT_MAX_BUFFER_SIZE
 #define READ_BANK_BUF_INDEX 	 (DEFAULT_BUFFER_SIZES-1)
 #define ALLOC_DATA_MAGIC	 0xA5   // 8 bits in size

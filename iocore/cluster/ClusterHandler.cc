@@ -288,7 +288,7 @@ ClusterHandler::close_ClusterVConnection(ClusterVConnection * vc)
     vc->active_timeout->cancel(vc);
   if (vc->read.queue)
     ClusterVC_remove_read(vc);
-  if (vc->write.queue)
+  if ((VC_CLUSTER_WRITE_SCHEDULE != vc->type) && vc->write.queue)
     ClusterVC_remove_write(vc);
   vc->read.vio.mutex = NULL;
   vc->write.vio.mutex = NULL;
@@ -1598,11 +1598,12 @@ ClusterHandler::build_write_descriptors()
     vc_next = (ClusterVConnection *) vc->ready_alink.next;
     vc->ready_alink.next = NULL;
     if (VC_CLUSTER_CLOSED == vc->type) {
+      if (vc->write.queue)
+        ClusterVC_remove_write(vc);
       vc->type = VC_NULL;
       clusterVCAllocator.free(vc);
     } else {
       cluster_reschedule_offset(this, vc, &vc->write, 0);
-      vc->type = VC_CLUSTER;
     }
     vc = vc_next;
   }
@@ -1617,7 +1618,23 @@ ClusterHandler::build_write_descriptors()
       break;
     vc = vc_next;
     vc_next = (ClusterVConnection *) vc->write.link.next;
-    if (valid_for_data_write(vc)) {
+
+    if (VC_CLUSTER_CLOSED == vc->type) {
+      if (vc->write.queue)
+        ClusterVC_remove_write(vc);
+      vc->type = VC_NULL;
+      clusterVCAllocator.free(vc);
+      continue;
+    }
+
+    int valid = valid_for_data_write(vc);
+    if (-1 == valid && (VC_CLUSTER_WRITE_SCHEDULE == vc->type)) {
+      cluster_reschedule_offset(this, vc, &vc->write, 1);
+      continue;
+    }
+
+    vc->type = VC_CLUSTER;
+    if (1 == valid) {
       ink_assert(vc->write_locked);     // Acquired in valid_for_data_write()
       if ((vc->remote_free > (vc->write.vio.ndone - vc->write_list_bytes))
           && channels[vc->channel] == vc) {
@@ -1942,7 +1959,7 @@ retry:
 #ifdef CLUSTER_STATS
       _dw_missed_lock++;
 #endif
-      return 0;
+      return -1;
     }
   }
 
@@ -2117,7 +2134,7 @@ retry:
     }
   }
 
-  if (vc->schedule_write()) {
+  if (vc->schedule_write() || (s->vio.ntodo() <= 0)) {
 #ifdef CLUSTER_TOMCAT
     ink_assert(s->vio.mutex);
 #endif
