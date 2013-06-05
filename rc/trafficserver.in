@@ -239,6 +239,8 @@ do_stop()
     return "$RETVAL"
 }
 
+NOTIFY_FILENAME='/var/log/trafficserver/trafficserver.notify'
+
 # main
 case "$1" in
     start)
@@ -255,7 +257,6 @@ case "$1" in
               echo "$NAME Already running"
               exit 17
             fi
-            NOTIFY_FILENAME='/var/log/trafficserver/trafficserver.notify'
             RECORD_FILENAME='/etc/trafficserver/records.config'
             BAK_FILENAME="${RECORD_FILENAME}.bak"
             /bin/cp -f $RECORD_FILENAME $BAK_FILENAME
@@ -439,8 +440,13 @@ case "$1" in
         fi
         ;;
     activate)
+      content=$(/bin/cat $NOTIFY_FILENAME)
+      if [ "x$content" = 'x0' ]; then
+        echo "can't activate $NAME, the content of $NOTIFY_FILENAME must be 1"
+      else
         activate $NAME
-        ;;
+      fi
+      ;;
     deactivate)
         deactivate $NAME
         ;;
