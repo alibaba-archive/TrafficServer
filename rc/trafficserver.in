@@ -250,7 +250,25 @@ case "$1" in
             test "x$VERBOSE" != "xno" && log_daemon_msg "$retval"
             exit "$retval"
         elif [ "$DISTRIB_ID" = "fedora" -o "$DISTRIB_ID" = "redhat" ]; then
+            status -p $TC_PIDFILE $TC_NAME > /dev/null
+            if [ $? -eq 0 ]; then
+              echo "$NAME Already running"
+              exit 17
+            fi
+            NOTIFY_FILENAME='/var/log/trafficserver/trafficserver.notify'
+            RECORD_FILENAME='/etc/trafficserver/records.config'
+            BAK_FILENAME="${RECORD_FILENAME}.bak"
+            /bin/cp -f $RECORD_FILENAME $BAK_FILENAME
+
+            TYPE_ALONE='LOCAL proxy.local.cluster.type INT 3'
+            TYPE_CLUSTER='LOCAL proxy.local.cluster.type INT 1'
+            /bin/sed -i "s/$TYPE_CLUSTER/$TYPE_ALONE/" $RECORD_FILENAME
+            printf '%s' '0' > $NOTIFY_FILENAME && /bin/chmod 0777 $NOTIFY_FILENAME
+
             action "Starting ${TS_PACKAGE_NAME}:" forkdaemon $TC_DAEMON $TC_DAEMON_ARGS
+
+            /bin/sed -i "s/$TYPE_ALONE/$TYPE_CLUSTER/" $RECORD_FILENAME
+            /usr/bin/trafficrecovery.sh &
         elif [ "$DISTRIB_ID" = "suse" ]; then
             echo -n "Starting ${TS_PACKAGE_NAME}"
             startproc -p $TC_PIDFILE $TC_DAEMON $TC_DAEMON_ARGS

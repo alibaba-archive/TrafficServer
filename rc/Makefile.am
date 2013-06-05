@@ -25,4 +25,4 @@ AM_CPPFLAGS = \
   -I$(top_srcdir)/proxy/logging
 
 dist_bin_SCRIPTS = \
-  trafficserver
+  trafficserver trafficrecovery.sh

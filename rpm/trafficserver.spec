@@ -100,6 +100,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(0755,root,root) %{_libdir}/trafficserver/*.so.*
 %attr(0755,root,root) %{_libdir}/trafficserver/plugins/*.so
 %config(noreplace) /etc/trafficserver/*
+%attr(0755, root, root) /usr/bin/trafficrecovery.sh
 %attr(0755, root, root) /etc/init.d/trafficserver
 %attr(0755, ats, ats) %dir /etc/trafficserver
 %config(noreplace) %attr(0644, root, root) %{_sysconfdir}/sysconfig/trafficserver
