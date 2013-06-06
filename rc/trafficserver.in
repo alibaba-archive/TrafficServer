@@ -257,6 +257,8 @@ case "$1" in
               echo "$NAME Already running"
               exit 17
             fi
+
+            /usr/bin/killall trafficrecovery.sh
             RECORD_FILENAME='/etc/trafficserver/records.config'
             BAK_FILENAME="${RECORD_FILENAME}.bak"
             /bin/cp -f $RECORD_FILENAME $BAK_FILENAME
