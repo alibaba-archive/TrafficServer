@@ -1314,6 +1314,7 @@ public:
   static void handle_forward_server_connection_open(State* s);
   static void handle_cache_operation_on_forward_server_response(State* s);
   static void handle_no_cache_operation_on_forward_server_response(State* s);
+  static void mark_owner_left_time_header(State* s);
   static void merge_and_update_headers_for_cache_update(State* s);
   static void set_headers_for_cache_write(State* s, HTTPInfo* cache_info, HTTPHdr* request, HTTPHdr* response);
   static void set_header_for_transform(State* s, HTTPHdr* base_header);

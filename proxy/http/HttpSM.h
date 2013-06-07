@@ -259,6 +259,10 @@ public:
   void add_history_entry(const char *fileline, int event, int reentrant);
   void add_cache_sm();
   bool decide_cached_url(URL * s_url);
+  inline URL *get_cache_sm_lookup_url() {
+      return cache_sm.get_lookup_url();
+  }
+
 
   int64_t sm_id;
   unsigned int magic;

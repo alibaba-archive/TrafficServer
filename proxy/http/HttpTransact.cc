@@ -4563,6 +4563,44 @@ HttpTransact::handle_no_cache_operation_on_forward_server_response(State* s)
   return;
 }
 
+/*
+ * Mark Owner-Left-Time in header if necessary.
+ */
+void HttpTransact::mark_owner_left_time_header(State *s)
+{
+  INK_MD5 url_md5;
+  ClusterMachine *m = NULL;
+  Cache::generate_key(&url_md5, s->state_machine->get_cache_sm_lookup_url());
+  m = cluster_machine_by_default(cache_hash(url_md5));
+
+  char hexStr[33];
+  unsigned int ip = m ? m->ip : 0;
+  Debug("http_hdrs", "[%" PRId64 "] Owner-Left-Time, OwnerIP:%u(%u.%u.%u.%u), dead:%d, md5:%s\n",
+        s->state_machine->sm_id, ip, DOT_SEPARATED(ip), m?m->dead:0, url_md5.toHexStr(hexStr));
+
+  // When owner machine is not dead, cache will be written
+  // back to it, so needn't to mark in that case.
+  if (m && m->dead) {
+    int len;
+    char value[48];
+    ink_hrtime left_time = 0;
+
+    ink_hash_table_lookup(this_cluster()->machines_left_time_ht,
+                                  (InkHashTableKey)m->ip,
+                                  (InkHashTableValue *)&left_time);
+
+    MIMEField *field;
+    HTTPHdr *hdr = s->cache_info.object_store.response_get();
+    if (!(field= hdr->field_find(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME))) {
+      field = hdr->field_create(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME);
+      hdr->field_attach(field);
+    }
+
+    len = snprintf(value, sizeof(value), "%u:%"PRId64"", m->ip, left_time);
+    hdr->field_value_set(field, value, len);
+    DUMP_HEADER("http_hdrs", hdr, s->state_machine_id, "Mark Owner-Left-Time");
+  }
+}
 
 void
 HttpTransact::merge_and_update_headers_for_cache_update(State* s)
@@ -4600,6 +4638,8 @@ HttpTransact::merge_and_update_headers_for_cache_update(State* s)
   }
 
   merge_response_header_with_cached_header(s->cache_info.object_store.response_get(), &s->hdr_info.server_response);
+
+  mark_owner_left_time_header(s);
 
   // Some special processing for 304
   //
@@ -4787,6 +4827,8 @@ HttpTransact::set_headers_for_cache_write(State* s, HTTPInfo* cache_info, HTTPHd
 
   if (!s->cop_test_page)
     DUMP_HEADER("http_hdrs", cache_info->request_get(), s->state_machine_id, "Cached Request Hdr");
+
+  mark_owner_left_time_header(s);
 }
 
 void
