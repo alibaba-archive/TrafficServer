@@ -39,6 +39,7 @@
 #include <sys/time.h>
 
 #include "ink_unused.h"  /* MAGIC_EDITING_TAG */
+const ink_hrtime ink_startup_time = ink_get_hrtime_internal();
 
 char *
 int64_to_str(char *buf, unsigned int buf_size, int64_t val, unsigned int *total_chars, unsigned int req_width, char pad_char)

@@ -4583,7 +4583,7 @@ void HttpTransact::mark_owner_left_time_header(State *s)
   if (m && m->dead) {
     int len;
     char value[48];
-    ink_hrtime left_time = 0;
+    ink_hrtime left_time = ink_get_hrtime();
 
     ink_hash_table_lookup(this_cluster()->machines_left_time_ht,
                                   (InkHashTableKey)m->ip,
@@ -7379,26 +7379,35 @@ HttpTransact::what_is_document_freshness(State *s, HTTPHdr* client_request, HTTP
                                   (InkHashTableKey)ip,
                                   (InkHashTableValue *)&latest_left_time);
 
-    DebugTxn("http_hdrs", "Owner-Left-Time, ip:%u(%u.%u.%u.%u), left:%"PRId64", latest_left:%"PRId64"\n",
-             ip, DOT_SEPARATED(ip), left_time, latest_left_time);
+    DebugTxn("http_hdrs", "Owner-Left-Time, ip:%u(%u.%u.%u.%u), "
+             "startup:%"PRId64", left:%"PRId64", latest_left:%"PRId64"\n",
+             ip, DOT_SEPARATED(ip), ink_startup_time, left_time, latest_left_time);
 
     ///////////////////////////////////////////////////////////////
-    //                     When to refresh                       //
-    //-------------------------------------------------------------
-    //|          | left_time: 0 |        left_tiime: > 0          |
-    //|----------|--------------|---------------------------------|
-    //|found = 0 |      x       |          (a)REFRESH             |
-    //|----------|--------------|---------------------------------|
-    //|          |              | * left_time < latest_left_time: |
-    //|          |              |          (b)REFRESH             |
-    //|found = 1 |      x       |                                 |
-    //|          |              | * left_time >= latest_left_time:|
-    //|          |              |             x                   |
-    //-------------------------------------------------------------
-    // (a)REFRESH: This mache restarted, the owner machine may
+    //                      When to refresh                      //
+    //-----------------------------------------------------------//
+    //| LT: left_time,  ST: start_time,  LLT: latest_left_time  |//
+    //|---------------------------------------------------------|//
+    //|    LT < ST    |   LT < LLT     |       LLT <= LT        |//
+    //|---------------------------------------------------------|//
+    //|               |                | (c) LLT <= ST <= LT    |//
+    //|               |                |         x              |//
+    //|               |                |                        |//
+    //|  (a)REFRESH   |  (b)REFRESH    | (d) ST <= LLT == LT    |//
+    //|               |                |         x              |//
+    //|               |                |                        |//
+    //|               |                | (e) ST <= LLT < LT     |//
+    //|               |                |         x              |//
+    //-----------------------------------------------------------//
+    // (a)REFRESH: This machine restarted, the owner machine may
     //             have left twice before this machine restarted.
-    // (b)REFRESH: The owner machine had left twice.
-    if ((!found && left_time) || left_time < latest_left_time) {
+    // (b)REFRESH: The owner machine had left.
+    // (c): This machine restarted, LLT is 0, cache had been
+    //      refreshed in (a) status, need not to refresh again.
+    // (d): When the owner machine left, cache had been refreshed
+    //      in (b) status, need not to refresh again.
+    // (e): Wouldn't happen.
+    if (left_time < ink_startup_time || left_time < latest_left_time) {
       DebugTxn("http_hdrs", "Owner-Left-Time, cache should be refreshed, found:%d\n", found);
       return (FRESHNESS_STALE);
     }

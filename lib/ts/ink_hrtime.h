@@ -47,6 +47,7 @@ typedef int64_t ink_hrtime;
 #include <sys/time.h>
 typedef hrtime_t ink_hrtime;
 #endif
+extern const ink_hrtime ink_startup_time;
 
 
 //////////////////////////////////////////////////////////////////////////////
