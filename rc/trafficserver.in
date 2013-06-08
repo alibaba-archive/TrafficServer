@@ -252,26 +252,31 @@ case "$1" in
             test "x$VERBOSE" != "xno" && log_daemon_msg "$retval"
             exit "$retval"
         elif [ "$DISTRIB_ID" = "fedora" -o "$DISTRIB_ID" = "redhat" ]; then
-            status -p $TC_PIDFILE $TC_NAME > /dev/null
-            if [ $? -eq 0 ]; then
-              echo "$NAME Already running"
-              exit 17
+            if [ "x$2" = 'xquick' ]; then
+              action "Starting ${TS_PACKAGE_NAME}:" forkdaemon $TC_DAEMON $TC_DAEMON_ARGS
+            else
+              status -p $TC_PIDFILE $TC_NAME > /dev/null
+              if [ $? -eq 0 ]; then
+                echo "$NAME Already running"
+                exit 17
+              fi
+
+              /usr/bin/killall trafficrecovery.sh >/dev/null 2>&1
+
+              RECORD_FILENAME='/etc/trafficserver/records.config'
+              BAK_FILENAME="${RECORD_FILENAME}.bak"
+              /bin/cp -f $RECORD_FILENAME $BAK_FILENAME
+
+              TYPE_ALONE='LOCAL proxy.local.cluster.type INT 3'
+              TYPE_CLUSTER='LOCAL proxy.local.cluster.type INT 1'
+              /bin/sed -i "s/$TYPE_CLUSTER/$TYPE_ALONE/" $RECORD_FILENAME
+              printf '%s' '0' > $NOTIFY_FILENAME && /bin/chmod 0777 $NOTIFY_FILENAME
+
+              action "Starting ${TS_PACKAGE_NAME}:" forkdaemon $TC_DAEMON $TC_DAEMON_ARGS
+
+              /bin/sed -i "s/$TYPE_ALONE/$TYPE_CLUSTER/" $RECORD_FILENAME
+              /usr/bin/trafficrecovery.sh &
             fi
-
-            /usr/bin/killall trafficrecovery.sh
-            RECORD_FILENAME='/etc/trafficserver/records.config'
-            BAK_FILENAME="${RECORD_FILENAME}.bak"
-            /bin/cp -f $RECORD_FILENAME $BAK_FILENAME
-
-            TYPE_ALONE='LOCAL proxy.local.cluster.type INT 3'
-            TYPE_CLUSTER='LOCAL proxy.local.cluster.type INT 1'
-            /bin/sed -i "s/$TYPE_CLUSTER/$TYPE_ALONE/" $RECORD_FILENAME
-            printf '%s' '0' > $NOTIFY_FILENAME && /bin/chmod 0777 $NOTIFY_FILENAME
-
-            action "Starting ${TS_PACKAGE_NAME}:" forkdaemon $TC_DAEMON $TC_DAEMON_ARGS
-
-            /bin/sed -i "s/$TYPE_ALONE/$TYPE_CLUSTER/" $RECORD_FILENAME
-            /usr/bin/trafficrecovery.sh &
         elif [ "$DISTRIB_ID" = "suse" ]; then
             echo -n "Starting ${TS_PACKAGE_NAME}"
             startproc -p $TC_PIDFILE $TC_DAEMON $TC_DAEMON_ARGS
@@ -301,6 +306,26 @@ case "$1" in
             test "x$VERBOSE" != "xno" && log_daemon_msg "$retval"
             exit "$retval"
         elif [ "$DISTRIB_ID" = "fedora" -o "$DISTRIB_ID" = "redhat" ]; then
+            if [ "x$2" != 'xquick' ]; then
+              if [ -f $TS_PIDFILE ]; then
+                pid=$(cat $TS_PIDFILE)
+                /usr/bin/traffic_line -S
+
+                ret=0
+                i=0
+                while [ $ret -eq 0 ]; do
+                  kill -0 $pid >/dev/null 2>&1
+                  ret=$?
+                  ((i++))
+                  if [ $i -gt 10 ]; then
+                    echo 'wait trafficserver down timeout'
+                    break
+                  fi
+                  sleep 1
+                done
+              fi
+            fi
+
             action "Stopping ${TC_NAME}:" killproc -p $TC_PIDFILE $TC_DAEMON
             action "Stopping ${TM_NAME}:" killproc -p $TM_PIDFILE $TM_DAEMON
             action "Stopping ${TS_NAME}:" killproc -p $TS_PIDFILE $TS_DAEMON
@@ -392,9 +417,9 @@ case "$1" in
             esac
         else
       # This is the typical process for restart
-            sh $0 'stop'
+            sh $0 'stop' $2
             sleep $SLEEP_TIME
-            sh $0 'start'
+            sh $0 'start' $2
         fi
         ;;
     status)
