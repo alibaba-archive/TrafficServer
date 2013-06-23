@@ -128,6 +128,10 @@ extern ink_hrtime last_throttle_warning;
 extern ink_hrtime last_shedding_warning;
 extern ink_hrtime emergency_throttle_time;
 extern int net_connections_throttle;
+extern int net_max_accept;
+extern int net_max_active_client;
+extern int fds_accept;
+extern int active_client;
 extern int fds_throttle;
 extern bool throttle_enabled;
 extern int fds_limit;
@@ -259,6 +263,19 @@ emergency_throttle(ink_hrtime now)
   return emergency_throttle_time > now;
 }
 
+TS_INLINE void
+check_net_accept(UnixNetVConnection *vc)
+{
+  if (net_max_accept > 0) {
+    int64_t sval = 0;
+    NET_READ_GLOBAL_DYN_SUM(net_accept_connections_currently_open_stat, sval);
+    if ((int) sval >= net_max_accept) {
+      if ((16777343 != vc->get_remote_ip()) && ((vc->get_remote_ip() & 0xfff0) != (vc->get_local_ip() & 0xfff0)))
+        vc->action_.cancelled = 1;
+    }
+  }
+}
+
 TS_INLINE int
 check_net_throttle(ThrottleType t, ink_hrtime now)
 {
@@ -314,6 +331,26 @@ check_emergency_throttle(Connection & con)
     return true;
   }
   return false;
+}
+
+
+TS_INLINE int
+change_net_max_accept(const char *token, RecDataT data_type, RecData value, void *data)
+{
+  (void) token;
+  (void) data_type;
+  (void) value;
+  (void) data;
+  if (fds_accept < 0)
+    net_max_accept = 0;
+  else
+    net_max_accept = fds_accept;
+
+  if (active_client < 0)
+    net_max_active_client = 0;
+  else
+    net_max_active_client = active_client;
+  return 0;
 }
 
 

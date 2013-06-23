@@ -43,6 +43,18 @@ HttpAccept::mainEvent(int event, void *data)
     uint32_t acl_method_mask = 0;
     ip_port_text_buffer ipb;
 
+    if (net_max_active_client > 0) {
+      int64_t sval = 0;
+      HTTP_READ_GLOBAL_DYN_SUM(http_current_client_transactions_stat, sval);
+      if ((int) sval > net_max_active_client) {
+        if ((16777343 != netvc->get_remote_ip()) && ((netvc->get_remote_ip() & 0xfff0) != (netvc->get_local_ip() & 0xfff0))) {
+          Warning("connect by drop client %s, closing", ats_ip_ntop(client_ip, ipb, sizeof(ipb)));
+          netvc->do_io_close();
+          return VC_EVENT_CONT;
+        }
+      }
+    }
+
     // The backdoor port is now only bound to "localhost", so reason to
     // check for if it's incoming from "localhost" or not.
     if (backdoor) {

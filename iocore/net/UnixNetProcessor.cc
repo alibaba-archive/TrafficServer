@@ -430,6 +430,7 @@ UnixNetProcessor::start(int)
   RecData d;
   d.rec_int = 0;
   change_net_connections_throttle(NULL, RECD_INT, d, NULL);
+  change_net_max_accept(NULL, RECD_INT, d, NULL);
 
   // Socks
 #ifndef INK_NO_SOCKS
