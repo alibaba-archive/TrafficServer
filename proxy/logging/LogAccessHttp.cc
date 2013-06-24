@@ -89,7 +89,7 @@ LogAccessHttp::init()
 {
   HttpTransact::HeaderInfo * hdr = &(m_http_sm->t_state.hdr_info);
 
-  if (hdr->client_request.valid()) {
+  if (hdr->client_request.valid() && m_http_sm->milestones.ua_read_header_done) {
     m_client_request = &(hdr->client_request);
     m_url = m_client_request->url_get();
     if (m_url) {
