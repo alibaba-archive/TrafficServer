@@ -48,10 +48,10 @@ HttpAccept::mainEvent(int event, void *data)
       HTTP_READ_GLOBAL_DYN_SUM(http_current_client_transactions_stat, sval);
       if ((int) sval > net_max_active_client) {
         if ((16777343 != netvc->get_remote_ip()) && ((netvc->get_remote_ip() & 0xfff0) != (netvc->get_local_ip() & 0xfff0))) {
-          Warning("connect by drop client %s, closing", ats_ip_ntop(client_ip, ipb, sizeof(ipb)));
           netvc->do_io_close();
           return VC_EVENT_CONT;
-        }
+        } else
+          Note("connect by allow client (localhost or localnet) %s", ats_ip_ntop(client_ip, ipb, sizeof(ipb)));
       }
     }
 
