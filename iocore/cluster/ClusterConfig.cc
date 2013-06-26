@@ -472,8 +472,6 @@ configuration_add_machine(ClusterConfiguration * c, ClusterMachine * m)
 ClusterConfiguration *
 configuration_remove_machine(ClusterConfiguration * c, ClusterMachine * m)
 {
-  EThread *thread = this_ethread();
-  ProxyMutex *mutex = thread->mutex;
   ClusterMachine *remove_m = m;
 
   //
