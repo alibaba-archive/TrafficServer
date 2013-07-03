@@ -1155,7 +1155,7 @@ test_rs_port()
 static int
 test_mgmt_cli_port()
 {
-  TSString val;
+  TSString val = NULL;
   int ret = 0;
 
   if (TSRecordGetString("proxy.config.manager_binary", &val) !=  TS_ERR_OKAY) {
