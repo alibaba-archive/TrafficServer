@@ -472,10 +472,9 @@ configuration_add_machine(ClusterConfiguration * c, ClusterMachine * m)
 ClusterConfiguration *
 configuration_remove_machine(ClusterConfiguration * c, ClusterMachine * m)
 {
-  /*
   EThread *thread = this_ethread();
   ProxyMutex *mutex = thread->mutex;
-  */
+  ClusterMachine *remove_m = m;
 
   //
   // Build a new cluster configuration without a machine
@@ -497,7 +496,7 @@ configuration_remove_machine(ClusterConfiguration * c, ClusterMachine * m)
   ClusterMachine *mm;
   ClusterConfiguration *def_cc;
   if ((def_cc = this_cluster()->default_configuration)) {
-    mm = def_cc->find(m->ip, m->cluster_port);
+    mm = def_cc->find(remove_m->ip, remove_m->cluster_port);
     if (mm) mm->dead = true;
   }
 

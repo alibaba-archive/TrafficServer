@@ -182,14 +182,8 @@ adjust_cluster_hash_table(ClusterConfiguration * c)
     mm = cc->machines[cc->hash_table[i]];
 
     if (!mm->dead && !m->equal(mm)) {
-      int idx = c->find_idx(mm->ip, mm->cluster_port);
-
-      //As configuration_{add/remove}_machine() may execute concurrently,
-      //when a machine restart very frequently, the value of mm->dead may
-      //be changed outside, then we will run into here and cause idx < 0.
-      if (idx >=0) {
-        c->hash_table[i] = idx;
-      }
+      c->hash_table[i] = c->find_idx(mm->ip, mm->cluster_port);
+      ink_release_assert(c->hash_table[i] >= 0);
     }
   }
 }
