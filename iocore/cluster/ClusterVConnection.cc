@@ -34,7 +34,7 @@ ClassAllocator<ClusterCacheVC> clusterCacheVCAllocator("custerCacheVCAllocator")
 
 int ClusterCacheVC::size_to_init = -1;
 
-#define CLUSTER_WRITE_MIN_SIZE (1 << 17)
+#define CLUSTER_WRITE_MIN_SIZE (1 << 14)
 
 ByteBankDescriptor *
 ByteBankDescriptor::ByteBankDescriptor_alloc(IOBufferBlock * iob)
@@ -916,36 +916,21 @@ Lagain:
   // for the read_from_writer work better,
   // especailly the slow original
   flen = CLUSTER_WRITE_MIN_SIZE;
-  while (vio.ntodo() > 0 && length >= flen) {
-    IOBufferBlock *r = clone_IOBufferBlockList(blocks, offset, flen);
-    blocks = iobufferblock_skip(blocks, &offset, &length, flen);
-
-    remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_DONE, r, -1,
-        priority);
+  if (length >= flen || (vio.ntodo() <= 0 && length > 0)) {
+    data_sent += length;
+    IOBufferBlock *r = clone_IOBufferBlockList(blocks, offset, length);
+    blocks = iobufferblock_skip(blocks, &offset, &length, length);
+    remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_DONE, r,
+              -1, priority);
     if (remote_closed)
       goto Lagain;
-
-    data_sent += flen;
     Debug("data_sent", "sent bytes %d, reminds %"PRId64"", flen, length);
   }
 
   if (vio.ntodo() <= 0) {
-    if (length > 0) {
-      data_sent += length;
-      IOBufferBlock *r = clone_IOBufferBlockList(blocks, offset, length);
-      blocks = iobufferblock_skip(blocks, &offset, &length, length);
-      remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_DONE, r,
-          -1, priority);
-      if (remote_closed)
-        goto Lagain;
-      Debug("data_sent", "sent bytes done: %"PRId64", reminds %"PRId64"", data_sent, length);
-    }
     ink_debug_assert(length == 0 && total_len == vio.nbytes);
-    if (calluser(VC_EVENT_WRITE_COMPLETE) == EVENT_DONE)
-      return EVENT_DONE;
-    return EVENT_CONT;
+    return calluser(VC_EVENT_WRITE_COMPLETE);
   }
-
   return calluser(VC_EVENT_WRITE_READY);
 }
 
