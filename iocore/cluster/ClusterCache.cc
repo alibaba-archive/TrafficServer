@@ -2037,7 +2037,7 @@ CacheContinuation::setupVCdataRead(int event, void *data)
     } else
       doc_size = cache_vc->get_object_size();
 
-    if (doc_size > 0 && doc_size < SIZE_OF_FRAGEMENT) {
+    if (doc_size > 0 && doc_size < SIZE_OF_FRAGEMENT && !cache_vc->is_read_from_writer()) {
       SET_HANDLER((CacheContHandler) & CacheContinuation::VCSmallDataRead);
       mbuf = new_empty_MIOBuffer();
       reader = mbuf->alloc_reader();
@@ -2796,7 +2796,6 @@ cache_op_result_ClusterFunction(ClusterSession cs, void *context, void *d)
         cvc->total_len = msg->d_len;
         if (cvc->total_len >= cvc->doc_len)
           cvc->remote_closed = true;
-        ink_debug_assert(cvc->total_len == 0 || cvc->total_len >= cvc->doc_len);
         cvc->flags = (uint32_t) msg->reason;
         break;
       }
