@@ -3,7 +3,7 @@
 Summary:	Fast, scalable and extensible HTTP/1.1 compliant caching proxy server
 Name:		trafficserver
 Version:	3.2.0
-Release:	2.1%(echo ${RELEASE:+.${RELEASE}})%{?dist}
+Release:	3.1%(echo ${RELEASE:+.${RELEASE}})%{?dist}
 License:	ASL 2.0
 Group:		System Environment/Daemons
 Source0:	%{name}-%{version}.tar.bz2
