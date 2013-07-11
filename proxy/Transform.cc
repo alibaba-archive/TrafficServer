@@ -1151,7 +1151,7 @@ RangeTransform::change_response_header()
   char *reason_phrase;
   HTTPStatus status_code;
 
-  ink_assert(m_transform_resp->field_find(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE) == NULL);
+  //ink_assert(m_transform_resp->field_find(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE) == NULL);
 
   status_code = HTTP_STATUS_PARTIAL_CONTENT;
   m_transform_resp->status_set(status_code);

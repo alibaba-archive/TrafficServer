@@ -372,6 +372,9 @@ struct CacheVC: public CacheVConnection
   virtual time_t get_pin_in_cache();
   virtual bool set_disk_io_priority(int priority);
   virtual int get_disk_io_priority();
+  virtual bool is_read_from_writer() {
+    return f.read_from_writer_called;
+  }
 
   // offsets from the base stat
 #define CACHE_STAT_ACTIVE  0
@@ -505,6 +508,7 @@ struct CacheVC: public CacheVConnection
       unsigned int ram_fixup:1;
       unsigned int transistor:1;
 #endif
+      unsigned int cluster:1;
     } f;
   };
   // BTF optimization used to skip reading stuff in cache partition that doesn't contain any
@@ -517,13 +521,11 @@ struct CacheVC: public CacheVConnection
 };
 
 #define PUSH_HANDLER(_x) do {                                           \
-    ink_assert(handler != (ContinuationHandler)(&CacheVC::dead));       \
     save_handler = handler; handler = (ContinuationHandler)(_x);        \
 } while (0)
 
 #define POP_HANDLER do {                                          \
     handler = save_handler;                                       \
-    ink_assert(handler != (ContinuationHandler)(&CacheVC::dead)); \
   } while (0)
 
 struct CacheRemoveCont: public Continuation
@@ -535,9 +537,13 @@ struct CacheRemoveCont: public Continuation
   { }
 };
 
+struct DummyClusterAIOCallback: Continuation
+{
+
+};
+
 
 // Global Data
-
 extern ClassAllocator<CacheVC> cacheVConnectionAllocator;
 extern CacheKey zero_key;
 extern CacheSync *cacheDirSync;
@@ -1173,7 +1179,170 @@ cache_hash(INK_MD5 & md5)
 // Note: This include must occur here in order to avoid numerous forward
 //       reference problems.
 #include "P_ClusterInline.h"
+#include "clusterinterface.h"
 #endif
+
+//struct ClusterCacheVC: public CacheVConnection
+//{
+//  Action _action;
+//  int64_t seek_to;                // pread offset
+//  int64_t offset;                 // offset into 'blocks' of data to write
+//  int64_t writer_offset;          // offset of the writer for reading from a writer
+//  int64_t length;                 // length of data available to write
+//  int64_t total_len;
+//  int64_t doc_len;
+//
+//  int doc_pos;                // read position in 'buf'
+//  int d_len;
+//
+//  int closed;
+//  int recursive;
+//  time_t time_pin;
+//  int disk_io_priority;
+//  MessagePriority priority;
+//
+//  EThread *initial_thread;  // initial thread open_XX was called on
+//  ClusterSession cs;
+//  Event *trigger;
+//  ContinuationHandler save_handler;
+//
+//  int probe_depth;
+//  bool in_progress; //
+//  bool data_done;
+//  bool remote_closed;
+//  bool trigger_remote_close;
+//
+//  VIO vio;
+//  Ptr<IOBufferData> buf;          // for read
+//  Ptr<IOBufferData> first_buf;
+//  Ptr<IOBufferBlock> blocks; // data available to write
+//  Ptr<IOBufferBlock> writer_buf;
+//
+//  DummyClusterAIOCallback io;
+//  CacheHTTPInfo alternate;
+//
+//  union
+//  {
+//    uint32_t flags;
+//    struct
+//    {
+//      unsigned int use_first_key:1;
+//      unsigned int overwrite:1; // overwrite first_key Dir if it exists
+//      unsigned int close_complete:1; // WRITE_COMPLETE is final
+//      unsigned int sync:1; // write to be committed to durable storage before WRITE_COMPLETE
+//      unsigned int evacuator:1;
+//      unsigned int single_fragment:1;
+//      unsigned int evac_vector:1;
+//      unsigned int lookup:1;
+//      unsigned int update:1;
+//      unsigned int remove:1;
+//      unsigned int remove_aborted_writers:1;
+//      unsigned int open_read_timeout:1; // UNUSED
+//      unsigned int data_done:1;
+//      unsigned int read_from_writer_called:1;
+//      unsigned int not_from_ram_cache:1;        // entire object was from ram cache
+//      unsigned int rewrite_resident_alt:1;
+//      unsigned int readers:1;
+//      unsigned int doc_from_ram_cache:1;
+//#ifdef HIT_EVACUATE
+//      unsigned int hit_evacuate:1;
+//#endif
+//#ifdef HTTP_CACHE
+//      unsigned int force_empty:1; // used for cache empty http document
+//#endif
+//#ifdef SSD_CACHE
+//      unsigned int read_from_ssd:1;
+//      unsigned int write_into_ssd:1;
+//      unsigned int ram_fixup:1;
+//      unsigned int transistor:1;
+//#endif
+//    } f;
+//  };
+//  VIO *do_io_read(Continuation *c, int64_t nbytes, MIOBuffer *buf); // invoke remote
+//  VIO *do_io_pread(Continuation *c, int64_t nbytes, MIOBuffer *buf, int64_t offset); // invoke remote
+//  VIO *do_io_write(Continuation *c, int64_t nbytes, IOBufferReader *buf, bool owner = false); // invoke remote
+//  void do_io_close(int lerrno = -1); // invoke remote ?
+//  void reenable(VIO *avio); // invoke remote ?
+//  void reenable_re(VIO *avio); // invoke remote ?
+//
+//  void do_remote_close(); // invoke remote, for cancel or error
+//
+//  virtual int get_header(void **ptr, int *len)
+//  {
+//    NOWARN_UNUSED(ptr);
+//    NOWARN_UNUSED(len);
+//    ink_assert(!"implemented");
+//    return -1;
+//  }
+//  virtual int set_header(void *ptr, int len)
+//  {
+//    NOWARN_UNUSED(ptr);
+//    NOWARN_UNUSED(len);
+//    ink_assert(!"implemented");
+//    return -1;
+//  }
+//  virtual int get_single_data(void **ptr, int *len)
+//  {
+//    NOWARN_UNUSED(ptr);
+//    NOWARN_UNUSED(len);
+//    ink_assert(!"implemented");
+//    return -1;
+//  }
+//
+//#ifdef HTTP_CACHE
+//  virtual void set_http_info(CacheHTTPInfo *info) {
+//    alternate.copy_shallow(info);
+//    info->clear();
+//  }
+//  virtual void get_http_info(CacheHTTPInfo ** info) {
+//    *info = &alternate;
+//  }
+//#endif
+//
+//  bool is_ram_cache_hit() {
+//    ink_assert(vio.op == VIO::READ);
+//    return !f.not_from_ram_cache;
+//  }
+//  virtual bool set_disk_io_priority(int priority)
+//  {
+//    disk_io_priority = priority;
+//    return true;
+//  }
+//  virtual int get_disk_io_priority() {
+//    return disk_io_priority;
+//  }
+//  virtual bool set_pin_in_cache(time_t t) {
+//    time_pin = t;
+//    return true;
+//  }
+//  virtual time_t get_pin_in_cache() {
+//    return time_pin;
+//  }
+//  virtual int64_t get_object_size()
+//  {
+//    return alternate.object_size_get();
+//  }
+//
+//  void
+//  cancel_trigger()
+//  {
+//    if (trigger) {
+//      trigger->cancel_action();
+//      trigger = NULL;
+//    }
+//  }
+//
+//  int calluser(int event);
+//  int callcont(int event);
+//  int handleRead(int event, void *data);
+//  int openReadReadDone(int event, void *data);
+//  int handleWrite(int event, void *data);
+//  int openWriteWriteDone(int event, void *data);
+//  int openReadStart(int event, void *data);
+//  int openWriteStart(int event, void *data);
+//  int openReadMain(int event, void *data);
+//  int openWriteMain(int event, void *data);
+//};
 
 TS_INLINE Action *
 CacheProcessor::lookup(Continuation *cont, CacheKey *key, bool cluster_cache_local, bool local_only,
@@ -1412,4 +1581,65 @@ local_cache()
 
 LINK_DEFINITION(CacheVC, opendir_link)
 
+//struct SetIOReadMessage: public ClusterMessageHeader
+//{
+//  int64_t nbytes;
+//  int64_t offset;
+//};
+//
+//struct SetIOWriteMessage: public ClusterMessageHeader
+//{
+//  int32_t hdr_len;
+//  int64_t nbytes;
+//};
+//
+//struct SetIOCloseMessage: public ClusterMessageHeader
+//{
+//  int h_len;
+//  int d_len;
+//  int64_t total_len;
+//};
+//
+//struct SetIOReenableMessage: public ClusterMessageHeader
+//{
+//  int reenable;
+//};
+//struct SetResponseMessage: public ClusterMessageHeader
+//{
+//
+//};
+//
+//ClusterCacheVC *new_ClusterCacheVC();
+//void free_ClusterCacheVC(ClusterCacheVC *ccvc);
+//
+//inline int
+//ClusterCacheVC::calluser(int event)
+//{
+//  recursive++;
+//  ink_debug_assert(this_ethread() != vio._cont->mutex->thread_holding);
+//  vio._cont->handleEvent(event, (void *) &vio);
+//  recursive--;
+//  if (closed) {
+//    free_ClusterCacheVC(this);
+//    return EVENT_DONE;
+//  }
+//  return EVENT_CONT;
+//}
+//
+//inline int
+//ClusterCacheVC::callcont(int event)
+//{
+//  recursive++;
+//  ink_debug_assert(this_ethread() != _action.mutex->thread_holding);
+//  _action.continuation->handleEvent(event, this);
+//  recursive--;
+//  if (closed) {
+//    free_ClusterCacheVC(this);
+//    return EVENT_DONE;
+//  } else if (vio.vc_server)
+//    handleEvent(EVENT_IMMEDIATE, 0);
+//  return EVENT_DONE;
+//}
+//
+//extern ClassAllocator<ClusterCacheVC> clusterCacheVCAllocator;
 #endif /* _P_CACHE_INTERNAL_H__ */

@@ -1204,7 +1204,7 @@ HttpTransactCache::CalcVariability(CacheLookupHttpConfig * http_config_params,
       HttpCompat::parse_comma_list(&vary_list, (vary_values ? vary_values : ""));
     }
 #ifdef DEBUG
-    if (vary_list.head) {
+    if (is_debug_tag_set("http_match") && (vary_list.head)) {
       Debug("http_match", "Vary list of %d elements", vary_list.count);
       vary_list.dump(stderr);
     }

@@ -559,6 +559,7 @@ public:
     READ_PUSH_HDR,
     STORE_PUSH_BODY,
 
+    PROXY_CACHE_DELETE,
     PROXY_INTERNAL_CACHE_DELETE,
     PROXY_INTERNAL_CACHE_NOOP,
     PROXY_INTERNAL_CACHE_UPDATE_HEADERS,
@@ -732,6 +733,7 @@ public:
     int open_write_retries;
     CacheWriteLock_t write_lock_state;
     int lookup_count;
+    int remove_result;
     bool is_ram_cache_hit;
 
     _CacheLookupInfo()
@@ -750,7 +752,9 @@ public:
         config(),
         directives(),
         open_read_retries(0),
-        open_write_retries(0), write_lock_state(CACHE_WL_INIT), lookup_count(0), is_ram_cache_hit(false)
+        open_write_retries(0), write_lock_state(CACHE_WL_INIT), lookup_count(0),
+        remove_result(0),
+        is_ram_cache_hit(false)
     { }
   } CacheLookupInfo;
 
@@ -1337,6 +1341,7 @@ public:
   static RequestError_t check_request_validity(State* s, HTTPHdr* incoming_hdr);
   static ResponseError_t check_response_validity(State* s, HTTPHdr* incoming_hdr);
   static bool delete_all_document_alternates_and_return(State* s, bool cache_hit);
+  static void handle_all_document_alternate_removed(State* s);
   static bool did_forward_server_send_0_9_response(State* s);
   static bool does_client_request_permit_cached_response(const OverridableHttpConfigParams *p, CacheControlResult *c,
                                                          HTTPHdr *h, char *via_string);

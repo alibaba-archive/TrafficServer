@@ -50,7 +50,7 @@
 #include "P_ClusterLib.h"
 #include "P_ClusterLoadMonitor.h"
 #include "P_TimeTrace.h"
-
+#include "clusterinterface.h"
 
 #define ECLUSTER_NO_VC                    (CLUSTER_ERRNO+0)
 #define ECLUSTER_NO_MACHINE               (CLUSTER_ERRNO+1)
@@ -125,6 +125,7 @@ enum
   cluster_stat_count
 };
 
+#define SIZE_OF_FRAGEMENT ((1 << 20) - 128)
 extern RecRawStatBlock *cluster_rsb;
 #define CLUSTER_INCREMENT_DYN_STAT(x) \
 	RecIncrRawStat(cluster_rsb, mutex->thread_holding, (int) x, 1);

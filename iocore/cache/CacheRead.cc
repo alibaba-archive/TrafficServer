@@ -147,7 +147,7 @@ Lmiss:
   return ACTION_RESULT_DONE;
 Lwriter:
   // this is a horrible violation of the interface and should be fixed (FIXME)
-  ((HttpCacheSM *)cont)->set_readwhilewrite_inprogress(true);
+  //((HttpCacheSM *)cont)->set_readwhilewrite_inprogress(true);
   SET_CONTINUATION_HANDLER(c, &CacheVC::openReadFromWriter);
   if (c->handleEvent(EVENT_IMMEDIATE, 0) == EVENT_DONE)
     return ACTION_RESULT_DONE;
@@ -698,7 +698,7 @@ CacheVC::openReadMain(int event, Event * e)
       return EVENT_DONE;
     // we have to keep reading until we give the user all the
     // bytes it wanted or we hit the watermark.
-    if (vio.ntodo() > 0 && !vio.buffer.writer()->high_water())
+    if (!f.cluster && vio.ntodo() > 0 && !vio.buffer.writer()->high_water())
       goto Lread;
     return EVENT_CONT;
   }
@@ -1211,3 +1211,116 @@ Learliest:
   SET_HANDLER(&CacheVC::openReadStartEarliest);
   return openReadStartEarliest(event, e);
 }
+//
+//int
+//ClusterCacheVC::handleRead(int event, void *data)
+//{
+//  in_progress = true;
+//  PUSH_HANDLER(&ClusterCacheVC::openReadReadDone);
+//  if (!cluster_send_message(cs, CLUSTER_CACHE_DATA_REENABLE, NULL, 0, PRIORITY_HIGH))
+//    return EVENT_CONT;
+//  cluster_close_session(cs);
+//  return calluser(VC_EVENT_ERROR);
+//}
+//
+//int
+//ClusterCacheVC::openReadReadDone(int event, void *data)
+//{
+//  cancel_trigger();
+//  in_progress = false;
+//  POP_HANDLER;
+//
+//  switch (event) {
+//    case CLUSTER_CACHE_DATA_ERR_FUNCTION:
+//      event = *(int *)data;
+//      break;
+//    case CLUSTER_CACHE_DATA_DONE_FUNCTION:
+//    {
+//      ClusterBuffer *cb = (ClusterBuffer *) data;
+//      cb->get_data(&d_len);
+//      doc_pos = 0;
+//      buf = cb->data;
+//      free_ClusterBuffer(cb);
+//      break;
+//    }
+//    case CLUSTER_INTERNEL_ERROR:
+//    default:
+//      event = VC_EVENT_ERROR;
+//      break;
+//  }
+//  // recevied data from cluster
+//
+//  return handleEvent(event, data);
+//}
+//
+//int
+//ClusterCacheVC::openReadStart(int event, void *data)
+//{
+//  if (event != CACHE_EVENT_OPEN_READ) {
+//    // prevent further trigger
+//    remote_closed = true;
+//    cluster_close_session(cs);
+//    _action.continuation->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, data);
+//    free_ClusterCacheVC(this);
+//    return EVENT_DONE;
+//  }
+//
+//  doc_len = alternate.object_size_get();
+//  SET_HANDLER(&ClusterCacheVC::openReadMain);
+//  callcont(CACHE_EVENT_OPEN_READ);
+//  return EVENT_CONT;
+//}
+//int
+//ClusterCacheVC::openReadMain(int event, void *e)
+//{
+//  NOWARN_UNUSED(e);
+//  NOWARN_UNUSED(event);
+//
+//  cancel_trigger();
+//
+//  if (event == VC_EVENT_ERROR || event == VC_EVENT_EOS) {
+//    remote_closed = true;
+//    cluster_close_session(cs);
+//    return calluser(event);
+//  }
+//
+//  int64_t ntodo = vio.ntodo();
+//  int64_t bytes = d_len - doc_pos;
+//  IOBufferBlock *b = NULL;
+//  if (ntodo <= 0)
+//    return EVENT_CONT;
+//  if (vio.buffer.mbuf->max_read_avail() > vio.buffer.writer()->water_mark && vio.ndone) // initiate read of first block
+//    return EVENT_CONT;
+//  if ((bytes <= 0) && vio.ntodo() >= 0)
+//    goto Lread;
+//  if (bytes > vio.ntodo())
+//    bytes = vio.ntodo();
+//  b = new_IOBufferBlock(buf, bytes, doc_pos);
+//  b->_buf_end = b->_end;
+//  vio.buffer.mbuf->append_block(b);
+//  vio.ndone += bytes;
+//
+//  if (vio.ntodo() <= 0)
+//    return calluser(VC_EVENT_READ_COMPLETE);
+//  else {
+//    if (calluser(VC_EVENT_READ_READY) == EVENT_DONE)
+//      return EVENT_DONE;
+//    // we have to keep reading until we give the user all the
+//    // bytes it wanted or we hit the watermark.
+//    if (vio.ntodo() > 0 && !vio.buffer.writer()->high_water())
+//      goto Lread;
+//    return EVENT_CONT;
+//  }
+//Lread: {
+//    if (vio.ndone >= (int64_t)doc_len) {
+//      // reached the end of the document and the user still wants more
+//      return calluser(VC_EVENT_EOS);
+//    }
+//    // if the state machine calls reenable on the callback from the cache,
+//    // we set up a schedule_imm event. The openReadReadDone discards
+//    // EVENT_IMMEDIATE events. So, we have to cancel that trigger and set
+//    // a new EVENT_INTERVAL event.
+//    cancel_trigger();
+//    return handleRead(event, e);
+//  }
+//}

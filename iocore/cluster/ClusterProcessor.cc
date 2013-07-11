@@ -28,6 +28,9 @@
 ****************************************************************************/
 
 #include "P_Cluster.h"
+#include "global.h"
+#include "connection.h"
+
 /*************************************************************************/
 // ClusterProcessor member functions (Public class)
 /*************************************************************************/
@@ -39,9 +42,18 @@ ClusterProcessor clusterProcessor;
 RecRawStatBlock *cluster_rsb = NULL;
 int ET_CLUSTER;
 
+void cluster_main_handler(ClusterSession session, void *context,
+    const int func_id, IOBufferBlock *data, const int data_len);
 ClusterProcessor::ClusterProcessor():accept_handler(NULL), this_cluster(NULL)
 {
 }
+
+
+//void cluster_error_handler(int event, void *arg);
+//void cluster_main_handler(ClusterSession *session, const int func_id,
+//  void *data, const int data_len) {
+//  ClusterRPC[func_id](session, data, data_len);
+//}
 
 ClusterProcessor::~ClusterProcessor()
 {
@@ -55,102 +67,103 @@ int
 ClusterProcessor::internal_invoke_remote(ClusterHandler *ch, int cluster_fn,
                                          void *data, int len, int options, void *cmsg, bool zero_body, void *cc)
 {
-  EThread *thread = this_ethread();
-  ProxyMutex *mutex = thread->mutex;
-  //
-  // RPC facility for intercluster communication available to other
-  //  subsystems.
-  //
-  bool steal = (options & CLUSTER_OPT_STEAL ? true : false);
-  bool delay = (options & CLUSTER_OPT_DELAY ? true : false);
-  bool data_in_ocntl = (options & CLUSTER_OPT_DATA_IS_OCONTROL ? true : false);
-  bool malloced = (cluster_fn == CLUSTER_FUNCTION_MALLOCED);
-  OutgoingControl *c;
-
-  if (!ch || (!malloced && !((unsigned int) cluster_fn < (uint32_t) SIZE_clusterFunction))) {
-    // Invalid message or node is down, free message data
-    if (malloced) {
-      ats_free(data);
-    }
-    if (cmsg) {
-      invoke_remote_data_args *args = (invoke_remote_data_args *)
-        (((OutgoingControl *) cmsg)->data + sizeof(int32_t));
-      ink_assert(args->magicno == invoke_remote_data_args::MagicNo);
-
-      args->data_oc->freeall();
-      ((OutgoingControl *) cmsg)->freeall();
-    }
-    if (data_in_ocntl) {
-      c = *((OutgoingControl **) ((char *) data - sizeof(OutgoingControl *)));
-      c->freeall();
-    }
-    return -1;
-  }
-
-  if (data_in_ocntl) {
-    c = *((OutgoingControl **) ((char *) data - sizeof(OutgoingControl *)));
-  } else {
-    c = OutgoingControl::alloc();
-  }
-  CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CTRL_MSGS_SENT_STAT);
-  c->submit_time = ink_get_hrtime();
-  if ((c->zero_body = zero_body)) {
-    c->free_proc = &CacheContinuation::disposeOfDataBuffer; 
-    c->free_proc_arg = cc;
-  }
-
-  if (malloced) {
-    c->set_data((char *) data, len);
-  } else {
-    if (!data_in_ocntl) {
-      c->len = len + sizeof(int32_t);
-      c->alloc_data();
-    }
-    if (!c->fast_data()) {
-      CLUSTER_INCREMENT_DYN_STAT(CLUSTER_SLOW_CTRL_MSGS_SENT_STAT);
-    }
-    *(int32_t *) c->data = cluster_fn;
-    if (!data_in_ocntl) {
-      memcpy(c->data + sizeof(int32_t), data, len);
-    }
-  }
-
-  SET_CONTINUATION_HANDLER(c, (OutgoingCtrlHandler) & OutgoingControl::startEvent);
-
-  /////////////////////////////////////
-  // Compound message adjustments
-  /////////////////////////////////////
-  if (cmsg) {
-    invoke_remote_data_args *args = (invoke_remote_data_args *)
-      (((OutgoingControl *) cmsg)->data + sizeof(int32_t));
-    ink_assert(args->magicno == invoke_remote_data_args::MagicNo);
-    args->msg_oc = c;
-    c = (OutgoingControl *) cmsg;
-  }
-#ifndef CLUSTER_THREAD_STEALING
-  delay = true;
-#endif
-  if (!delay) {
-    EThread *tt = this_ethread();
-    {
-      int q = ClusterFuncToQpri(cluster_fn);
-      ink_atomiclist_push(&ch->outgoing_control_al[q], (void *) c);
-
-      MUTEX_TRY_LOCK(lock, ch->mutex, tt);
-      if (!lock) {
-		if(ch->thread && ch->thread->signal_hook)
-		  ch->thread->signal_hook(ch->thread);
-		return 1;
-      }
-      if (steal)
-        ch->steal_thread(tt);
-      return 1;
-    }
-  } else {
-    c->mutex = ch->mutex;
-    eventProcessor.schedule_imm_signal(c);
-    return 0;
-  }
+//  EThread *thread = this_ethread();
+//  ProxyMutex *mutex = thread->mutex;
+//  //
+//  // RPC facility for intercluster communication available to other
+//  //  subsystems.
+//  //
+//  bool steal = (options & CLUSTER_OPT_STEAL ? true : false);
+//  bool delay = (options & CLUSTER_OPT_DELAY ? true : false);
+//  bool data_in_ocntl = (options & CLUSTER_OPT_DATA_IS_OCONTROL ? true : false);
+//  bool malloced = (cluster_fn == CLUSTER_FUNCTION_MALLOCED);
+//  OutgoingControl *c;
+//
+//  if (!ch || (!malloced && !((unsigned int) cluster_fn < (uint32_t) SIZE_clusterFunction))) {
+//    // Invalid message or node is down, free message data
+//    if (malloced) {
+//      ats_free(data);
+//    }
+//    if (cmsg) {
+//      invoke_remote_data_args *args = (invoke_remote_data_args *)
+//        (((OutgoingControl *) cmsg)->data + sizeof(int32_t));
+//      ink_assert(args->magicno == invoke_remote_data_args::MagicNo);
+//
+//      args->data_oc->freeall();
+//      ((OutgoingControl *) cmsg)->freeall();
+//    }
+//    if (data_in_ocntl) {
+//      c = *((OutgoingControl **) ((char *) data - sizeof(OutgoingControl *)));
+//      c->freeall();
+//    }
+//    return -1;
+//  }
+//
+//  if (data_in_ocntl) {
+//    c = *((OutgoingControl **) ((char *) data - sizeof(OutgoingControl *)));
+//  } else {
+//    c = OutgoingControl::alloc();
+//  }
+//  CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CTRL_MSGS_SENT_STAT);
+//  c->submit_time = ink_get_hrtime();
+//  if ((c->zero_body = zero_body)) {
+//    c->free_proc = &CacheContinuation::disposeOfDataBuffer;
+//    c->free_proc_arg = cc;
+//  }
+//
+//  if (malloced) {
+//    c->set_data((char *) data, len);
+//  } else {
+//    if (!data_in_ocntl) {
+//      c->len = len + sizeof(int32_t);
+//      c->alloc_data();
+//    }
+//    if (!c->fast_data()) {
+//      CLUSTER_INCREMENT_DYN_STAT(CLUSTER_SLOW_CTRL_MSGS_SENT_STAT);
+//    }
+//    *(int32_t *) c->data = cluster_fn;
+//    if (!data_in_ocntl) {
+//      memcpy(c->data + sizeof(int32_t), data, len);
+//    }
+//  }
+//
+//  SET_CONTINUATION_HANDLER(c, (OutgoingCtrlHandler) & OutgoingControl::startEvent);
+//
+//  /////////////////////////////////////
+//  // Compound message adjustments
+//  /////////////////////////////////////
+//  if (cmsg) {
+//    invoke_remote_data_args *args = (invoke_remote_data_args *)
+//      (((OutgoingControl *) cmsg)->data + sizeof(int32_t));
+//    ink_assert(args->magicno == invoke_remote_data_args::MagicNo);
+//    args->msg_oc = c;
+//    c = (OutgoingControl *) cmsg;
+//  }
+//#ifndef CLUSTER_THREAD_STEALING
+//  delay = true;
+//#endif
+//  if (!delay) {
+//    EThread *tt = this_ethread();
+//    {
+//      int q = ClusterFuncToQpri(cluster_fn);
+//      ink_atomiclist_push(&ch->outgoing_control_al[q], (void *) c);
+//
+//      MUTEX_TRY_LOCK(lock, ch->mutex, tt);
+//      if (!lock) {
+//		if(ch->thread && ch->thread->signal_hook)
+//		  ch->thread->signal_hook(ch->thread);
+//		return 1;
+//      }
+//      if (steal)
+//        ch->steal_thread(tt);
+//      return 1;
+//    }
+//  } else {
+//    c->mutex = ch->mutex;
+//    eventProcessor.schedule_imm_signal(c);
+//    return 0;
+//  }
+  return 0;
 }
 
 int
@@ -231,63 +244,64 @@ ClusterProcessor::free_remote_data(char *p, int l)
 ClusterVConnection *
 ClusterProcessor::open_local(Continuation * cont, ClusterMachine * m, ClusterVCToken & token, int options)
 {
-  //
-  //  New connect protocol.
-  //  As a VC initiator, establish the VC connection to the remote node
-  //  by allocating the VC locally and requiring the caller to pass the
-  //  token and channel id in the remote request.  The remote handler calls
-  //  connect_local to establish the remote side of the connection.
-  //
-  bool immediate = ((options & CLUSTER_OPT_IMMEDIATE) ? true : false);
-  bool allow_immediate = ((options & CLUSTER_OPT_ALLOW_IMMEDIATE) ? true : false);
-
-  ClusterHandler *ch = ((CacheContinuation *)cont)->ch;
-  if (!ch)
-    return NULL;
-  EThread *t = ch->thread;
-  if (!t)
-    return NULL;
-
-  EThread *thread = this_ethread();
-  ProxyMutex *mutex = thread->mutex;
-  ClusterVConnection *vc = clusterVCAllocator.alloc();
-  vc->new_connect_read = (options & CLUSTER_OPT_CONN_READ ? 1 : 0);
-  vc->start_time = ink_get_hrtime();
-  vc->last_activity_time = vc->start_time;
-  vc->ch = ch;
-  vc->token.alloc();
-  vc->token.ch_id = ch->id;
-  token = vc->token;
-#ifdef CLUSTER_THREAD_STEALING
-  CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CONNECTIONS_OPENNED_STAT);
-  CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CONNECTIONS_OPEN_STAT);
-  MUTEX_TRY_LOCK(lock, ch->mutex, thread);
-  if (!lock) {
-#endif
-    if (immediate) {
-      clusterVCAllocator_free(vc);
-      return NULL;
-    }
-    vc->action_ = cont;
-    ink_atomiclist_push(&ch->external_incoming_open_local, (void *) vc);
-	if(ch->thread && ch->thread->signal_hook)
-	  ch->thread->signal_hook(ch->thread);
-    return CLUSTER_DELAYED_OPEN;
-
-#ifdef CLUSTER_THREAD_STEALING
-  } else {
-    if (!(immediate || allow_immediate))
-      vc->action_ = cont;
-    if (vc->start(thread) < 0) {
-      return NULL;
-    }
-    if (immediate || allow_immediate) {
-      return vc;
-    } else {
-      return CLUSTER_DELAYED_OPEN;
-    }
-  }
-#endif
+//  //
+//  //  New connect protocol.
+//  //  As a VC initiator, establish the VC connection to the remote node
+//  //  by allocating the VC locally and requiring the caller to pass the
+//  //  token and channel id in the remote request.  The remote handler calls
+//  //  connect_local to establish the remote side of the connection.
+//  //
+//  bool immediate = ((options & CLUSTER_OPT_IMMEDIATE) ? true : false);
+//  bool allow_immediate = ((options & CLUSTER_OPT_ALLOW_IMMEDIATE) ? true : false);
+//
+//  ClusterHandler *ch = ((CacheContinuation *)cont)->ch;
+//  if (!ch)
+//    return NULL;
+//  EThread *t = ch->thread;
+//  if (!t)
+//    return NULL;
+//
+//  EThread *thread = this_ethread();
+//  ProxyMutex *mutex = thread->mutex;
+//  ClusterVConnection *vc = clusterVCAllocator.alloc();
+//  vc->new_connect_read = (options & CLUSTER_OPT_CONN_READ ? 1 : 0);
+//  vc->start_time = ink_get_hrtime();
+//  vc->last_activity_time = vc->start_time;
+//  vc->ch = ch;
+//  vc->token.alloc();
+//  vc->token.ch_id = ch->id;
+//  token = vc->token;
+//#ifdef CLUSTER_THREAD_STEALING
+//  CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CONNECTIONS_OPENNED_STAT);
+//  CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CONNECTIONS_OPEN_STAT);
+//  MUTEX_TRY_LOCK(lock, ch->mutex, thread);
+//  if (!lock) {
+//#endif
+//    if (immediate) {
+//      clusterVCAllocator_free(vc);
+//      return NULL;
+//    }
+//    vc->action_ = cont;
+//    ink_atomiclist_push(&ch->external_incoming_open_local, (void *) vc);
+//	if(ch->thread && ch->thread->signal_hook)
+//	  ch->thread->signal_hook(ch->thread);
+//    return CLUSTER_DELAYED_OPEN;
+//
+//#ifdef CLUSTER_THREAD_STEALING
+//  } else {
+//    if (!(immediate || allow_immediate))
+//      vc->action_ = cont;
+//    if (vc->start(thread) < 0) {
+//      return NULL;
+//    }
+//    if (immediate || allow_immediate) {
+//      return vc;
+//    } else {
+//      return CLUSTER_DELAYED_OPEN;
+//    }
+//  }
+//#endif
+  return NULL;
 }
 
 ClusterVConnection *
@@ -389,6 +403,66 @@ unsigned long cluster_packet_tos = 0;
 
 int RPC_only_CacheCluster = 0;
 #endif
+
+static int machine_change_notify(ClusterMachine * m)
+{
+  //char textbuf[sizeof("255.255.255.255:65535")];
+  int result;
+
+  Note("start notify, machine %s %hhu.%hhu.%hhu.%hhu:%d, version: %d.%d",
+      m->dead ? "down" : "up",
+      DOT_SEPARATED(m->ip), m->cluster_port, m->msg_proto_major,
+      m->msg_proto_minor);
+
+  if (m->dead) {
+    ClusterConfiguration *c = this_cluster()->current_configuration();
+    if (c->find(m->ip, m->cluster_port)) {
+      ClusterConfiguration *cc = configuration_remove_machine(c, m);
+      //CLUSTER_DECREMENT_DYN_STAT(CLUSTER_NODES_STAT);
+      this_cluster()->configurations.push(cc);
+      result = 0;
+
+      Note("remove machine %hhu.%hhu.%hhu.%hhu:%d", DOT_SEPARATED(m->ip), m->cluster_port);
+    }
+    else {
+      result = ENOENT;
+    }
+
+    Note("machine down %hhu.%hhu.%hhu.%hhu:%d, version=%d.%d",
+        DOT_SEPARATED(m->ip), m->cluster_port, m->msg_proto_major,
+        m->msg_proto_minor);
+    /*
+    snprintf(textbuf, sizeof(textbuf), "%hhu.%hhu.%hhu.%hhu:%d", DOT_SEPARATED(m->ip), m->cluster_port);
+    REC_SignalManager(REC_SIGNAL_MACHINE_DOWN, textbuf);
+    */
+  }
+  else {
+    ClusterConfiguration *c = this_cluster()->current_configuration();
+    if (c->find(m->ip, m->cluster_port)) {
+      Warning("machine %hhu.%hhu.%hhu.%hhu:%d already up",
+        DOT_SEPARATED(m->ip), m->cluster_port);
+      result = EEXIST;
+    }
+    else {
+        ClusterConfiguration *cconf = configuration_add_machine(c, m);
+        //CLUSTER_INCREMENT_DYN_STAT(CLUSTER_NODES_STAT);
+        this_cluster()->configurations.push(cconf);
+        result = 0;
+        Note("add machine %hhu.%hhu.%hhu.%hhu:%d", DOT_SEPARATED(m->ip), m->cluster_port);
+    }
+
+    Note("machine up %hhu.%hhu.%hhu.%hhu:%d, version=%d.%d",
+        DOT_SEPARATED(m->ip), m->cluster_port, m->msg_proto_major,
+        m->msg_proto_minor);
+
+    /*
+    snprintf(textbuf, sizeof(textbuf), "%hhu.%hhu.%hhu.%hhu:%d", DOT_SEPARATED(m->ip), m->cluster_port);
+    REC_SignalManager(REC_SIGNAL_MACHINE_UP, textbuf);
+    */
+  }
+
+  return result;
+}
 
 int
 ClusterProcessor::init()
@@ -678,6 +752,12 @@ ClusterProcessor::init()
   if (num_of_cluster_threads == DEFAULT_NUMBER_OF_CLUSTER_THREADS)
     IOCORE_ReadConfigInteger(num_of_cluster_threads, "proxy.config.cluster.threads");
 
+  int num_of_cluster_connections = 0;
+  IOCORE_ReadConfigInteger(num_of_cluster_connections, "proxy.config.cluster.connections");
+  if (num_of_cluster_connections == 0) {
+    num_of_cluster_connections = num_of_cluster_threads;
+  }
+
   IOCORE_EstablishStaticConfigInt32(CacheClusterMonitorEnabled, "proxy.config.cluster.enable_monitor");
   IOCORE_EstablishStaticConfigInt32(CacheClusterMonitorIntervalSecs, "proxy.config.cluster.monitor_interval_secs");
   IOCORE_ReadConfigInteger(cluster_receive_buffer_size, "proxy.config.cluster.receive_buffer_size");
@@ -709,6 +789,21 @@ ClusterProcessor::init()
 
   memset(channel_dummy_output, 0, sizeof(channel_dummy_output));
 
+  Debug(CL_NOTE, "before connection_manager_init, ip: %u, port: %d, "
+      "num_of_cluster_threads: %d, num_of_cluster_connections: %d",
+      this_cluster_machine()->ip, cluster_port, num_of_cluster_threads,
+      num_of_cluster_connections);
+
+  g_my_machine_ip = this_cluster_machine()->ip;
+  g_work_threads = num_of_cluster_threads;
+  g_connections_per_machine = num_of_cluster_connections;
+  if (g_connections_per_machine % 2 != 0) {
+    g_connections_per_machine++;
+  }
+  g_server_port = cluster_port;
+  cluster_global_init(cluster_main_handler, machine_change_notify);
+  int result = connection_manager_init(this_cluster_machine()->ip, cluster_port);
+
   if (cluster_type == 1) {
     cache_clustering_enabled = 1;
     Note("cache clustering enabled");
@@ -717,7 +812,7 @@ ClusterProcessor::init()
     cache_clustering_enabled = 0;
     Note("cache clustering disabled");
   }
-  return 0;
+  return result;
 }
 
 // function added to adhere to the name calling convention of init functions
@@ -735,6 +830,7 @@ ClusterProcessor::start()
 #endif
   if (cache_clustering_enabled && (cacheProcessor.IsCacheEnabled() == CACHE_INITIALIZED)) {
 
+    /*
     ET_CLUSTER = eventProcessor.spawn_event_threads(num_of_cluster_threads, "ET_CLUSTER");
     for (int i = 0; i < eventProcessor.n_threads_for_type[ET_CLUSTER]; i++) {
       initialize_thread_for_net(eventProcessor.eventthread[ET_CLUSTER][i], i);
@@ -743,6 +839,8 @@ ClusterProcessor::start()
       initialize_thread_for_http_sessions(eventProcessor.eventthread[ET_CLUSTER][i], i);
 #endif
     }
+    */
+
     IOCORE_RegisterConfigUpdateFunc("proxy.config.cluster.cluster_configuration", machine_config_change, (void *) CLUSTER_CONFIG);
     do_machine_config_change((void *) CLUSTER_CONFIG, "proxy.config.cluster.cluster_configuration");
     // TODO: Remove this?
@@ -751,9 +849,18 @@ ClusterProcessor::start()
     do_machine_config_change((void *) MACHINE_CONFIG, "proxy.config.cluster.machine_configuration");
 #endif
 
-    accept_handler = NEW(new ClusterAccept(&cluster_port, cluster_receive_buffer_size, cluster_send_buffer_size));
-    accept_handler->Init();
+    //accept_handler = NEW(new ClusterAccept(&cluster_port, cluster_receive_buffer_size, cluster_send_buffer_size));
+    //accept_handler->Init();
+
+    Note("cluster_receive_buffer_size: %d, cluster_send_buffer_size: %d",
+        (int)cluster_receive_buffer_size, (int)cluster_send_buffer_size);
+
+    g_socket_recv_bufsize = cluster_receive_buffer_size;
+    g_socket_send_bufsize = cluster_send_buffer_size;
+    pthread_t connection_tid;
+    connection_manager_start(&connection_tid);
   }
+
   return 0;
 }
 
@@ -836,6 +943,54 @@ ClusterProcessor::compute_cluster_mode()
     if (cache_clustering_enabled < 0) {
       cache_clustering_enabled = 1;
       Note("RPC only cache clustering disabled");
+    }
+  }
+}
+
+
+void cluster_main_handler(ClusterSession session, void *context,
+    const int func_id, IOBufferBlock *data, const int data_len)
+{
+  int event = func_id < 0 ? -func_id: func_id;
+  switch (event) {
+    case CLUSTER_CACHE_DATA_ABORT:
+    case CLUSTER_CACHE_DATA_READ_REENABLE: {
+      ink_assert(data_len == 0 && context && data == NULL);
+      CacheContinuation *cc = (CacheContinuation *) context;
+      cc->thread->schedule_imm(cc, event);
+      return;
+    }
+    default: {
+      ClusterCont *cc = clusterContAllocator.alloc();
+      SET_CONTINUATION_HANDLER(cc, &ClusterCont::handleEvent);
+      cc->session = session;
+      cc->context = context;
+      cc->func_id = event;
+      cc->data = data;
+      cc->data_len = data_len;
+      cc->_action = (Continuation *) context;
+      if (cc->_action.continuation) {
+        cc->mutex = cc->_action.mutex;
+      }
+#ifdef DEBUG
+      int64_t nbytes = 0;
+      for (IOBufferBlock *b = data; b; b = b->next) {
+        nbytes += b->read_avail();
+      }
+      ink_assert(data_len == nbytes);
+#endif
+
+      if (event == CLUSTER_CACHE_DATA_READ_DONE
+          || event == CLUSTER_CACHE_DATA_ERROR
+          || event == CLUSTER_CACHE_OP_RESULT_CLUSTER_FUNCTION) {
+        ink_assert(context);
+        ClusterCacheVC *cvc = (ClusterCacheVC *) context;
+        cvc->initial_thread->schedule_imm(cc);
+        return;
+      }
+
+      eventProcessor.schedule_imm(cc);
+      return;
     }
   }
 }

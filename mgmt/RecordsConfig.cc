@@ -865,7 +865,7 @@ RecordElement RecordsConfig[] = {
   //##############################################################################
   {RECT_CONFIG, "proxy.config.cluster.threads", RECD_INT, "1", RECU_RESTART_TS, RR_NULL, RECC_INT, "[0-512]", RECA_NULL}
   ,
-  {RECT_CONFIG, "proxy.config.cluster.num_of_cluster_connections", RECD_INT, "1", RECU_RESTART_TS, RR_NULL, RECC_INT, "[1-4096]", RECA_NULL}
+  {RECT_CONFIG, "proxy.config.cluster.connections", RECD_INT, "0", RECU_RESTART_TS, RR_NULL, RECC_INT, "[2-512]", RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.cluster.cluster_port", RECD_INT, "8086", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
   ,

@@ -2533,6 +2533,17 @@ HttpSM::state_cache_open_read(int event, void *data)
 }
 
 int
+HttpSM::state_cache_open_remove(int event, void *data)
+{
+  STATE_ENTER(&HttpSM::state_cache_open_remove, event);
+  (void) data;
+
+  pending_action = NULL;
+  t_state.cache_info.remove_result = event;
+  call_transact_and_set_next_state(HttpTransact::handle_all_document_alternate_removed);
+  return 0;
+}
+int
 HttpSM::main_handler(int event, void *data)
 {
   ink_release_assert(magic == HTTP_SM_MAGIC_ALIVE);
@@ -6830,7 +6841,22 @@ HttpSM::set_next_state()
       }
       break;
     }
+  case HttpTransact::PROXY_CACHE_DELETE:
+      {
+        // Nuke all the alternates since this is mostly likely
+        //   the result of a delete method
+        cache_sm.end_both();
+        HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_cache_open_remove);
 
+        Action *cache_action_handle = cacheProcessor.remove(this, t_state.cache_info.lookup_url,
+                                      t_state.cache_control.cluster_cache_local);
+        if (cache_action_handle != ACTION_RESULT_DONE) {
+          ink_assert(!pending_action);
+          pending_action = cache_action_handle;
+          historical_action = pending_action;
+        }
+        break;
+      }
   case HttpTransact::PROXY_INTERNAL_CACHE_DELETE:
     {
       // Nuke all the alternates since this is mostly likely

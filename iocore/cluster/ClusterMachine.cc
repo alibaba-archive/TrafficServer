@@ -77,11 +77,14 @@ msg_proto_major(0),
 msg_proto_minor(0),
 clusterHandlers(0)
 {
+  /*
   EThread *thread = this_ethread();
   ProxyMutex *mutex = thread->mutex;
 #ifndef INK_NO_CLUSTER
   CLUSTER_INCREMENT_DYN_STAT(CLUSTER_MACHINES_ALLOCATED_STAT);
 #endif
+  */
+
   if (!aip) {
     char localhost[1024];
     if (!ahostname) {
@@ -103,7 +106,7 @@ clusterHandlers(0)
 #endif
     if (clustering_enabled) {
       char *clusterIP = getenv("PROXY_CLUSTER_ADDR");
-      Debug("cluster_note", "[Machine::Machine] Cluster IP addr: %s\n", clusterIP);
+      //Debug("cluster_note", "[Machine::Machine] Cluster IP addr: %s\n", clusterIP);
       ip = inet_addr(clusterIP);
     } else {
 
@@ -148,7 +151,7 @@ clusterHandlers(0)
     hostname_len = 0;
 
   num_connections = num_of_cluster_threads;
-  clusterHandlers = (ClusterHandler **)ats_calloc(num_connections, sizeof(ClusterHandler *));
+  //clusterHandlers = (ClusterHandler **)ats_calloc(num_connections, sizeof(ClusterHandler *));
 }
 
 ClusterHandler *ClusterMachine::pop_ClusterHandler(int no_rr)
@@ -170,7 +173,7 @@ ClusterHandler *ClusterMachine::pop_ClusterHandler(int no_rr)
 ClusterMachine::~ClusterMachine()
 {
   ats_free(hostname);
-  ats_free(clusterHandlers);
+  //ats_free(clusterHandlers);
 }
 
 #ifndef INK_NO_CLUSTER
@@ -196,10 +199,13 @@ struct MachineTimeoutContinuation: public Continuation
 void
 free_ClusterMachine(ClusterMachine * m)
 {
+  /*
   EThread *thread = this_ethread();
   ProxyMutex *mutex = thread->mutex;
   // delay before the final free
   CLUSTER_INCREMENT_DYN_STAT(CLUSTER_MACHINES_FREED_STAT);
+  */
+
   m->dead = true;
   eventProcessor.schedule_in(NEW(new MachineTimeoutContinuation(m)), MACHINE_TIMEOUT, ET_CALL);
 }

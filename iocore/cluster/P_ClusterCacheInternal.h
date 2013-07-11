@@ -85,116 +85,210 @@ extern int ET_CLUSTER;
 // This continuation handles all cache cluster traffic, on both
 // sides (state machine client and cache server)
 //
+
+//struct CacheSM: public Continuation
+//{
+//  Ptr<ProxyMutex> lmutex;
+//  // msg list
+//  ClusterSession *scs;
+//  CacheVConnection *cache_vc;
+//  CacheFragType frag_type;
+//  int request_opcode;
+//  bool request_purge;
+//  bool use_deferred_callback;
+//  time_t pin_in_cache;
+//  bool have_all_data;
+//  bool zero_body;
+//  unsigned int seq_number;
+//
+//  INK_MD5 url_md5;
+//  CacheHTTPHdr ic_request;
+//  CacheHTTPHdr ic_response;
+//  CacheLookupHttpConfig *ic_params;
+//
+//  Action *cache_action;
+//  Ptr<IOBufferData> ic_hostname;
+//  int ic_hostname_len;
+//  ink_hrtime start_time;
+//
+//  int result;                   // return event code
+//  int result_error;             // error code associated with event
+//};
+//
+//CacheSM * new_CacheSM();
+//void free_CacheSM(CacheSM * cache_sm);
+//
+//extern ClassAllocator<CacheSM> cacheSMAllocator;
+
+struct ClusterCont: public Continuation
+{
+  ClusterSession session;
+  Ptr<IOBufferBlock> data;
+  void *context;
+  int func_id;
+  int data_len;
+
+  Action _action;
+  int handleEvent(int event, void *d);
+  IOBufferData *copy_data();
+  int copy_data(char *buf, int size);
+  void consume(int size);
+};
+
+inline IOBufferData *
+ClusterCont::copy_data() {
+  IOBufferData *buf = new_IOBufferData(iobuffer_size_to_index(data_len, MAX_BUFFER_SIZE_INDEX));
+  char *p = buf->data();
+  for (IOBufferBlock *b = data; b; b = b->next) {
+    memcpy(p, b->_start, b->_end - b->_start);
+    p += b->_end - b->_start;
+  }
+  return buf;
+}
+
+inline void
+ClusterCont::consume(int size) {
+
+  int64_t sz = size;
+  while (data && sz >= data->read_avail()) {
+    sz -= data->read_avail();
+    data = data->next;
+  }
+  if (data)
+    data->_start += sz;
+
+  data_len = data_len > size ? (data_len - size) : 0;
+}
+
+inline int
+ClusterCont::copy_data(char *buf, int len)
+{
+  ink_debug_assert(data_len >= len);
+  IOBufferBlock *b = data;
+  int64_t sz = len;
+  while (len > 0 && b) {
+    int64_t avail = b->read_avail();
+    sz -= avail;
+    if (sz < 0) {
+      memcpy(buf, b->_start, avail + sz);
+      sz = 0;
+      break;
+    } else {
+      memcpy(buf, b->_start, avail);
+      buf += avail;
+      b = b->next;
+    }
+  }
+  return len - (int) sz;
+}
+extern ClassAllocator<ClusterCont> clusterContAllocator;
+
+inline int
+ClusterCont::handleEvent(int event, void *d) {
+  if (func_id == CLUSTER_CACHE_OP_CLUSTER_FUNCTION)
+    cache_op_ClusterFunction(session, context, this);
+  else if (func_id == CLUSTER_CACHE_OP_RESULT_CLUSTER_FUNCTION)
+    cache_op_result_ClusterFunction(session, context, this);
+  else
+    _action.continuation->handleEvent(func_id, this);
+
+  mutex.clear();
+  _action.mutex.clear();
+  data = NULL;
+
+  clusterContAllocator.free(this);
+  return EVENT_DONE;
+}
+
 struct CacheContinuation;
 typedef int (CacheContinuation::*CacheContHandler) (int, void *);
 struct CacheContinuation:public Continuation
 {
+  static int size_to_init;
   enum
   {
     MagicNo = 0x92183123
   };
   int magicno;
-  void *callback_data;
-  void *callback_data_2;
   INK_MD5 url_md5;
-  Event *timeout;
-  Action action;
-  ClusterMachine *target_machine;
-  int probe_depth;
+
   ClusterMachine *past_probes[CONFIGURATION_HISTORY_PROBE_DEPTH];
-  ink_hrtime start_time;
-  ClusterMachine *from;
-  ClusterHandler *ch;
-  VConnection *cache_vc;
-  bool cache_read;
-  int result;                   // return event code
-  int result_error;             // error code associated with event
+
   ClusterVCToken token;
-  unsigned int seq_number;
-  uint16_t cfl_flags;             // Request flags; see CFL_XXX defines
-  CacheFragType frag_type;
-  int nbytes;
-  unsigned int target_ip;
-  int request_opcode;
-  bool request_purge;
-  bool local_lookup_only;
-  bool no_reply_message;
-  bool request_timeout;         // timeout occurred before
-  //   op complete
-  bool expect_cache_callback;
 
-  // remove_and_delete() specific data
-  bool use_deferred_callback;
-
-  // open_read/write data
-
-  time_t pin_in_cache;
-
-  // setMsgBufferLen(), allocMsgBuffer() and freeMsgBuffer() data
-
-    Ptr<IOBufferData> rw_buf_msg;
-  int rw_buf_msg_len;
-
-  // open data
-
-  ClusterVConnection *read_cluster_vc;
-  ClusterVConnection *write_cluster_vc;
-  int cluster_vc_channel;
-  ClusterVCToken open_local_token;
-
-  // Readahead on open read specific data
-
-  int caller_buf_freebytes;     // remote bufsize for
-  //  initial data
-  VIO *readahead_vio;
-  IOBufferReader *readahead_reader;
-    Ptr<IOBufferBlock> readahead_data;
-  bool have_all_data;           // all object data in response
-  bool zero_body;
-
-  CacheHTTPInfo cache_vc_info;
-  OneWayTunnel *tunnel;
-    Ptr<ProxyMutex> tunnel_mutex;
-  CacheContinuation *tunnel_cont;
-  bool tunnel_closed;
-  Action *cache_action;
-  Event *lookup_open_write_vc_event;
-
+  CacheHTTPInfo cache_vc_info; // for get_http_info
+//  MIOBuffer doc_data;
+  Ptr<IOBufferBlock> doc_data;
   // Incoming data generated from unmarshaling request/response ops
-
+  Ptr<IOBufferData> rw_buf_msg;
   Arena ic_arena;
-  CacheHTTPHdr ic_request;
-  CacheHTTPHdr ic_response;
-  CacheLookupHttpConfig *ic_params;
-  CacheHTTPInfo ic_old_info;
-  CacheHTTPInfo ic_new_info;
-    Ptr<IOBufferData> ic_hostname;
+  CacheHTTPHdr ic_request; // for lookup or read
+  CacheHTTPInfo ic_old_info; // for update
+  CacheHTTPInfo ic_new_info; // for set_http_info
+
+  ClusterSession cs;
+  char *ic_hostname;
   int ic_hostname_len;
 
-  // debugging
-  int cache_op_ClusterFunction;
+  ink_hrtime start_time;
+  ClusterMachine *target_machine;
+  int probe_depth;
 
-  int lookupEvent(int event, void *d);
-  int probeLookupEvent(int event, void *d);
-  int remoteOpEvent(int event, Event * e);
-  int replyLookupEvent(int event, void *d);
-  int replyOpEvent(int event, VConnection * vc);
-  int handleReplyEvent(int event, Event * e);
-  int callbackEvent(int event, Event * e);
-  int setupVCdataRead(int event, VConnection * vc);
-  int VCdataRead(int event, VIO * target_vio);
-  int setupReadWriteVC(int, VConnection *);
-  ClusterVConnection *lookupOpenWriteVC();
-  int lookupOpenWriteVCEvent(int, Event *);
-  int localVCsetupEvent(int event, ClusterVConnection * vc);
-  void insert_cache_callback_user(ClusterVConnection *, int, void *);
-  int insertCallbackEvent(int, Event *);
-  void callback_user(int result, void *d);
-  void defer_callback_result(int result, void *d);
-  int callbackResultEvent(int event, Event * e);
-  void setupReadBufTunnel(VConnection *, VConnection *);
-  int tunnelClosedEvent(int event, void *);
-  int remove_and_delete(int, Event *);
+  CacheVC *cache_vc;
+  Action *pending_action;
+  bool cache_read;
+  bool request_purge;
+  bool have_all_data;           // all object data in response
+  bool expect_next;
+  bool writer_aborted;
+  int result;                   // return event code
+  int result_error;             // error code associated with event
+  uint16_t cfl_flags;             // Request flags; see CFL_XXX defines
+
+  unsigned int seq_number;
+  CacheFragType frag_type;
+  int nbytes;       // the msg nbyts
+  unsigned int target_ip;
+  int request_opcode;
+  int header_len;
+  int rw_buf_msg_len;
+
+  time_t pin_in_cache;
+  int64_t doc_size;
+  int64_t total_length;
+  VIO *vio;                  //
+  IOBufferReader *reader;    // for normal read
+  CacheLookupHttpConfig *ic_params;
+  MIOBuffer *mbuf;
+  EThread *thread;
+
+//  int lookupEvent(int event, void *d);
+//  int probeLookupEvent(int event, void *d);
+//  int remoteOpEvent(int event, Event * e);
+//  int replyLookupEvent(int event, void *d);
+  int replyOpEvent();
+//  int handleReplyEvent(int event, Event * e);
+//  int callbackEvent(int event, Event * e);
+  int setupVCdataRead(int event, void *data);
+  int setupVCdataWrite(int event, void *data);
+  int setupVCdataRemove(int event, void *data);
+  int setupVCdataLink(int event, void *data);
+  int setupVCdataDeref(int event, void *data);
+  int VCdataRead(int event, void *data);
+  int VCdataWrite(int event, void *data);
+  int VCSmallDataRead(int event, void *data);
+//  int setupReadWriteVC(int, VConnection *);
+//  ClusterVConnection *lookupOpenWriteVC();
+//  int lookupOpenWriteVCEvent(int, Event *);
+//  int localVCsetupEvent(int event, ClusterVConnection * vc);
+//  void insert_cache_callback_user(ClusterVConnection *, int, void *);
+//  int insertCallbackEvent(int, Event *);
+//  void callback_user(int result, void *d);
+//  void defer_callback_result(int result, void *d);
+//  int callbackResultEvent(int event, Event * e);
+//  void setupReadBufTunnel(VConnection *, VConnection *);
+//  int tunnelClosedEvent(int event, void *);
+//  int remove_and_delete(int, Event *);
 
 
   inline void setMsgBufferLen(int l, IOBufferData * b = 0) {
@@ -255,67 +349,26 @@ struct CacheContinuation:public Continuation
     if (ic_request.valid()) {
       ic_request.clear();
     }
-    if (ic_response.valid()) {
-      ic_response.clear();
-    }
+//    if (ic_response.valid()) {
+//      ic_response.clear();
+//    }
     if (ic_old_info.valid()) {
       ic_old_info.destroy();
     }
     if (ic_new_info.valid()) {
       ic_new_info.destroy();
     }
-    ic_arena.reset();
+//    ic_arena.reset();
     freeMsgBuffer();
-
-    tunnel_mutex = 0;
-    readahead_data = 0;
+//
+//    tunnel_mutex = 0;
+//    readahead_data = 0;
     ic_hostname = 0;
   }
 
-CacheContinuation():
-  Continuation(NULL),
-    magicno(MagicNo),
-    callback_data(0),
-    callback_data_2(0),
-    timeout(0),
-    target_machine(0),
-    probe_depth(0),
-    start_time(0),
-    cache_read(false),
-    result(0),
-    result_error(0),
-    seq_number(0),
-    cfl_flags(0),
-    frag_type(CACHE_FRAG_TYPE_NONE),
-    nbytes(0),
-    target_ip(0),
-    request_opcode(0),
-    request_purge(false),
-    local_lookup_only(0),
-    no_reply_message(0),
-    request_timeout(0),
-    expect_cache_callback(true),
-    use_deferred_callback(0),
-    pin_in_cache(0),
-    rw_buf_msg_len(0),
-    read_cluster_vc(0),
-    write_cluster_vc(0),
-    cluster_vc_channel(0),
-    caller_buf_freebytes(0),
-    readahead_vio(0),
-    readahead_reader(0),
-    have_all_data(false),
-    zero_body(false),
-    cache_vc_info(),
-    tunnel(0),
-    tunnel_cont(0),
-    tunnel_closed(0),
-    lookup_open_write_vc_event(0),
-    ic_arena(),
-    ic_request(),
-    ic_response(), ic_params(0), ic_old_info(), ic_new_info(), ic_hostname_len(0), cache_op_ClusterFunction(0) {
-    token.clear();
-    SET_HANDLER((CacheContHandler) & CacheContinuation::remoteOpEvent);
+  CacheContinuation(): magicno(MagicNo) {
+    size_to_init = sizeof(CacheContinuation) - (size_t) & ((CacheContinuation *) 0)->cs;
+    memset((char *) &cs, 0, size_to_init);
   }
 
   inline static bool is_ClusterThread(EThread * et)
@@ -336,14 +389,62 @@ CacheContinuation():
   static void cacheContAllocator_free(CacheContinuation *);
   inkcoreapi static Action *callback_failure(Action *, int, int, CacheContinuation * this_cc = 0);
   static Action *do_remote_lookup(Continuation *, CacheKey *, CacheContinuation *, CacheFragType, char *, int);
-  inkcoreapi static Action *do_op(Continuation *, ClusterMachine *, void *, int, char *, int,
-                                  int nbytes = -1, MIOBuffer * b = 0);
+  inkcoreapi static Action *do_op(Continuation * c, ClusterSession cs, void *args,
+                           int user_opcode, IOBufferData *data, int data_len, int nbytes = -1, MIOBuffer * b = 0);
   static int setup_local_vc(char *data, int data_len, CacheContinuation * cc, ClusterMachine * mp, Action **);
   static void disposeOfDataBuffer(void *buf);
   static int handleDisposeEvent(int event, CacheContinuation * cc);
-  static int32_t getObjectSize(VConnection *, int, CacheHTTPInfo *);
+  int32_t getObjectSize(VConnection *, int, CacheHTTPInfo *);
 };
 
+extern ClassAllocator<CacheContinuation> cacheContAllocator;
+
+inline CacheContinuation *
+new_CacheCont(EThread *t) {
+  ink_assert(t == this_ethread());
+  CacheContinuation *c = THREAD_ALLOC(cacheContAllocator, t);
+  c->mutex = new_ProxyMutex();
+  c->start_time = ink_get_hrtime();
+  c->thread = t;
+  return c;
+}
+
+inline void
+free_CacheCont(CacheContinuation *c) {
+  ink_assert(c->magicno == (int) c->MagicNo && !c->expect_next);
+//  ink_assert(!c->cache_op_ClusterFunction);
+  if (c->pending_action) {
+    c->pending_action->cancel();
+    c->pending_action = NULL;
+  }
+  if (c->cache_vc) {
+    c->cache_vc->do_io(VIO::CLOSE);
+    c->cache_vc = NULL;
+  }
+  if (c->mbuf) {
+    free_MIOBuffer(c->mbuf);
+    c->mbuf = NULL;
+  }
+
+  c->magicno = -1;
+  c->token.clear();
+  c->cache_vc_info.clear();
+  if (c->ic_params) {
+    delete c->ic_params;
+    c->ic_params = 0;
+  }
+  c->ic_request.clear();
+  c->ic_old_info.clear();
+  c->ic_new_info.destroy();
+  c->ic_arena.reset();
+  c->freeMsgBuffer();
+  c->ic_hostname = 0;
+  c->mutex.clear();
+
+  c->doc_data = NULL;
+
+  cacheContAllocator.free(c);
+}
 /////////////////////////////////////////
 // Cache OP specific args for do_op()  //
 /////////////////////////////////////////
@@ -607,8 +708,11 @@ struct CacheOpReplyMsg:public ClusterMessageHeader
 {
   uint32_t seq_number;
   int32_t result;
-  ClusterVCToken token;
-  uint8_t moi[4];                 // Used by CACHE_OPEN_READ & CACHE_LINK reply
+  int32_t h_len;
+  int32_t d_len;
+  int32_t reason; // // Used by CACHE_OPEN_READ & CACHE_LINK reply
+  int64_t doc_size;
+
   enum
   {
     MIN_VERSION = 1,
@@ -616,8 +720,7 @@ struct CacheOpReplyMsg:public ClusterMessageHeader
     CACHE_OP_REPLY_MESSAGE_VERSION = MAX_VERSION
   };
   CacheOpReplyMsg(uint16_t vers = CACHE_OP_REPLY_MESSAGE_VERSION):
-  ClusterMessageHeader(vers), seq_number(0), result(0) {
-    memset(moi, 0, sizeof(moi));
+  ClusterMessageHeader(vers), seq_number(0), result(0), h_len(0), d_len(0), reason(0), doc_size(0) {
   }
 
   //////////////////////////////////////////////////////////////////////////
@@ -628,9 +731,7 @@ struct CacheOpReplyMsg:public ClusterMessageHeader
   }
   static int sizeof_fixedlen_msg()
   {
-    CacheOpReplyMsg *p = 0;
-    // Use offsetof. /leif
-    return (int) ALIGN_DOUBLE(&p->moi[0]);
+    return INK_ALIGN(sizeof (CacheOpReplyMsg), 16);
   }
   void init(uint16_t vers = CACHE_OP_REPLY_MESSAGE_VERSION) {
     _init(vers);
@@ -640,7 +741,8 @@ struct CacheOpReplyMsg:public ClusterMessageHeader
     if (NeedByteSwap()) {
       ats_swap32(&seq_number);
       ats_swap32((uint32_t *) & result);
-      token.SwapBytes();
+      ats_swap32((uint32_t *) & reason);
+      ats_swap64((uint64_t *) & doc_size);
     }
   }
   //////////////////////////////////////////////////////////////////////////
@@ -808,6 +910,7 @@ event_reply_may_have_moi(int event)
 {
   switch (event) {
   case CACHE_EVENT_OPEN_READ:
+  case CACHE_EVENT_OPEN_WRITE:
   case CACHE_EVENT_LINK:
   case CACHE_EVENT_LINK_FAILED:
   case CACHE_EVENT_OPEN_READ_FAILED:

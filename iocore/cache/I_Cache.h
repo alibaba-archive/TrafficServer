@@ -175,6 +175,7 @@ struct CacheVConnection:public VConnection
   virtual void get_http_info(CacheHTTPInfo **info) = 0;
 #endif
 
+  virtual bool is_read_from_writer() = 0;
   virtual bool is_ram_cache_hit() = 0;
   virtual bool set_disk_io_priority(int priority) = 0;
   virtual int get_disk_io_priority() = 0;
@@ -188,5 +189,6 @@ struct CacheVConnection:public VConnection
 void ink_cache_init(ModuleVersion version);
 extern inkcoreapi CacheProcessor cacheProcessor;
 extern Continuation *cacheRegexDeleteCont;
+extern int cache_config_target_fragment_size;
 
 #endif /* _I_CACHE_H__ */

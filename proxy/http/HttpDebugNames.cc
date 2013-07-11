@@ -315,6 +315,9 @@ HttpDebugNames::get_action_name(HttpTransact::StateMachineAction_t e)
   case HttpTransact::PROXY_INTERNAL_CACHE_WRITE:
     return ("PROXY_INTERNAL_CACHE_WRITE");
 
+  case HttpTransact::PROXY_CACHE_DELETE:
+    return ("PROXY_CACHE_DELETE");
+
   case HttpTransact::PROXY_INTERNAL_CACHE_DELETE:
     return ("PROXY_INTERNAL_CACHE_DELETE");
 

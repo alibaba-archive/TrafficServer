@@ -53,7 +53,7 @@
 /****************************************************************************/
 
 #include "P_ClusterMachine.h"
-
+#include "clusterinterface.h"
 //
 // Cluster Processor
 //
@@ -320,6 +320,8 @@ struct ClusterVCToken
 //   This must be registered.
 //
 typedef void ClusterFunction(ClusterHandler * ch, void *data, int len);
+
+typedef void ClusterFunctionExt(ClusterSession cs, void *context, void *data);
 typedef ClusterFunction *ClusterFunctionPtr;
 
 struct ClusterVConnectionBase;
@@ -515,6 +517,9 @@ struct ClusterVConnection: public ClusterVConnectionBase
   ~ClusterVConnection();
   void free();                  // Destructor actions (we are using ClassAllocator)
 
+  virtual bool is_read_from_writer() {
+    return false;
+  }
   virtual void do_io_close(int lerrno = -1);
 
   ClusterHandler *ch;
@@ -735,9 +740,9 @@ extern ClusterFunction close_channel_ClusterFunction;
 extern ClusterFunction get_hostinfo_ClusterFunction;
 extern ClusterFunction put_hostinfo_ClusterFunction;
 extern ClusterFunction cache_lookup_ClusterFunction;
-extern ClusterFunction cache_op_ClusterFunction;
+//extern ClusterFunction cache_op_ClusterFunction;
 extern ClusterFunction cache_op_malloc_ClusterFunction;
-extern ClusterFunction cache_op_result_ClusterFunction;
+//extern ClusterFunction cache_op_result_ClusterFunction;
 extern ClusterFunction set_channel_data_ClusterFunction;
 extern ClusterFunction post_setchan_send_ClusterFunction;
 extern ClusterFunction set_channel_pin_ClusterFunction;
@@ -745,6 +750,9 @@ extern ClusterFunction post_setchan_pin_ClusterFunction;
 extern ClusterFunction set_channel_priority_ClusterFunction;
 extern ClusterFunction post_setchan_priority_ClusterFunction;
 extern ClusterFunction default_api_ClusterFunction;
+
+extern ClusterFunctionExt cache_op_ClusterFunction;
+extern ClusterFunctionExt cache_op_result_ClusterFunction;
 
 struct ClusterFunctionDescriptor
 {
@@ -763,7 +771,8 @@ struct ClusterFunctionDescriptor
 #ifndef DEFINE_CLUSTER_FUNCTIONS
 extern
 #endif
-ClusterFunctionDescriptor clusterFunction[]
+ClusterFunctionDescriptor clusterFunction[0]
+#if 0
 #ifdef DEFINE_CLUSTER_FUNCTIONS
   = {
   {false, true, CMSG_LOW_PRI, test_ClusterFunction, 0},
@@ -865,7 +874,7 @@ ClusterFunctionDescriptor clusterFunction[]
   // ********** ADD NEW ENTRIES ABOVE THIS LINE ************
 }
 #endif
-
+#endif
 ;
 extern int SIZE_clusterFunction;        // clusterFunction[] entries
 
@@ -985,10 +994,27 @@ ClusterFuncToQpri(int cluster_func)
 #define API_F29_CLUSTER_FUNCTION  	     	     79
 #define API_F30_CLUSTER_FUNCTION  	     	     80
 
-#define API_STARECT_CLUSTER_FUNCTION		     API_F01_CLUSTER_FUNCTION
-#define API_END_CLUSTER_FUNCTION		     API_F30_CLUSTER_FUNCTION
+#define CLUSTER_CACHE_OP_CLUSTER_FUNCTION      (CLUSTER_MSG_START+81)
+#define CLUSTER_CACHE_DATA_READ_BEGIN          (CLUSTER_MSG_START+82)
+#define CLUSTER_CACHE_DATA_READ_REENABLE       (CLUSTER_MSG_START+83)
+#define CLUSTER_CACHE_DATA_WRITE_BEGIN         (CLUSTER_MSG_START+84)
+#define CLUSTER_CACHE_HEADER_ONLY_UPDATE       (CLUSTER_MSG_START+85)
+#define CLUSTER_CACHE_DATA_CLOSE               (CLUSTER_MSG_START+86)
+#define CLUSTER_CACHE_DATA_ABORT               (CLUSTER_MSG_START+87)
+#define CLUSTER_CACHE_DATA_WRITE_DONE          (CLUSTER_MSG_START+88)
 
-#define UNDEFINED_CLUSTER_FUNCTION                   0xFDEFFDEF
+#define CLUSTER_CACHE_OP_RESULT_CLUSTER_FUNCTION (CLUSTER_MSG_START+89)
+#define CLUSTER_CACHE_DATA_READ_DONE           (CLUSTER_MSG_START+90)
+#define CLUSTER_CACHE_DATA_ERROR               (CLUSTER_MSG_START+91)
+
+#define CLUSTER_INTERNEL_ERROR                 (CLUSTER_MSG_START+100)
+#define CLUSTER_PING_CLUSTER_FUNCTION          (CLUSTER_MSG_START+101)                        1
+#define CLUSTER_PING_REPLY_CLUSTER_FUNCTION    (CLUSTER_MSG_START+102)
+
+#define API_STARECT_CLUSTER_FUNCTION           API_F01_CLUSTER_FUNCTION
+#define API_END_CLUSTER_FUNCTION               API_F30_CLUSTER_FUNCTION
+
+#define UNDEFINED_CLUSTER_FUNCTION             0xFDEFFDEF
 
 //////////////////////////////////////////////
 // Initial cluster connect exchange message
@@ -1014,6 +1040,7 @@ struct ClusterHelloMessage
     _minor = CLUSTER_MINOR_VERSION;
     _min_major = MIN_CLUSTER_MAJOR_VERSION;
     _min_minor = MIN_CLUSTER_MINOR_VERSION;
+    _id = 0;
     memset(_pad, '\0', sizeof(_pad));
   }
   int NativeByteOrder()
@@ -1173,4 +1200,323 @@ ClusterVC_remove_write(ClusterVConnectionBase * vc)
 }
 
 
+struct ClusterCacheVC: public CacheVConnection
+{
+  static int size_to_init;
+  Action _action;
+  Ptr<IOBufferData> buf;          // for read
+  Ptr<IOBufferData> first_buf;    // the head fragment
+  Ptr<IOBufferBlock> blocks; // data available to write
+
+  CacheHTTPInfo alternate;
+
+  VIO vio;
+  ink_hrtime start_time;
+  CacheFragType frag_type;
+  int64_t seek_to;                // pread offset
+  int64_t offset;                 // offset into 'blocks' of data to write
+  int64_t length;                 // length of data available to write
+  int64_t total_len;
+  int64_t data_sent;
+  int64_t doc_len;
+
+  int doc_pos;                // read position in 'buf'
+  int d_len;                  // the length of data in 'buf'
+
+  int closed;
+  int recursive;
+  int disk_io_priority;
+  int probe_depth;
+  MessagePriority priority;
+
+  time_t time_pin;
+  EThread *initial_thread;  // initial thread open_XX was called on
+  ClusterSession cs;
+  Event *trigger;
+  ContinuationHandler save_handler;
+
+
+  bool in_progress; //
+  bool remote_closed;
+
+  union
+  {
+    uint32_t flags;
+    struct
+    {
+      unsigned int use_first_key:1;
+      unsigned int overwrite:1; // overwrite first_key Dir if it exists
+      unsigned int close_complete:1; // WRITE_COMPLETE is final
+      unsigned int sync:1; // write to be committed to durable storage before WRITE_COMPLETE
+      unsigned int evacuator:1;
+      unsigned int single_fragment:1;
+      unsigned int evac_vector:1;
+      unsigned int lookup:1;
+      unsigned int update:1;
+      unsigned int remove:1;
+      unsigned int remove_aborted_writers:1;
+      unsigned int open_read_timeout:1; // UNUSED
+      unsigned int data_done:1;
+      unsigned int read_from_writer_called:1;
+      unsigned int not_from_ram_cache:1;        // entire object was from ram cache
+      unsigned int rewrite_resident_alt:1;
+      unsigned int readers:1;
+      unsigned int doc_from_ram_cache:1;
+#ifdef HIT_EVACUATE
+      unsigned int hit_evacuate:1;
+#endif
+#ifdef HTTP_CACHE
+      unsigned int force_empty:1; // used for cache empty http document
+#endif
+#ifdef SSD_CACHE
+      unsigned int read_from_ssd:1;
+      unsigned int write_into_ssd:1;
+      unsigned int ram_fixup:1;
+      unsigned int transistor:1;
+#endif
+    } f;
+  };
+  ClusterCacheVC();
+  VIO *do_io_read(Continuation *c, int64_t nbytes, MIOBuffer *buf); // invoke remote
+  VIO *do_io_pread(Continuation *c, int64_t nbytes, MIOBuffer *buf, int64_t offset); // invoke remote
+  VIO *do_io_write(Continuation *c, int64_t nbytes, IOBufferReader *buf, bool owner = false); // invoke remote
+  void do_io_close(int lerrno = -1); // invoke remote ?
+  void reenable(VIO *avio); // invoke remote ?
+  void reenable_re(VIO *avio); // invoke remote ?
+
+  void do_remote_close(); // invoke remote, for cancel or error
+
+  virtual int get_header(void **ptr, int *len)
+  {
+    NOWARN_UNUSED(ptr);
+    NOWARN_UNUSED(len);
+    ink_assert(!"implemented");
+    return -1;
+  }
+  virtual int set_header(void *ptr, int len)
+  {
+    NOWARN_UNUSED(ptr);
+    NOWARN_UNUSED(len);
+    ink_assert(!"implemented");
+    return -1;
+  }
+  virtual int get_single_data(void **ptr, int *len)
+  {
+    NOWARN_UNUSED(ptr);
+    NOWARN_UNUSED(len);
+    ink_assert(!"implemented");
+    return -1;
+  }
+
+#ifdef HTTP_CACHE
+  virtual void set_http_info(CacheHTTPInfo *info) {
+    if (enable_cache_empty_http_doc) {
+      MIMEField *field = info->m_alt->m_response_hdr.field_find(
+          MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
+      if (field && !field->value_get_int64())
+        f.force_empty = 1;
+      else
+        f.force_empty = 0;
+    } else
+      f.force_empty = 0;
+    alternate.copy_shallow(info);
+    info->clear();
+  }
+  virtual void get_http_info(CacheHTTPInfo ** info) {
+    *info = &alternate;
+  }
+#endif
+
+  bool is_ram_cache_hit() {
+    ink_assert(vio.op == VIO::READ);
+    return !f.not_from_ram_cache;
+  }
+  virtual bool set_disk_io_priority(int priority)
+  {
+    disk_io_priority = priority;
+    return true;
+  }
+  virtual int get_disk_io_priority() {
+    return disk_io_priority;
+  }
+  virtual bool set_pin_in_cache(time_t t) {
+    time_pin = t;
+    return true;
+  }
+  virtual time_t get_pin_in_cache() {
+    return time_pin;
+  }
+  virtual int64_t get_object_size()
+  {
+    return alternate.object_size_get();
+  }
+  virtual bool is_read_from_writer()
+  {
+    return f.read_from_writer_called;
+  }
+  void
+  cancel_trigger()
+  {
+    if (trigger) {
+      trigger->cancel_action();
+      trigger = NULL;
+    }
+  }
+
+  int calluser(int event);
+  int callcont(int event);
+  int handleRead(int event, void *data);
+  int openReadReadDone(int event, void *data);
+//  int handleWrite(int event, void *data);
+//  int openWriteWriteDone(int event, void *data);
+  int openReadStart(int event, void *data);
+  int openWriteStart(int event, void *data);
+  int openReadMain(int event, void *data);
+  int openWriteMain(int event, void *data);
+  int removeEvent(int event, void *data);
+};
+
+
+
+struct SetIOReadMessage: public ClusterMessageHeader
+{
+  int64_t nbytes;
+  int64_t offset;
+};
+
+struct SetIOWriteMessage: public ClusterMessageHeader
+{
+  int32_t hdr_len;
+  int64_t nbytes;
+};
+
+struct SetIOCloseMessage: public ClusterMessageHeader
+{
+  int h_len;
+  int d_len;
+  int64_t total_len;
+};
+
+struct SetIOReenableMessage: public ClusterMessageHeader
+{
+  int reenable;
+};
+struct SetResponseMessage: public ClusterMessageHeader
+{
+
+};
+
+inline IOBufferBlock *
+clone_IOBufferBlockList(IOBufferBlock *ab, int64_t offset, int64_t len)
+{
+  IOBufferBlock *b = ab;
+  IOBufferBlock *head = NULL;
+  IOBufferBlock *clone = NULL;
+
+  while (b && len >= 0) {
+    int64_t max_bytes = b->read_avail();
+    max_bytes -= offset;
+    if (max_bytes <= 0) {
+      offset = -max_bytes;
+      b = b->next;
+      continue;
+    }
+
+    if (!head) {
+      head = b->clone();
+      head->consume(offset);
+      clone = head;
+    } else {
+      clone->next = b->clone();
+      clone = clone->next;
+    }
+
+    len -= max_bytes;
+    b = b->next;
+    offset = 0;
+  }
+  if (clone && len < 0)
+    clone->fill(len);
+  return head;
+}
+
+ClusterCacheVC *new_ClusterCacheVC();
+void free_ClusterCacheVC(ClusterCacheVC *ccvc);
+
+inline int
+ClusterCacheVC::calluser(int event)
+{
+  recursive++;
+  ink_debug_assert(this_ethread() == vio._cont->mutex->thread_holding);
+  vio._cont->handleEvent(event, (void *) &vio);
+  recursive--;
+  if (closed && !in_progress) {
+    free_ClusterCacheVC(this);
+    return EVENT_DONE;
+  }
+  return EVENT_CONT;
+}
+
+inline int
+ClusterCacheVC::callcont(int event)
+{
+  recursive++;
+  ink_debug_assert(this_ethread() == _action.mutex->thread_holding);
+  _action.continuation->handleEvent(event, this);
+  recursive--;
+  if (closed && !in_progress) {
+    free_ClusterCacheVC(this);
+    return EVENT_DONE;
+  } else if (vio.vc_server)
+    handleEvent(EVENT_IMMEDIATE, 0);
+  return EVENT_DONE;
+}
+
+extern ClassAllocator<ClusterCacheVC> clusterCacheVCAllocator;
+
+inline ClusterCacheVC *
+new_ClusterCacheVC(Continuation *cont)
+{
+  EThread *t = cont->mutex->thread_holding;
+  ClusterCacheVC *c = THREAD_ALLOC(clusterCacheVCAllocator, t);
+  c->_action = cont;
+  c->initial_thread = t;
+  c->mutex = cont->mutex;
+  c->start_time = ink_get_hrtime();
+  ink_assert(c->trigger == NULL);
+
+  Debug("cluster_cache_new", "new %p", c);
+  return c;
+}
+
+inline void
+free_ClusterCacheVC(ClusterCacheVC *cont)
+{
+  Debug("cluster_cache_free", "free %p", cont);
+  ink_debug_assert(cont->mutex->thread_holding == this_ethread());
+
+  if (cont->trigger)
+    cont->trigger->cancel();
+  ink_assert(!cont->in_progress);
+
+  cluster_close_session(cont->cs);
+  cont->vio.buffer.clear();
+  cont->vio.mutex.clear();
+#ifdef HTTP_CACHE
+  if (cont->vio.op == VIO::WRITE)
+    cont->alternate.destroy();
+  else
+    cont->alternate.clear();
+#endif
+  cont->_action.cancelled = 0;
+  cont->_action.mutex.clear();
+  cont->mutex.clear();
+  cont->buf.clear();
+  cont->first_buf.clear();
+  cont->blocks.clear();
+
+  memset((char *) &cont->vio, 0, cont->size_to_init);
+
+  THREAD_FREE_TO(cont, clusterCacheVCAllocator, this_ethread(), MAX_CACHE_VCS_PER_THREAD);
+}
 #endif /* _Cluster_h */

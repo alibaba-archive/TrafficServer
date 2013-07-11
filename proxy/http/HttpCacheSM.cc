@@ -115,6 +115,9 @@ HttpCacheSM::state_cache_open_read(int event, void *data)
     ink_assert(cache_read_vc == NULL);
     open_read_cb = true;
     cache_read_vc = (CacheVConnection *) data;
+    if (cache_read_vc->is_read_from_writer())
+      set_readwhilewrite_inprogress(true);
+
     master_sm->handleEvent(event, data);
     break;
 

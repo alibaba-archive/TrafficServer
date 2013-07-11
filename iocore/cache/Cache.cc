@@ -125,6 +125,7 @@ ClassAllocator<EvacuationKey> evacuationKeyAllocator("evacuationKey");
 #ifdef SSD_CACHE
 ClassAllocator<MigrateToSSD> migrateToSSDAllocator("migrateToSSD");
 #endif
+
 int CacheVC::size_to_init = -1;
 CacheKey zero_key(0, 0);
 
@@ -463,7 +464,190 @@ CacheVC::get_disk_io_priority()
 {
   return io.aiocb.aio_reqprio;
 }
-
+//
+//VIO *
+//ClusterCacheVC::do_io_read(Continuation *c, int64_t nbytes, MIOBuffer *abuf)
+//{
+//  ink_assert(vio.op == VIO::READ && alternate.valid());
+//  vio.buffer.writer_for(abuf);
+//  vio.set_continuation(c);
+//  vio.ndone = 0;
+//  vio.nbytes = nbytes;
+//  vio.vc_server = this;
+//  ink_assert(c->mutex->thread_holding);
+//
+//  SetIOReadMessage msg;
+//  msg.nbytes = nbytes;
+//  msg.offset = 0;
+//  cluster_send_message(cs, CLUSTER_CACHE_DATA_READ_BEGIN, (char *) &msg, sizeof(msg), PRIORITY_HIGH);
+//  return &vio;
+//}
+//
+//VIO *
+//ClusterCacheVC::do_io_pread(Continuation *c, int64_t nbytes, MIOBuffer *abuf, int64_t offset)
+//{
+//  ink_assert(vio.op == VIO::READ && alternate.valid());
+//  vio.buffer.writer_for(abuf);
+//  vio.set_continuation(c);
+//  vio.ndone = 0;
+//  vio.nbytes = nbytes;
+//  vio.vc_server = this;
+//  ink_assert(c->mutex->thread_holding);
+//
+//  SetIOReadMessage msg;
+//  msg.nbytes = nbytes;
+//  msg.offset = offset;
+//  cluster_send_message(cs, CLUSTER_CACHE_DATA_READ_BEGIN, (char *) &msg, sizeof(msg), PRIORITY_HIGH);
+//  return &vio;
+//}
+//
+//VIO *
+//ClusterCacheVC::do_io_write(Continuation *c, int64_t nbytes, IOBufferReader *abuf, bool owner)
+//{
+//  ink_assert(vio.op == VIO::WRITE && alternate.valid());
+//  ink_assert(!owner);
+//  vio.buffer.reader_for(abuf);
+//  vio.set_continuation(c);
+//  vio.ndone = 0;
+//  vio.nbytes = nbytes;
+//  vio.vc_server = this;
+//  ink_assert(c->mutex->thread_holding);
+//
+//  if (nbytes < (1 << 20))
+//    priority = PRIORITY_MID;
+//  else
+//    priority = PRIORITY_LOW;
+//
+//  if (nbytes == INT64_MAX)
+//    trigger_remote_close = true;
+//
+//  CacheHTTPInfo *r = &alternate;
+//
+//  SetIOWriteMessage msg;
+//  msg.nbytes = nbytes;
+//  int len = r->marshal_length();
+//  msg.hdr_len = len;
+//
+//  Ptr<IOBufferData> data = new_IOBufferData(iobuffer_size_to_index(sizeof msg + len, MAX_BUFFER_SIZE_INDEX));
+//  memcpy((char *) data->data(), &msg, sizeof(msg));
+//
+//  char *p = (char *) data->data() + sizeof msg;
+//  int res = r->marshal(p, len);
+//  ink_assert(res >= 0);
+//
+//  ClusterBufferReader *reader = new_ClusterBufferReader();
+//  reader->blocks = new_IOBufferBlock(data, sizeof msg + len, 0);
+//  cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_BEGIN, reader, -1, PRIORITY_HIGH);
+//  return &vio;
+//}
+//
+//void
+//ClusterCacheVC::do_io_close(int alerrno)
+//{
+//  ink_debug_assert(mutex->thread_holding == this_ethread());
+//  int previous_closed = closed;
+//  closed = (alerrno == -1) ? 1 : -1;    // Stupid default arguments
+//  DDebug("cache_close", "do_io_close %p %d %d", this, alerrno, closed);
+//
+//  if (!remote_closed) {
+//    if (closed > 0 && vio.op == VIO::WRITE) {
+//      if (f.update && vio.ndone == 0) {
+//        //header only update
+//        //
+//        if (alternate.valid()) {
+//          SetIOCloseMessage msg;
+//          msg.h_len = alternate.marshal_length();
+//          msg.d_len = 0;
+//          msg.total_len = 0;
+//
+//          Ptr<IOBufferData> d = new_IOBufferData(
+//              iobuffer_size_to_index(sizeof msg + msg.h_len));
+//          char *data = d->data();
+//          memcpy(data, &msg, sizeof msg);
+//
+//          int res = alternate.marshal((char *) data + sizeof msg, msg.h_len);
+//          ink_assert(res >= 0 && res <= msg.h_len);
+//
+//          ClusterBufferReader *r = new_ClusterBufferReader();
+//          r->blocks = new_IOBufferBlock(d, sizeof msg + msg.h_len, 0);
+//
+//          if (cluster_send_message(cs, CLUSTER_CACHE_HEADER_ONLY_UPDATE, r, -1,
+//              PRIORITY_HIGH)) {
+//            free_ClusterBufferReader(r);
+//            goto Lfailed;
+//          }
+//        }
+//      } else if (total_len < vio.nbytes) {
+//        int flen = cache_config_target_fragment_size - sizeofDoc;
+//        int64_t avail = vio.buffer.reader()->read_avail();
+//        if (avail > vio.ntodo())
+//          avail = vio.ntodo();
+//        while (avail >= flen) {
+//          ClusterBufferReader *r = new_ClusterBufferReader();
+//          r->blocks = move_IOBufferBlockList(vio.buffer.reader(), flen);
+//          vio.ndone += flen;
+//          total_len += flen;
+//          avail -= flen;
+//
+//          if (cluster_send_message(cs, CLUSTER_CACHE_DATA_DONE_FUNCTION, NULL,
+//              0, priority)) {
+//            free_ClusterBufferReader(r);
+//            goto Lfailed;
+//          }
+//        }
+//      }
+//
+//      if (trigger_remote_close) {
+//        ink_assert(total_len == vio.nbytes);
+//        if (cluster_send_message(cs, CLUSTER_CACHE_DATA_CLOSE, &total_len, sizeof total_len, PRIORITY_HIGH))
+//          goto Lfailed;
+//      }
+//    }
+//
+//    if (closed < 0) {
+//      if (cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH))
+//        goto Lfailed;
+//    }
+//  }
+//Lfailed:
+//  if (!previous_closed && !recursive) {
+//    free_ClusterCacheVC(this);
+//  }
+//}
+//
+//void
+//ClusterCacheVC::reenable(VIO *avio)
+//{
+//  DDebug("cache_reenable", "reenable %p", this);
+//  (void) avio;
+//  ink_assert(avio->mutex->thread_holding);
+//  if (!trigger && !in_progress) {
+//#ifndef USELESS_REENABLES
+//    if (vio.op == VIO::READ) {
+//      if (vio.buffer.mbuf->max_read_avail() > vio.buffer.writer()->water_mark)
+//        ink_assert(!"useless reenable of cache read");
+//    } else if (!vio.buffer.reader()->read_avail())
+//      ink_assert(!"useless reenable of cache write");
+//#endif
+//    trigger = avio->mutex->thread_holding->schedule_imm_local(this);
+//  }
+//}
+//
+//void
+//ClusterCacheVC::reenable_re(VIO *avio)
+//{
+//  DDebug("cache_reenable", "reenable %p", this);
+//  (void) avio;
+//  ink_assert(avio->mutex->thread_holding);
+//
+//  if (!trigger) {
+//    if (!in_progress && !recursive) {
+//      handleEvent(EVENT_NONE, (void *) 0);
+//    } else if (!in_progress)
+//      trigger = avio->mutex->thread_holding->schedule_imm_local(this);
+//  }
+//}
+//
 int
 Vol::begin_read(CacheVC *cont)
 {

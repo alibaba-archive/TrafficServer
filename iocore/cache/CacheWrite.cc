@@ -2026,4 +2026,120 @@ SSDVol::aggWriteDone(int event, void *e)
    return EVENT_CONT;
 }
 #endif
+
+//int
+//ClusterCacheVC::handleWrite(int event, void *data)
+//{
+//  in_progress = true;
+//  PUSH_HANDLER(&ClusterCacheVC::openWriteWriteDone);
+//  ClusterBufferReader *reader = new_ClusterBufferReader();
+//
+//  if (!cluster_send_message(cs, CLUSTER_CACHE_DATA_DONE_FUNCTION, reader, -1, priority))
+//      return EVENT_CONT;
+//  free_ClusterBufferReader(reader);
+//  return calluser(VC_EVENT_ERROR);
+//}
+//
+//int
+//ClusterCacheVC::openWriteWriteDone(int event, void *data)
+//{
+//  // process the data
+//  POP_HANDLER;
+//  return handleEvent(event, data);
+//}
+//
+//int
+//ClusterCacheVC::openWriteStart(int event, void *data)
+//{
+//  // process the data
+//  if (event != CACHE_EVENT_OPEN_WRITE) {
+//    // prevent further trigger
+//    remote_closed = true;
+//    cluster_close_session(cs);
+//    _action.continuation->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, data);
+//    free_ClusterCacheVC(this);
+//    return EVENT_DONE;
+//  }
+//  SET_HANDLER(&ClusterCacheVC::openWriteMain);
+//  return callcont(CACHE_EVENT_OPEN_WRITE);
+//}
+//int
+//ClusterCacheVC::openWriteMain(int event, void *data)
+//{
+//  NOWARN_UNUSED(event);
+//  cancel_trigger();
+//  int called_user = 0;
+//  ink_debug_assert(!in_progress);
+//
+//Lagain:
+//  if (!vio.buffer.writer()) {
+//    if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
+//      return EVENT_DONE;
+//    if (!vio.buffer.writer())
+//      return EVENT_CONT;
+//  }
+//
+//  int64_t ntodo = vio.ntodo();
+//
+//  if (ntodo <= 0) {
+//    called_user = 1;
+//    if (calluser(VC_EVENT_WRITE_COMPLETE) == EVENT_DONE)
+//      return EVENT_DONE;
+//    ink_assert(!f.close_complete || !"close expected after write COMPLETE");
+//    if (ntodo <= 0)
+//      return EVENT_CONT;
+//  }
+//
+//  int64_t total_avail = vio.buffer.reader()->read_avail();
+//  int64_t avail = total_avail;
+//
+//  if (avail > vio.ntodo())
+//    avail = vio.ntodo();
+//
+//
+//  int flen = target_fragment_size();
+//  bool not_writing = (avail < flen && avail < vio.ntodo());
+//
+//  if (!called_user) {
+//    if (not_writing) {
+//      called_user = 1;
+//      if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
+//        return EVENT_DONE;
+//      goto Lagain;
+//    } else if (vio.ntodo() <= 0)
+//      goto Lagain;
+//  }
+//
+//  while (avail >= flen) {
+//    ClusterBufferReader *r = new_ClusterBufferReader();
+//    r->blocks = move_IOBufferBlockList(vio.buffer.reader(), flen);
+//    vio.ndone += flen;
+//    total_len += flen;
+//    avail -= flen;
+//
+//    if(cluster_send_message(cs, CLUSTER_CACHE_DATA_DONE_FUNCTION, r, -1, priority)) {
+//      free_ClusterBufferReader(r);
+//      if (calluser(VC_EVENT_ERROR) == EVENT_DONE)
+//        return EVENT_DONE;
+//      return EVENT_CONT;
+//    }
+//  }
+//
+//  if (vio.ntodo() > 0 && avail >= vio.ntodo()) {
+//    ClusterBufferReader *r = new_ClusterBufferReader();
+//    r->blocks = move_IOBufferBlockList(vio.buffer.reader(), avail);
+//    vio.ndone += avail;
+//    total_len += avail;
+//    // send the last data fragment
+//    if (cluster_send_message(cs, CLUSTER_CACHE_DATA_DONE_FUNCTION, r, -1, priority)) {
+//      free_ClusterBufferReader(r);
+//      if (calluser(VC_EVENT_ERROR) == EVENT_DONE)
+//        return EVENT_DONE;
+//      return EVENT_CONT;
+//    }
+//    goto Lagain;
+//  }
+//
+//  return EVENT_CONT;
+//}
 #endif

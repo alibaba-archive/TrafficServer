@@ -270,6 +270,8 @@ public:
   ProxyAllocator httpClientSessionAllocator;
   ProxyAllocator httpServerSessionAllocator;
   ProxyAllocator cacheVConnectionAllocator;
+  ProxyAllocator clusterCacheVCAllocator;
+  ProxyAllocator cacheContAllocator;
   ProxyAllocator openDirEntryAllocator;
   ProxyAllocator ramCacheCLFUSEntryAllocator;
   ProxyAllocator ramCacheLRUEntryAllocator;

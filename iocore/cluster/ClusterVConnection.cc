@@ -30,6 +30,11 @@
 #include "P_Cluster.h"
 ClassAllocator<ClusterVConnection> clusterVCAllocator("clusterVCAllocator");
 ClassAllocator<ByteBankDescriptor> byteBankAllocator("byteBankAllocator");
+ClassAllocator<ClusterCacheVC> clusterCacheVCAllocator("custerCacheVCAllocator");
+
+int ClusterCacheVC::size_to_init = -1;
+
+#define CLUSTER_WRITE_MIN_SIZE (1 << 17)
 
 ByteBankDescriptor *
 ByteBankDescriptor::ByteBankDescriptor_alloc(IOBufferBlock * iob)
@@ -632,5 +637,560 @@ ClusterVConnection::reenable(VIO * vio)
     ink_atomiclist_push(&ch->write_vcs_ready, (void *)this);
   }
 }
+
+
+
+ClusterCacheVC::ClusterCacheVC() {
+  size_to_init = sizeof(ClusterCacheVC) - (size_t) & ((ClusterCacheVC *) 0)->vio;
+  memset((char *) &vio, 0, size_to_init);
+}
+
+int
+ClusterCacheVC::handleRead(int event, void *data)
+{
+  ink_debug_assert(!in_progress && !remote_closed);
+  PUSH_HANDLER(&ClusterCacheVC::openReadReadDone);
+  if (vio.nbytes > 0 && total_len == 0) {
+    SetIOReadMessage msg;
+    msg.nbytes = vio.nbytes;
+    msg.offset = seek_to;
+    if (!cluster_send_message(cs, -CLUSTER_CACHE_DATA_READ_BEGIN, (char *) &msg,
+        sizeof(msg), PRIORITY_HIGH)) {
+      in_progress = true;
+      cluster_set_events(cs, RESPONSE_EVENT_NOTIFY_DEALER);
+      return EVENT_CONT;
+    }
+    goto Lfailed;
+  }
+
+  if (!cluster_send_message(cs, -CLUSTER_CACHE_DATA_READ_REENABLE, NULL, 0,
+      PRIORITY_HIGH)) {
+    in_progress = true;
+    cluster_set_events(cs, RESPONSE_EVENT_NOTIFY_DEALER);
+    return EVENT_CONT;
+  }
+  Lfailed:
+  cluster_close_session(cs);
+  return calluser(VC_EVENT_ERROR);
+}
+
+int
+ClusterCacheVC::openReadReadDone(int event, void *data)
+{
+  cancel_trigger();
+  ink_debug_assert(in_progress);
+  in_progress = false;
+  POP_HANDLER;
+  if (closed) {
+    if (!remote_closed)
+      cluster_send_message(cs, -CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+
+    free_ClusterCacheVC(this);
+    return EVENT_DONE;
+  }
+  switch (event) {
+    case CLUSTER_CACHE_DATA_ERROR:
+    {
+      ClusterCont *cc = (ClusterCont *) data;
+      ink_assert(cc && cc->data_len > 0);
+      remote_closed = true;
+      event = *(int *) cc->data->start();
+      break;
+    }
+    case CLUSTER_CACHE_DATA_READ_DONE:
+    {
+      ClusterCont *cc = (ClusterCont *) data;
+      ink_debug_assert(cc && d_len == 0);
+
+      d_len = cc->data_len;
+      total_len += d_len;
+      blocks = cc->data;
+      if (total_len >= vio.nbytes)
+        remote_closed = true;
+      break;
+    }
+    case CLUSTER_INTERNEL_ERROR:
+    default:
+      event = VC_EVENT_ERROR;
+      remote_closed = true;
+      break;
+  }
+  // recevied data from cluster
+
+  return handleEvent(event, data);
+}
+
+int
+ClusterCacheVC::openReadStart(int event, void *data)
+{
+  ink_assert(in_progress);
+  in_progress = false;
+  if (_action.cancelled) {
+    if (!remote_closed)
+      cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+    cluster_close_session(cs);
+    free_ClusterCacheVC(this);
+    return EVENT_DONE;
+  }
+  if (event != CACHE_EVENT_OPEN_READ) {
+    // prevent further trigger
+    remote_closed = true;
+    cluster_close_session(cs);
+    _action.continuation->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, data);
+    free_ClusterCacheVC(this);
+    return EVENT_DONE;
+  }
+
+  SET_HANDLER(&ClusterCacheVC::openReadMain);
+  callcont(CACHE_EVENT_OPEN_READ);
+  return EVENT_CONT;
+}
+int
+ClusterCacheVC::openReadMain(int event, void *e)
+{
+  NOWARN_UNUSED(e);
+  NOWARN_UNUSED(event);
+
+  cancel_trigger();
+  ink_assert(!in_progress);
+  if (event == VC_EVENT_ERROR || event == VC_EVENT_EOS) {
+    remote_closed = true;
+    cluster_close_session(cs);
+    return calluser(event);
+  }
+
+  int64_t bytes = d_len;
+  int64_t ntodo = vio.ntodo();
+  if (ntodo <= 0)
+    return EVENT_CONT;
+  if (vio.buffer.mbuf->max_read_avail() > vio.buffer.writer()->water_mark && vio.ndone) // initiate read of first block
+    return EVENT_CONT;
+  if (!blocks && vio.ntodo() > 0)
+    goto Lread;
+
+  if (bytes > vio.ntodo())
+    bytes = vio.ntodo();
+  vio.buffer.mbuf->append_block(blocks);
+  vio.ndone += bytes;
+  blocks = NULL;
+  d_len -= bytes;
+
+  if (vio.ntodo() <= 0)
+    return calluser(VC_EVENT_READ_COMPLETE);
+  else {
+    if (calluser(VC_EVENT_READ_READY) == EVENT_DONE)
+      return EVENT_DONE;
+    // we have to keep reading until we give the user all the
+    // bytes it wanted or we hit the watermark.
+    if (vio.ntodo() > 0 && !vio.buffer.writer()->high_water())
+      goto Lread;
+    return EVENT_CONT;
+  }
+Lread:
+  if (vio.ndone >= (int64_t) doc_len) {
+    // reached the end of the document and the user still wants more
+    return calluser(VC_EVENT_EOS);
+  }
+  // if the state machine calls reenable on the callback from the cache,
+  // we set up a schedule_imm event. The openReadReadDone discards
+  // EVENT_IMMEDIATE events. So, we have to cancel that trigger and set
+  // a new EVENT_INTERVAL event.
+  cancel_trigger();
+  return handleRead(event, e);
+}
+
+
+//int
+//ClusterCacheVC::handleWrite(int event, void *data)
+//{
+//  in_progress = true;
+//  PUSH_HANDLER(&ClusterCacheVC::openWriteWriteDone);
+//  ClusterBufferReader *reader = new_ClusterBufferReader();
+//
+//  if (!cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_DONE, reader, -1, priority))
+//      return EVENT_CONT;
+//  free_ClusterBufferReader(reader);
+//  return calluser(VC_EVENT_ERROR);
+//}
+//
+//int
+//ClusterCacheVC::openWriteWriteDone(int event, void *data)
+//{
+//  // process the data
+//  POP_HANDLER;
+//  return handleEvent(event, data);
+//}
+
+int
+ClusterCacheVC::openWriteStart(int event, void *data)
+{
+  ink_assert(in_progress);
+  in_progress = false;
+  if (_action.cancelled) {
+    if (!remote_closed)
+      cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+    cluster_close_session(cs);
+    free_ClusterCacheVC(this);
+    return EVENT_DONE;
+  }
+  // process the data
+  if (event != CACHE_EVENT_OPEN_WRITE) {
+    // prevent further trigger
+    remote_closed = true;
+    cluster_close_session(cs);
+    _action.continuation->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, data);
+    free_ClusterCacheVC(this);
+    return EVENT_DONE;
+  }
+  SET_HANDLER(&ClusterCacheVC::openWriteMain);
+  return callcont(CACHE_EVENT_OPEN_WRITE);
+}
+int
+ClusterCacheVC::openWriteMain(int event, void *data)
+{
+  NOWARN_UNUSED(event);
+  cancel_trigger();
+  ink_debug_assert(!in_progress);
+
+Lagain:
+  if (remote_closed) {
+    if (calluser(VC_EVENT_ERROR) == EVENT_DONE)
+      return EVENT_DONE;
+    return EVENT_CONT;
+  }
+
+  if (!vio.buffer.writer()) {
+    if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
+      return EVENT_DONE;
+    if (!vio.buffer.writer())
+      return EVENT_CONT;
+  }
+
+  int64_t ntodo = vio.ntodo();
+
+  if (ntodo <= 0) {
+    if (calluser(VC_EVENT_WRITE_COMPLETE) == EVENT_DONE)
+      return EVENT_DONE;
+    ink_assert(!"close expected after write COMPLETE");
+    if (vio.ntodo() <= 0)
+      return EVENT_CONT;
+  }
+
+  ntodo = vio.ntodo() + length;
+  int64_t total_avail = vio.buffer.reader()->read_avail();
+  int64_t avail = total_avail;
+  int64_t towrite = avail + length;
+  if (towrite > ntodo) {
+    avail -= (towrite - ntodo);
+    towrite = ntodo;
+  }
+
+  if (!blocks && towrite) {
+    blocks = vio.buffer.reader()->block;
+    offset = vio.buffer.reader()->start_offset;
+  }
+
+  if (avail > 0) {
+    vio.buffer.reader()->consume(avail);
+    vio.ndone += avail;
+    total_len += avail;
+  }
+
+  ink_assert(towrite >= 0);
+  length = towrite;
+
+  int flen = cache_config_target_fragment_size;
+
+  while (length >= flen) {
+    IOBufferBlock *r = clone_IOBufferBlockList(blocks, offset, flen);
+    blocks = iobufferblock_skip(blocks, &offset, &length, flen);
+
+    remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_DONE, r, -1,
+        priority);
+    if (remote_closed)
+      goto Lagain;
+
+    data_sent += flen;
+    Debug("data_sent", "sent bytes %d, reminds %"PRId64"", flen, length);
+  }
+  // for the read_from_writer work better,
+  // especailly the slow original
+  flen = CLUSTER_WRITE_MIN_SIZE;
+  while (vio.ntodo() > 0 && length >= flen) {
+    IOBufferBlock *r = clone_IOBufferBlockList(blocks, offset, flen);
+    blocks = iobufferblock_skip(blocks, &offset, &length, flen);
+
+    remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_DONE, r, -1,
+        priority);
+    if (remote_closed)
+      goto Lagain;
+
+    data_sent += flen;
+    Debug("data_sent", "sent bytes %d, reminds %"PRId64"", flen, length);
+  }
+
+  if (vio.ntodo() <= 0) {
+    if (length > 0) {
+      data_sent += length;
+      IOBufferBlock *r = clone_IOBufferBlockList(blocks, offset, length);
+      blocks = iobufferblock_skip(blocks, &offset, &length, length);
+      remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_DONE, r,
+          -1, priority);
+      if (remote_closed)
+        goto Lagain;
+      Debug("data_sent", "sent bytes done: %"PRId64", reminds %"PRId64"", data_sent, length);
+    }
+    ink_debug_assert(length == 0 && total_len == vio.nbytes);
+    if (calluser(VC_EVENT_WRITE_COMPLETE) == EVENT_DONE)
+      return EVENT_DONE;
+    return EVENT_CONT;
+  }
+
+  return calluser(VC_EVENT_WRITE_READY);
+}
+
+int
+ClusterCacheVC::removeEvent(int event, void *data)
+{
+  ink_debug_assert(in_progress);
+  in_progress = false;
+  remote_closed = true;
+  cluster_close_session(cs);
+  if (!_action.cancelled)
+    _action.continuation->handleEvent(event, data);
+  free_ClusterCacheVC(this);
+  return EVENT_DONE;
+}
+
+VIO *
+ClusterCacheVC::do_io_read(Continuation *c, int64_t nbytes, MIOBuffer *abuf)
+{
+  ink_assert(vio.op == VIO::READ && alternate.valid());
+  vio.buffer.writer_for(abuf);
+  vio.set_continuation(c);
+  vio.ndone = 0;
+  vio.nbytes = nbytes;
+  vio.vc_server = this;
+  seek_to = 0;
+  ink_assert(c->mutex->thread_holding);
+
+  ink_assert(!in_progress);
+  if (!trigger && !recursive)
+    trigger = c->mutex->thread_holding->schedule_imm_local(this);
+  return &vio;
+}
+
+VIO *
+ClusterCacheVC::do_io_pread(Continuation *c, int64_t nbytes, MIOBuffer *abuf, int64_t offset)
+{
+  ink_assert(vio.op == VIO::READ && alternate.valid());
+  vio.buffer.writer_for(abuf);
+  vio.set_continuation(c);
+  vio.ndone = 0;
+  vio.nbytes = nbytes;
+  vio.vc_server = this;
+  seek_to = offset;
+  ink_assert(c->mutex->thread_holding);
+
+  ink_assert(!in_progress);
+  if (!trigger && !recursive)
+    trigger = c->mutex->thread_holding->schedule_imm_local(this);
+  return &vio;
+}
+
+VIO *
+ClusterCacheVC::do_io_write(Continuation *c, int64_t nbytes, IOBufferReader *abuf, bool owner)
+{
+  ink_assert(vio.op == VIO::WRITE);
+  ink_assert(!owner && !in_progress);
+  vio.buffer.reader_for(abuf);
+  vio.set_continuation(c);
+  vio.ndone = 0;
+  vio.nbytes = nbytes;
+  doc_len = nbytes; // note: the doc_len maybe not the real length of the body
+  vio.vc_server = this;
+  ink_assert(c->mutex->thread_holding);
+
+  if (nbytes < (1 << 20))
+    priority = PRIORITY_MID;
+  else
+    priority = PRIORITY_LOW;
+
+  CacheHTTPInfo *r = &alternate;
+  SetIOWriteMessage msg;
+  msg.nbytes = nbytes;
+  int len = r->valid() ? r->marshal_length() : 0;
+  msg.hdr_len = len;
+  ink_debug_assert(total_len == 0);
+  ink_debug_assert((frag_type == CACHE_FRAG_TYPE_HTTP && len > 0) ||
+      (frag_type != CACHE_FRAG_TYPE_HTTP && len == 0));
+
+  if (len > 0) {
+    Ptr<IOBufferData> data = new_IOBufferData(iobuffer_size_to_index(sizeof msg + len, MAX_BUFFER_SIZE_INDEX));
+    memcpy((char *) data->data(), &msg, sizeof(msg));
+    char *p = (char *) data->data() + sizeof msg;
+    int res = r->marshal(p, len);
+    ink_assert(res >= 0);
+    IOBufferBlock *ret = new_IOBufferBlock(data, sizeof msg + len, 0);
+    ret->_buf_end = ret->_end;
+    remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_BEGIN, ret, -1, priority);
+  } else
+    remote_closed = cluster_send_message(cs, -CLUSTER_CACHE_DATA_WRITE_BEGIN, &msg, sizeof msg, priority);
+
+  if (!trigger && !recursive)
+    trigger = c->mutex->thread_holding->schedule_imm_local(this);
+  return &vio;
+}
+
+void
+ClusterCacheVC::do_io_close(int alerrno)
+{
+  ink_debug_assert(mutex->thread_holding == this_ethread());
+  int previous_closed = closed;
+  closed = (alerrno == -1) ? 1 : -1;    // Stupid default arguments
+  DDebug("cache_close", "do_io_close %p %d %d", this, alerrno, closed);
+
+  // special case: to cache 0 bytes document
+  if (f.force_empty)
+    closed = 1;
+
+  if (!remote_closed) {
+    if (closed > 0 && vio.op == VIO::WRITE) {
+      if ((f.update && vio.nbytes == 0) || f.force_empty) {
+        //header only update
+        //
+        if (frag_type == CACHE_FRAG_TYPE_HTTP) {
+          if (alternate.valid()) {
+            SetIOCloseMessage msg;
+            msg.h_len = alternate.marshal_length();
+            msg.d_len = 0;
+            msg.total_len = 0;
+
+            Ptr<IOBufferData> d = new_IOBufferData(
+                iobuffer_size_to_index(sizeof msg + msg.h_len));
+            char *data = d->data();
+            memcpy(data, &msg, sizeof msg);
+
+            int res = alternate.marshal((char *) data + sizeof msg, msg.h_len);
+            ink_assert(res >= 0 && res <= msg.h_len);
+
+            IOBufferBlock *ret = new_IOBufferBlock(d, sizeof msg + msg.h_len, 0);
+            ret->_buf_end = ret->_end;
+
+            remote_closed = cluster_send_message(cs,
+                -CLUSTER_CACHE_HEADER_ONLY_UPDATE, ret, -1, PRIORITY_HIGH);
+          } else
+            remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+        } else {
+          remote_closed = cluster_send_message(cs, -CLUSTER_CACHE_DATA_CLOSE,
+              &total_len, sizeof total_len, priority);
+        }
+
+        goto Lfree;
+      } else if ((total_len < vio.nbytes) || length > 0) {
+        int64_t ntodo = vio.ntodo() + length;
+        int64_t total_avail = vio.buffer.reader()->read_avail();
+        int64_t avail = total_avail;
+        int64_t towrite = avail + length;
+        if (towrite > ntodo) {
+          avail -= (towrite - ntodo);
+          towrite = ntodo;
+        }
+
+        if (!blocks && towrite) {
+          blocks = vio.buffer.reader()->block;
+          offset = vio.buffer.reader()->start_offset;
+        }
+
+        if (avail > 0) {
+          vio.buffer.reader()->consume(avail);
+          vio.ndone += avail;
+          total_len += avail;
+        }
+
+        if (vio.ntodo() > 0) {
+          Warning("writer closed success but still want more data");
+          remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0,
+                        priority);
+          goto Lfree;
+        }
+
+        length = towrite;
+        ink_debug_assert(total_len == vio.nbytes);
+        int flen = cache_config_target_fragment_size;
+        while (length >= flen) {
+          IOBufferBlock *ret = clone_IOBufferBlockList(blocks, offset, flen);
+          blocks = iobufferblock_skip(blocks, &offset, &length, flen);
+
+          remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_DONE, ret,
+              -1, priority);
+          if (remote_closed)
+            goto Lfree;
+
+          data_sent += flen;
+          Debug("data_sent", "sent bytes %d, reminds %"PRId64"", flen, length);
+        }
+
+        if (length > 0) {
+          data_sent += length;
+          IOBufferBlock *ret = clone_IOBufferBlockList(blocks, offset, flen);
+          blocks = iobufferblock_skip(blocks, &offset, &length, length);
+          remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_WRITE_DONE, ret, -1,
+              priority);
+          if (remote_closed)
+            goto Lfree;
+          Debug("data_sent", "sent bytes done: %"PRId64", reminds %"PRId64"", data_sent, length);
+        }
+      }
+
+      if (doc_len != vio.nbytes) {
+        // for trunk
+        ink_debug_assert(total_len == vio.nbytes && length == 0);
+        remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_CLOSE,
+            &total_len, sizeof total_len, priority);
+        goto Lfree;
+      }
+      ink_debug_assert(data_sent == total_len);
+    }
+
+    if (closed < 0 && vio.op == VIO::WRITE)
+      remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+
+    if (vio.op == VIO::READ && !in_progress) {
+      remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+    }
+  }
+Lfree:
+  if (!previous_closed && !recursive && !in_progress) {
+    free_ClusterCacheVC(this);
+  }
+}
+
+void
+ClusterCacheVC::reenable(VIO *avio)
+{
+  DDebug("cache_reenable", "reenable %p, trigger %p, in_progress %d", this, trigger, in_progress);
+  (void) avio;
+  ink_assert(avio->mutex->thread_holding);
+  if (!trigger && !in_progress) {
+    trigger = avio->mutex->thread_holding->schedule_imm_local(this);
+  }
+}
+
+void
+ClusterCacheVC::reenable_re(VIO *avio)
+{
+  DDebug("cache_reenable", "reenable %p", this);
+  (void) avio;
+  ink_assert(avio->mutex->thread_holding);
+
+  if (!trigger) {
+    if (!in_progress && !recursive) {
+      handleEvent(EVENT_NONE, (void *) 0);
+    } else if (!in_progress)
+      trigger = avio->mutex->thread_holding->schedule_imm_local(this);
+  }
+}
+
 
 // End of ClusterVConnection.cc

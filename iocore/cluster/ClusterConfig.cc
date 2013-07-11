@@ -28,6 +28,9 @@
 ****************************************************************************/
 
 #include "P_Cluster.h"
+#include "machine.h"
+#include "connection.h"
+
 // updated from the cluster port configuration variable
 int cluster_port = DEFAULT_CLUSTER_PORT_NUMBER;
 
@@ -157,15 +160,28 @@ ClusterAccept::ClusterAcceptMachine(NetVConnection * NetVC)
 static void
 make_cluster_connections(MachineList * l, MachineList * old)
 {
-  NOWARN_UNUSED(old);
   //
   // Connect to all new machines.
   //
-  uint32_t ip = this_cluster_machine()->ip;
-  int num_connections = this_cluster_machine()->num_connections;
+  //uint32_t ip = this_cluster_machine()->ip;
+  //int num_connections = this_cluster_machine()->num_connections;
 
+  int i;
+  int k;
+  ClusterMachine *m;
   if (l) {
-    for (int i = 0; i < l->n; i++) {
+    for (i = 0; i < l->n; i++) {
+      struct in_addr in;
+      in.s_addr = l->machine[i].ip;
+      m = add_machine(l->machine[i].ip, l->machine[i].port);
+      if (m != NULL) {
+        machine_make_connections(m);
+      }
+
+      Debug(CL_NOTE, "do connect hostname: %u.%u.%u.%u:%d, %s, g_machine_count: %d\n",
+          DOT_SEPARATED(l->machine[i].ip), l->machine[i].port, inet_ntoa(in), g_machine_count);
+
+    /*
 #ifdef LOCAL_CLUSTER_TEST_MODE
       if (ip < l->machine[i].ip || (ip == l->machine[i].ip && (cluster_port < l->machine[i].port))) {
 #else
@@ -173,6 +189,48 @@ make_cluster_connections(MachineList * l, MachineList * old)
 #endif
         for (int j = 0; j < num_connections; j++) {
           clusterProcessor.connect(l->machine[i].ip, l->machine[i].port, j);
+        }
+      }
+    }
+    */
+    }
+  }
+
+  if (old == NULL) {
+    return;
+  }
+
+  //found down machines
+  if (l == NULL) {
+    for (i = 0; i < old->n; i++) {
+      struct in_addr in;
+      in.s_addr = old->machine[i].ip;
+      Debug(CL_NOTE, "stop connect hostname: %u.%u.%u.%u:%d, %s\n",
+          DOT_SEPARATED(old->machine[i].ip), old->machine[i].port, inet_ntoa(in));
+      m = get_machine(old->machine[i].ip, old->machine[i].port);
+      if (m != NULL) {
+        machine_stop_reconnect(m);
+      }
+    }
+  }
+  else {
+    for (i = 0; i < old->n; i++) {
+      for (k = 0; k < l->n; k++) {
+        if (l->machine[k].ip == old->machine[i].ip &&
+            l->machine[k].port == old->machine[i].port)
+        {
+          break;
+        }
+      }
+
+      if (k == l->n) {  //not found, machine down
+        struct in_addr in;
+        in.s_addr = old->machine[i].ip;
+        Debug(CL_NOTE, "stop connect hostname: %u.%u.%u.%u:%d, %s\n",
+            DOT_SEPARATED(old->machine[i].ip), old->machine[i].port, inet_ntoa(in));
+        m = get_machine(old->machine[i].ip, old->machine[i].port);
+        if (m != NULL) {
+          machine_stop_reconnect(m);
         }
       }
     }
@@ -192,6 +250,7 @@ machine_config_change(const char *name, RecDataT data_type, RecData data, void *
   // This may include front-end load redirectors, machines going
   // up or coming down etc.
   //
+
   char *filename = (char *) data.rec_string;
   MachineList *l = read_MachineList(filename);
   MachineList *old = NULL;
@@ -295,8 +354,11 @@ configuration_add_machine(ClusterConfiguration * c, ClusterMachine * m)
   // Build a new cluster configuration with the new machine.
   // Machines are stored in ip sorted order.
   //
+  /*
   EThread *thread = this_ethread();
   ProxyMutex *mutex = thread->mutex;
+  */
+
   int i = 0;
   ClusterConfiguration *cc = NEW(new ClusterConfiguration(*c));
 
@@ -323,7 +385,7 @@ configuration_add_machine(ClusterConfiguration * c, ClusterMachine * m)
 
   build_cluster_hash_table(cc);
   INK_MEMORY_BARRIER;           // commit writes before freeing old hash table
-  CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CONFIGURATION_CHANGES_STAT);
+  //CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CONFIGURATION_CHANGES_STAT);
 
   free_configuration(c, cc);
   return cc;
@@ -332,8 +394,10 @@ configuration_add_machine(ClusterConfiguration * c, ClusterMachine * m)
 ClusterConfiguration *
 configuration_remove_machine(ClusterConfiguration * c, ClusterMachine * m)
 {
+  /*
   EThread *thread = this_ethread();
   ProxyMutex *mutex = thread->mutex;
+  */
 
   //
   // Build a new cluster configuration without a machine
@@ -354,7 +418,7 @@ configuration_remove_machine(ClusterConfiguration * c, ClusterMachine * m)
 
   build_cluster_hash_table(cc);
   INK_MEMORY_BARRIER;           // commit writes before freeing old hash table
-  CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CONFIGURATION_CHANGES_STAT);
+  //CLUSTER_INCREMENT_DYN_STAT(CLUSTER_CONFIGURATION_CHANGES_STAT);
 
   free_configuration(c, cc);
   return cc;

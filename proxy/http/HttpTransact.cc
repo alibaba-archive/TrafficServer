@@ -1820,7 +1820,10 @@ HttpTransact::DecideCacheLookup(State* s)
       }
       ink_debug_assert(s->cache_info.lookup_url->valid() == true);
     }
-
+    if ((s->method != HTTP_WKSIDX_GET) && (s->method == HTTP_WKSIDX_DELETE || s->method == HTTP_WKSIDX_PURGE)) {
+      s->cache_info.action = CACHE_DO_DELETE;
+      TRANSACT_RETURN(PROXY_CACHE_DELETE, NULL);
+    }
     TRANSACT_RETURN(CACHE_LOOKUP, NULL);
   } else {
     ink_assert(s->cache_info.action != CACHE_DO_LOOKUP && s->cache_info.action != CACHE_DO_SERVE);
@@ -7060,6 +7063,17 @@ HttpTransact::delete_all_document_alternates_and_return(State* s, bool cache_hit
   return false;
 }
 
+void
+HttpTransact::handle_all_document_alternate_removed(State *s)
+{
+  s->hdr_info.trust_response_cl = true;
+  bool cache_hit = s->cache_info.remove_result == CACHE_EVENT_REMOVE ? true : false;
+  SET_VIA_STRING(VIA_CACHE_FILL_ACTION, VIA_CACHE_DELETED);
+  build_response(s, &s->hdr_info.client_response, s->client_info.http_version,
+      cache_hit ? HTTP_STATUS_OK : HTTP_STATUS_NOT_FOUND);
+  s->cache_info.action = CACHE_DO_NO_ACTION;
+  s->next_action = HttpTransact::PROXY_INTERNAL_CACHE_NOOP;
+}
 bool
 HttpTransact::does_client_request_permit_cached_response(const OverridableHttpConfigParams *p, CacheControlResult *c,
                                                          HTTPHdr *h, char *via_string)
