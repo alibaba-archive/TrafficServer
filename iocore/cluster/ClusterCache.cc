@@ -80,6 +80,11 @@ static int cluster_sequence_number = 1;
 
 static unsigned int new_cache_sequence_number();
 
+#ifdef DEBUG
+int64_t num_of_cachecontinuation = 0;
+int64_t num_of_cluster_cachevc = 0;
+#endif
+
 #define DOT_SEPARATED(_x)                             \
 ((unsigned char*)&(_x))[0], ((unsigned char*)&(_x))[1],   \
   ((unsigned char*)&(_x))[2], ((unsigned char*)&(_x))[3]

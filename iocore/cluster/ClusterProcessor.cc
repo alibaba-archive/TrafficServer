@@ -464,6 +464,22 @@ static int machine_change_notify(ClusterMachine * m)
   return result;
 }
 
+#ifdef DEBUG
+struct ClusterCacheVCPrinter: public Continuation
+{
+  ClusterCacheVCPrinter() {
+    mutex = new_ProxyMutex();
+    SET_HANDLER(&ClusterCacheVCPrinter::mainEvent);
+  }
+
+  int mainEvent(int event, void *data) {
+    fprintf(stderr, "++++++++ ClusterCacheVC = %"PRId64" ++++ ClusterCacheContinuation = %"PRId64"+++++\n",
+        num_of_cluster_cachevc, num_of_cachecontinuation);
+    return EVENT_CONT;
+  }
+};
+#endif
+
 int
 ClusterProcessor::init()
 {
@@ -807,6 +823,9 @@ ClusterProcessor::init()
   cluster_global_init(cluster_main_handler, machine_change_notify);
   int result = 0;
 
+#ifdef DEBUG
+  eventProcessor.schedule_every(new ClusterCacheVCPrinter, HRTIME_SECONDS(10));
+#endif
   if (cluster_type == 1) {
     cache_clustering_enabled = 1;
     Note("cache clustering enabled");
@@ -950,7 +969,6 @@ ClusterProcessor::compute_cluster_mode()
     }
   }
 }
-
 
 void cluster_main_handler(ClusterSession session, void *context,
     const int func_id, IOBufferBlock *data, const int data_len)
