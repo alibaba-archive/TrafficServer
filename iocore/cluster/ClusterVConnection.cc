@@ -683,7 +683,7 @@ ClusterCacheVC::openReadReadDone(int event, void *data)
   POP_HANDLER;
   if (closed) {
     if (!remote_closed)
-      cluster_send_message(cs, -CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+      cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
 
     free_ClusterCacheVC(this);
     return EVENT_DONE;

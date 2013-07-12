@@ -1394,23 +1394,13 @@ CacheVC::openWriteMain(int event, Event *e)
   NOWARN_UNUSED(e);
   NOWARN_UNUSED(event);
   cancel_trigger();
-  int called_user = 0;
   ink_debug_assert(!is_io_in_progress());
-Lagain:
-  if (!vio.buffer.writer()) {
-    if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
-      return EVENT_DONE;
-    if (!vio.buffer.writer())
-      return EVENT_CONT;
-  }
-  if (vio.ntodo() <= 0) {
-    called_user = 1;
-    if (calluser(VC_EVENT_WRITE_COMPLETE) == EVENT_DONE)
-      return EVENT_DONE;
-    ink_assert(!f.close_complete || !"close expected after write COMPLETE");
-    if (vio.ntodo() <= 0)
-      return EVENT_CONT;
-  }
+
+  if (!vio.buffer.writer())
+    return calluser(VC_EVENT_WRITE_READY);
+  if (vio.ntodo() <= 0)
+    return calluser(VC_EVENT_WRITE_COMPLETE);
+
   int64_t ntodo = (int64_t)(vio.ntodo() + length);
   int64_t total_avail = vio.buffer.reader()->read_avail();
   int64_t avail = total_avail;
@@ -1438,17 +1428,12 @@ Lagain:
   else
     write_len = target_fragment_size();
   bool not_writing = towrite != ntodo && towrite < target_fragment_size();
-  if (!called_user) {
-    if (not_writing) {
-      called_user = 1;
-      if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
-        return EVENT_DONE;
-      goto Lagain;
-    } else if (vio.ntodo() <= 0)
-      goto Lagain;
-  }
+
   if (not_writing)
-    return EVENT_CONT;
+    return calluser(VC_EVENT_WRITE_READY);
+  else if (vio.ntodo() <= 0)
+    return calluser(VC_EVENT_WRITE_COMPLETE);
+
   if (towrite == ntodo && f.close_complete) {
     closed = 1;
     SET_HANDLER(&CacheVC::openWriteClose);
