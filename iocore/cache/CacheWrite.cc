@@ -1145,12 +1145,7 @@ CacheVC::openWriteCloseDir(int event, Event *e)
       default: CACHE_INCREMENT_DYN_STAT(cache_three_plus_plus_fragment_document_count_stat); break;
     }
   }
-  if (f.close_complete) {
-    recursive++;
-    ink_debug_assert(!vol || this_ethread() != vol->mutex->thread_holding);
-    vio._cont->handleEvent(VC_EVENT_WRITE_COMPLETE, (void *) &vio);
-    recursive--;
-  }
+
   return free_CacheVC(this);
 }
 
@@ -1397,7 +1392,8 @@ CacheVC::openWriteMain(int event, Event *e)
   ink_debug_assert(!is_io_in_progress());
 
   if (!vio.buffer.writer())
-    return calluser(VC_EVENT_WRITE_READY);
+    if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
+      return EVENT_DONE;
   if (vio.ntodo() <= 0)
     return calluser(VC_EVENT_WRITE_COMPLETE);
 
@@ -1429,16 +1425,16 @@ CacheVC::openWriteMain(int event, Event *e)
     write_len = target_fragment_size();
   bool not_writing = towrite != ntodo && towrite < target_fragment_size();
 
-  if (not_writing)
-    return calluser(VC_EVENT_WRITE_READY);
-  else if (vio.ntodo() <= 0)
+  if (not_writing) {
+    if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
+      return EVENT_DONE;
+    if (vio.ntodo() > 0)
+      return EVENT_CONT;
+  }
+
+  if (vio.ntodo() <= 0)
     return calluser(VC_EVENT_WRITE_COMPLETE);
 
-  if (towrite == ntodo && f.close_complete) {
-    closed = 1;
-    SET_HANDLER(&CacheVC::openWriteClose);
-    return openWriteClose(EVENT_NONE, NULL);
-  }
   SET_HANDLER(&CacheVC::openWriteWriteDone);
   return do_write_lock_call();
 }
