@@ -805,12 +805,13 @@ ClusterProcessor::init()
   }
   g_server_port = cluster_port;
   cluster_global_init(cluster_main_handler, machine_change_notify);
-  int result = connection_manager_init(this_cluster_machine()->ip, cluster_port);
+  int result = 0;
 
   if (cluster_type == 1) {
     cache_clustering_enabled = 1;
     Note("cache clustering enabled");
     compute_cluster_mode();
+    result = connection_manager_init(this_cluster_machine()->ip, cluster_port);
   } else {
     cache_clustering_enabled = 0;
     Note("cache clustering disabled");
