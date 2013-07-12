@@ -80,7 +80,7 @@ static int cluster_sequence_number = 1;
 
 static unsigned int new_cache_sequence_number();
 
-#ifdef DEBUG
+#ifdef CLUSTER_STAT_PRINT
 int64_t num_of_cachecontinuation = 0;
 int64_t num_of_cluster_cachevc = 0;
 #endif

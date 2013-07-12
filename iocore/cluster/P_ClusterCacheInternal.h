@@ -45,7 +45,7 @@
 #define CACHE_RETRY_PERIOD              HRTIME_MSECONDS(10)
 #define REMOTE_CONNECT_HASH             (16 * 1024)
 
-#if DEBUG
+#ifdef CLUSTER_STAT_PRINT
 extern int64_t num_of_cachecontinuation;
 #endif
 //
@@ -404,7 +404,7 @@ extern ClassAllocator<CacheContinuation> cacheContAllocator;
 
 inline CacheContinuation *
 new_CacheCont(EThread *t) {
-#ifdef DEBUG
+#ifdef CLUSTER_STAT_PRINT
   ink_atomic_increment(&num_of_cachecontinuation, 1);
 #endif
   ink_assert(t == this_ethread());
@@ -417,7 +417,7 @@ new_CacheCont(EThread *t) {
 
 inline void
 free_CacheCont(CacheContinuation *c) {
-#ifdef DEBUG
+#ifdef CLUSTER_STAT_PRINT
   ink_atomic_increment(&num_of_cachecontinuation, -1);
 #endif
   ink_assert(c->magicno == (int) c->MagicNo && !c->expect_next);

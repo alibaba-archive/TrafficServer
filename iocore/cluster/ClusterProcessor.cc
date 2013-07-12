@@ -464,7 +464,7 @@ static int machine_change_notify(ClusterMachine * m)
   return result;
 }
 
-#ifdef DEBUG
+#ifdef CLUSTER_STAT_PRINT
 struct ClusterCacheVCPrinter: public Continuation
 {
   ClusterCacheVCPrinter() {
