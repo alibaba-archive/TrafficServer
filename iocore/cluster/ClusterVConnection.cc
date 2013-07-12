@@ -681,13 +681,7 @@ ClusterCacheVC::openReadReadDone(int event, void *data)
   ink_debug_assert(in_progress);
   in_progress = false;
   POP_HANDLER;
-  if (closed) {
-    if (!remote_closed)
-      cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
 
-    free_ClusterCacheVC(this);
-    return EVENT_DONE;
-  }
   switch (event) {
     case CLUSTER_CACHE_DATA_ERROR:
     {
@@ -714,6 +708,14 @@ ClusterCacheVC::openReadReadDone(int event, void *data)
       event = VC_EVENT_ERROR;
       remote_closed = true;
       break;
+  }
+
+  if (closed) {
+    if (!remote_closed)
+      cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+
+    free_ClusterCacheVC(this);
+    return EVENT_DONE;
   }
   // recevied data from cluster
 

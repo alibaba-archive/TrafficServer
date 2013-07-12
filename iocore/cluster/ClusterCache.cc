@@ -2285,6 +2285,7 @@ CacheContinuation::VCdataWrite(int event, void *data)
 
       if (writer_aborted) {
         // tell the remote side not send anymore
+        ink_debug_assert(!"why the writer will be aborted because of no event");
         cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
         break;
       }
@@ -2420,6 +2421,7 @@ CacheContinuation::VCdataWrite(int event, void *data)
       cache_vc->do_io_close(EHTTP_ERROR);
       cache_vc = NULL;
       vio = NULL;
+      ink_debug_assert(!"why the write is in error!");
       // delay free
       if (expect_next)
         return EVENT_CONT;
