@@ -15,6 +15,10 @@ MappingDirective::MappingDirective(const char *name) :
 }
 
 
+MapDirective::MapDirective(const char *name) : MappingDirective(name)
+{
+}
+
 MapDirective::MapDirective() : MappingDirective(DIRECTVIE_NAME_MAP)
 {
 }
@@ -38,5 +42,9 @@ DirectiveParams *RedirectDirective::newDirectiveParams(const int lineNo,
 {
   return new RedirectParams(lineNo, lineStr, lineLen, parent, this,
       paramStr, paramLen, bBlock);
+}
+
+RegexMapDirective::RegexMapDirective() : MapDirective(DIRECTVIE_NAME_REGEX_MAP)
+{
 }
 

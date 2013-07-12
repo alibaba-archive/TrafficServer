@@ -16,6 +16,7 @@ class MappingDirective : public RemapDirective {
 class MapDirective : public MappingDirective {
   public:
     MapDirective();
+    MapDirective(const char *name);
     ~MapDirective() {}
 
     DirectiveParams *newDirectiveParams(const int lineNo,
@@ -32,6 +33,13 @@ class RedirectDirective : public MappingDirective {
     DirectiveParams *newDirectiveParams(const int lineNo,
         const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
+};
+
+//for backward compatibility
+class RegexMapDirective : public MapDirective {
+  public:
+    RegexMapDirective();
+    ~RegexMapDirective() {}
 };
 
 #endif

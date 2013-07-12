@@ -22,6 +22,7 @@
 #define DIRECTVIE_NAME_HTTPS        "https"
 #define DIRECTVIE_NAME_TUNNEL       "tunnel"
 #define DIRECTVIE_NAME_MAP          "map"
+#define DIRECTVIE_NAME_REGEX_MAP    "regex_map"
 #define DIRECTVIE_NAME_REDIRECT     "redirect"
 #define DIRECTVIE_NAME_PLUGIN       "plugin"
 #define DIRECTVIE_NAME_PLUGIN_PARAM "param"

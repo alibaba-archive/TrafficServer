@@ -44,6 +44,7 @@ void RemapParser::init()
   _rootDirective->_children[index++] = new SchemeDirective(DIRECTVIE_NAME_HTTPS);
   _rootDirective->_children[index++] = new SchemeDirective(DIRECTVIE_NAME_TUNNEL);
   _rootDirective->_children[index++] = new MapDirective();
+  _rootDirective->_children[index++] = new RegexMapDirective();  //for backward compatibility
   _rootDirective->_children[index++] = new RedirectDirective();
   _rootDirective->_childrenCount = index;
 }
