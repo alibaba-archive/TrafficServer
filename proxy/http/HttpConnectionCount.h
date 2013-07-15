@@ -27,17 +27,35 @@
 
 #ifndef _HTTP_CONNECTION_COUNT_H_
 
+#define IP_HASH_TABLE_SIZE   10949
+
 /**
  * Singleton class to keep track of the number of connections per host
  */
 class ConnectionCount
 {
+  struct ConnAddr {
+    IpEndpoint _addr;
+    int _count;
+
+    static int compare(const void *p1, const void *p2) {
+      return ats_ip_addr_cmp(&((ConnAddr *)p1)->_addr, &((ConnAddr *)p2)->_addr);
+    }
+  };
+ 
+  struct IpHashBucket {
+    ink_mutex _mutex; //use for locking this bucket
+    ConnAddr *_addrs; //ip address items
+    int _allocSize;   //alloc count
+    int _count;       //real count
+  };
+
 public:
   /**
    * Static method to get the instance of the class
    * @return Returns a pointer to the instance of the class
    */
-  static ConnectionCount *getInstance() {
+  inline static ConnectionCount *getInstance() {
     return &_connectionCount;
   }
 
@@ -46,51 +64,45 @@ public:
    * @param ip IP address of the host
    * @return Number of connections
    */
-  int getCount(const IpEndpoint& addr) {
-    ink_mutex_acquire(&_mutex);
-    int count = _hostCount.get(ConnAddr(addr));
-    ink_mutex_release(&_mutex);
-    return count;
-  }
+  int getCount(const IpEndpoint& addr);
 
   /**
    * Change (increment/decrement) the connection count
    * @param ip IP address of the host
    * @param delta Default is +1, can be set to negative to decrement
    */
-  void incrementCount(const IpEndpoint& addr, const int delta = 1) {
-    ConnAddr caddr(addr);
-    ink_mutex_acquire(&_mutex);
-    int count = _hostCount.get(caddr);
-    _hostCount.put(caddr, count + delta);
-    ink_mutex_release(&_mutex);
+  void incrementCount(const IpEndpoint& addr, const int delta = 1);
+
+protected:
+  inline ConnAddr *find(IpHashBucket *pBucket, const IpEndpoint& addr)
+  {
+    ConnAddr target;
+
+    if (pBucket->_count == 0) {
+      return NULL;
+    }
+    if (pBucket->_count == 1) {
+      if (ats_ip_addr_eq(&pBucket->_addrs->_addr, &addr)) {
+        return pBucket->_addrs;
+      }
+      else {
+        return NULL;
+      }
+    }
+
+    target._addr = addr;
+    return (ConnAddr *)bsearch(&target, pBucket->_addrs, pBucket->_count,
+        sizeof(ConnAddr), ConnAddr::compare);
   }
-
-  struct ConnAddr {
-    IpEndpoint _addr;
-
-    ConnAddr() { ink_zero(_addr); }
-    ConnAddr(int x) { ink_release_assert(x == 0); ink_zero(_addr); }
-    ConnAddr(const IpEndpoint& addr) : _addr(addr) { }
-    operator bool() { return ats_is_ip(&_addr); }
-  };
-  
-  class ConnAddrHashFns {
-  public:
-      static uintptr_t hash(ConnAddr& addr) { return (uintptr_t) ats_ip_hash(&addr._addr.sa); }
-      static int equal(ConnAddr& a, ConnAddr& b) { return ats_ip_addr_eq(&a._addr, &b._addr); }
-  };
 
 private:
   // Hide the constructor and copy constructor
-  ConnectionCount() {
-    ink_mutex_init(&_mutex, "ConnectionCountMutex");
-  }
+  ConnectionCount();
   ConnectionCount(const ConnectionCount & x) { NOWARN_UNUSED(x); }
 
   static ConnectionCount _connectionCount;
-  HashMap<ConnAddr, ConnAddrHashFns, int> _hostCount;
-  ink_mutex _mutex;
+  IpHashBucket *_ipTable;
 };
 
 #endif
+

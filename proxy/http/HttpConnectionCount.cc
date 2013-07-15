@@ -25,3 +25,69 @@
 
 
 ConnectionCount ConnectionCount::_connectionCount;
+
+ConnectionCount::ConnectionCount()
+{
+  int bytes;
+  IpHashBucket *pBucket;
+  IpHashBucket *pEnd;
+
+  bytes = sizeof(IpHashBucket) * IP_HASH_TABLE_SIZE;
+  _ipTable = (IpHashBucket *)ats_malloc(bytes);
+  memset(_ipTable, 0, bytes);
+
+  pEnd = _ipTable + IP_HASH_TABLE_SIZE;
+  for (pBucket=_ipTable; pBucket<pEnd; pBucket++) {
+    ink_mutex_init(&pBucket->_mutex, "ConnectionCountMutex");
+  }
+}
+
+int ConnectionCount::getCount(const IpEndpoint& addr)
+{
+  IpHashBucket *pBucket;
+  ConnAddr *found;
+  int count;
+
+  pBucket = _ipTable + ats_ip_hash(&addr.sa) % IP_HASH_TABLE_SIZE;
+  ink_mutex_acquire(&pBucket->_mutex);
+  found = find(pBucket, addr);
+  count = found != NULL ? found->_count : 0;
+  ink_mutex_release(&pBucket->_mutex);
+  return count;
+}
+
+void ConnectionCount::incrementCount(const IpEndpoint& addr, const int delta)
+{
+  IpHashBucket *pBucket;
+  ConnAddr *found;
+
+  pBucket = _ipTable + ats_ip_hash(&addr.sa) % IP_HASH_TABLE_SIZE;
+  ink_mutex_acquire(&pBucket->_mutex);
+  found = find(pBucket, addr);
+  if (found != NULL) {
+    found->_count += delta;
+  }
+  else {
+    if (pBucket->_allocSize <= pBucket->_count) {
+      if (pBucket->_allocSize == 0) {
+        pBucket->_allocSize = 8;
+      }
+      else {
+        pBucket->_allocSize *= 2;
+      }
+      pBucket->_addrs = (ConnAddr *)ats_realloc(pBucket->_addrs,
+          sizeof(ConnAddr) * pBucket->_allocSize);
+    }
+
+    found = pBucket->_addrs + pBucket->_count;
+    found->_count = delta;
+    found->_addr = addr;
+    pBucket->_count++;
+    if (pBucket->_count > 1) {
+      qsort(pBucket->_addrs, pBucket->_count, sizeof(ConnAddr),
+          ConnAddr::compare);
+    }
+  }
+  ink_mutex_release(&pBucket->_mutex);
+}
+
