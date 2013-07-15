@@ -946,7 +946,7 @@ int machine_make_connections(ClusterMachine *m)
   int result;
   SocketContext *pSockContext;
 
-  if ((result=init_machine_sessions(m)) != 0) {
+  if ((result=init_machine_sessions(m, false)) != 0) {
     return result;
   }
 
@@ -1081,6 +1081,7 @@ int connection_manager_init(const unsigned int my_ip, const int port)
   }
 
   if (my_ip > 0) {
+    g_my_machine_ip = my_ip;
     add_machine(my_ip, port);
   }
 

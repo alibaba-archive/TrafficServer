@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <assert.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include "logger.h"
@@ -95,7 +94,7 @@ inline static void release_in_message(SocketContext *pSockContext,
 #endif
 }
 
-int init_machine_sessions(ClusterMachine *machine)
+int init_machine_sessions(ClusterMachine *machine, const bool bMyself)
 {
   int result;
   int sessions_bytes;
@@ -119,7 +118,7 @@ int init_machine_sessions(ClusterMachine *machine)
     return 0;
   }
 
-  pMachineSessions->is_myself = (machine_id == g_my_machine_id);
+  pMachineSessions->is_myself = bMyself;
   pMachineSessions->ip = machine->ip;
 
 	sessions_bytes = sizeof(SessionEntry) * MAX_SESSION_COUNT_PER_MACHINE;
@@ -146,8 +145,8 @@ int init_machine_sessions(ClusterMachine *machine)
   pLockEnd = pMachineSessions->locks + SESSION_LOCK_COUNT_PER_MACHINE;
   for (pLock=pMachineSessions->locks; pLock<pLockEnd; pLock++) {
     if ((result=init_pthread_lock(pLock)) != 0) {
-      return result;
       pthread_mutex_unlock(&session_lock);
+      return result;
     }
   }
 
@@ -173,7 +172,7 @@ int session_init()
 	memset(all_sessions, 0, bytes);
 
   myMachine = g_machines + g_my_machine_index;
-  if ((result=init_machine_sessions(myMachine)) != 0) {
+  if ((result=init_machine_sessions(myMachine, true)) != 0) {
     return result;
   }
 
@@ -182,7 +181,9 @@ int session_init()
   }
 
   g_my_machine_id = get_session_machine_index(myMachine->ip);
-  logInfo("g_my_machine_id: %d", g_my_machine_id);
+  logInfo("g_my_machine_id: %d, g_my_machine_index: %u",
+      g_my_machine_id, g_my_machine_index);
+
 	return 0;
 }
 
@@ -222,6 +223,12 @@ int cluster_create_session(ClusterSession *session,
         pSessionEntry->current_msg_seq = 0;
 
         *session = pSessionEntry->session_id;
+
+#ifdef TRIGGER_STAT_FLAG
+        if (pSessionEntry->response_events & RESPONSE_EVENT_NOTIFY_DEALER) {
+          pSessionEntry->stat_start_time = CURRENT_NS();
+        }
+#endif
         SESSION_UNLOCK(pMachineSessions, session_index);
 
         /*
@@ -330,7 +337,7 @@ int cluster_set_events(ClusterSession session, const int events)
     if (pSockContext != NULL) {
       if (events & RESPONSE_EVENT_NOTIFY_DEALER) {
 
-        assert((pSessionEntry->response_events & RESPONSE_EVENT_NOTIFY_DEALER) == 0);
+        //assert((pSessionEntry->response_events & RESPONSE_EVENT_NOTIFY_DEALER) == 0);
 
 #ifdef TRIGGER_STAT_FLAG
         //for stat
@@ -376,18 +383,20 @@ int cluster_set_events(ClusterSession session, const int events)
     result = ENOENT;
   }
 
-  if (pMessage != NULL) {
 #ifdef TRIGGER_STAT_FLAG
+  if (pMessage != NULL) {
     if (!pMachineSessions->is_myself) {  //server
       pSessionEntry->stat_start_time = CURRENT_NS();
     }
+  }
 #endif
+  SESSION_UNLOCK(pMachineSessions, session_index);
 
+  if (pMessage != NULL) {
     g_msg_deal_func(session, user_data, pMessage->func_id,
         pMessage->blocks, pMessage->data_len);
     release_in_message(pSockContext, pMessage);
   }
-  SESSION_UNLOCK(pMachineSessions, session_index);
 
   return result;
 }
@@ -426,7 +435,6 @@ void *cluster_close_session(ClusterSession session)
 
   if (pSessionEntry != NULL) {  //found
     old_data = pSessionEntry->user_data;
-    CLEAR_SESSION(pSessionEntry->session_id);
     while (pSessionEntry->messages != NULL) {
       pMessage = pSessionEntry->messages;
       pSessionEntry->messages = pSessionEntry->messages->next;
@@ -436,6 +444,7 @@ void *cluster_close_session(ClusterSession session)
     pSessionEntry->sock_context = NULL;
     pSessionEntry->response_events = 0;
     pSessionEntry->user_data = NULL;
+    CLEAR_SESSION(pSessionEntry->session_id);
 
 #ifdef TRIGGER_STAT_FLAG
     if (pSessionEntry->stat_start_time != 0) {
@@ -452,13 +461,13 @@ void *cluster_close_session(ClusterSession session)
 #endif
 
 #ifdef MSG_TIME_STAT_FLAG
-      if ((pSessionEntry->session_id.fields.ip == g_my_machine_ip))
+      if (pMachineSessions->is_myself)
       {//request by me
         if (pSessionEntry->client_start_time != 0) {
           __sync_fetch_and_add(&pMachineSessions->msg_stat.count, 1);
           __sync_fetch_and_add(&pMachineSessions->msg_stat.time_used,
             CURRENT_NS() - pSessionEntry->client_start_time);
-          pSessionEntry->client_start_time= 0;
+          pSessionEntry->client_start_time = 0;
         }
       }
       else { //request by other
@@ -629,8 +638,9 @@ int get_response_session(const MsgHeader *pHeader,
     if ((*ppMachineSessions)->is_myself) { //request by me
       if (IS_SESSION_EMPTY(pSession->session_id)) {
         logWarning("file: "__FILE__", line: %d, " \
-            "sessionEntry: %16lX:%16lx not exist!", __LINE__,
-            pHeader->session_id.ids[0], pHeader->session_id.ids[1]);
+            "client sessionEntry: %16lX:%lX not exist, func_id: %d",
+            __LINE__, pHeader->session_id.ids[0],
+            pHeader->session_id.ids[1], pHeader->func_id);
         *sessionEntry = NULL;
         *call_func = false;
         *user_data = NULL;
@@ -650,10 +660,12 @@ int get_response_session(const MsgHeader *pHeader,
         result = ENOENT;
 
         logWarning("file: "__FILE__", line: %d, " \
-            "sessionEntry: %08X:%u:%ld, not exist, msg seq: %u",
+            "server sessionEntry: %08X:%u:%ld not exist, msg seq: %u, " \
+            "func_id: %d, data_len: %d",
             __LINE__, pHeader->session_id.fields.ip,
             pHeader->session_id.fields.timestamp,
-            pHeader->session_id.ids[1], pHeader->msg_seq);
+            pHeader->session_id.ids[1], pHeader->msg_seq,
+            pHeader->func_id, pHeader->data_len);
 
 #ifdef SESSION_STAT_FLAG
         __sync_fetch_and_add(&(*ppMachineSessions)->session_stat.
@@ -724,16 +736,16 @@ int get_response_session(const MsgHeader *pHeader,
 
     logWarning("file: "__FILE__", line: %d, " \
         "sessionEntry: %08X:%u:%ld, position occupied by %08X:%u:%ld, "
-        "quest by me: %d, time distance: %u",
+        "quest by me: %d, time distance: %u, func_id: %d",
         __LINE__, pHeader->session_id.fields.ip,
         pHeader->session_id.fields.timestamp, pHeader->session_id.ids[1],
         pSession->session_id.fields.ip, pSession->session_id.fields.timestamp,
         pSession->session_id.ids[1], machine_id == g_my_machine_id,
-        pHeader->session_id.fields.timestamp - pSession->session_id.fields.timestamp);
+        pHeader->session_id.fields.timestamp -
+        pSession->session_id.fields.timestamp, pHeader->func_id);
     *sessionEntry = NULL;
     *user_data = NULL;
     *call_func = false;
-    //assert(0);
     result = EEXIST;
 
 #ifdef SESSION_STAT_FLAG
@@ -746,10 +758,12 @@ int get_response_session(const MsgHeader *pHeader,
   if (*call_func) {
     //stat
     if ((*ppMachineSessions)->is_myself) { //request by me
-      __sync_fetch_and_add(&(*ppMachineSessions)->trigger_stat.count, 1);
-      __sync_fetch_and_add(&(*ppMachineSessions)->trigger_stat.time_used,
-          CURRENT_NS() - pSession->stat_start_time);
-      pSession->stat_start_time = 0;
+      if (pSession->stat_start_time != 0) {
+        __sync_fetch_and_add(&(*ppMachineSessions)->trigger_stat.count, 1);
+        __sync_fetch_and_add(&(*ppMachineSessions)->trigger_stat.time_used,
+            CURRENT_NS() - pSession->stat_start_time);
+        pSession->stat_start_time = 0;
+      }
     }
     else {
       pSession->stat_start_time = CURRENT_NS();
@@ -901,19 +915,21 @@ int push_in_message(const SessionId session,
     call_func = false;
   }
 
-  if (call_func) {
 #ifdef TRIGGER_STAT_FLAG
+  if (call_func) {
     if (!pMachineSessions->is_myself) {  //server
       pSessionEntry->stat_start_time = CURRENT_NS();
     }
+  }
 #endif
+  SESSION_UNLOCK(pMachineSessions, session_index);
 
+  if (call_func) {
     g_msg_deal_func(session, user_data, pMessage->func_id,
         pMessage->blocks, pMessage->data_len);
 
     release_in_message(pSockContext, pMessage);
   }
-  SESSION_UNLOCK(pMachineSessions, session_index);
 
   return 0;
 }
@@ -1001,12 +1017,12 @@ void log_trigger_stat()
 {
   ClusterMachine *pMachine;
   ClusterMachine *pMachineEnd;
-  int machine_id;
-  int server_avg_time_used;
-  int client_avg_time_used;
   MachineSessions *pServerSessions;
   MachineSessions *pClientSessions;
   MsgTimeUsed serverTimeUsed;
+  int machine_id;
+  int server_avg_time_used;
+  int client_avg_time_used;
 
   serverTimeUsed.count = 0;
   serverTimeUsed.time_used = 0;
@@ -1031,7 +1047,7 @@ void log_trigger_stat()
     else {
       server_avg_time_used = 0;
     }
-    logInfo("%s:%d trigger msg => %ld, avg time used => %ld us",
+    logInfo("%s:%d trigger msg => %ld, avg time used => %d us",
       pMachine->hostname, pMachine->cluster_port,
       pServerSessions->trigger_stat.count,
       server_avg_time_used / 1000);
@@ -1046,7 +1062,7 @@ void log_trigger_stat()
   else {
     server_avg_time_used = 0;
   }
-  logInfo("SERVER: trigger msg => %ld, avg time used => %ld us",
+  logInfo("SERVER: trigger msg => %ld, avg time used => %d us",
       serverTimeUsed.count, server_avg_time_used / 1000);
 
   pClientSessions = all_sessions + g_my_machine_id;
@@ -1057,7 +1073,7 @@ void log_trigger_stat()
   else {
     client_avg_time_used = 0;
   }
-  logInfo("CLIENT: trigger msg => %ld, avg time used => %ld us\n",  \
+  logInfo("CLIENT: trigger msg => %ld, avg time used => %d us\n",  \
       pClientSessions->trigger_stat.count, client_avg_time_used / 1000);
 
   pClientSessions->trigger_stat.count = 0;
@@ -1070,14 +1086,14 @@ void log_msg_time_stat()
 {
   ClusterMachine *pMachine;
   ClusterMachine *pMachineEnd;
-  int machine_id;
-  int server_avg_time_used;
-  int client_avg_time_used;
-  int send_avg_time_used;
   MachineSessions *pServerSessions;
   MachineSessions *pClientSessions;
   MsgTimeUsed serverTimeUsed;
   MsgTimeUsed sendTimeUsed;
+  int machine_id;
+  int server_avg_time_used;
+  int client_avg_time_used;
+  int send_avg_time_used;
 
   serverTimeUsed.count = 0;
   serverTimeUsed.time_used = 0;
@@ -1114,12 +1130,11 @@ void log_msg_time_stat()
       send_avg_time_used = 0;
     }
 
-    logInfo("%s:%d msg count: %ld, avg time used (recv start to send done): %ld us, "
-        "send msg count: %ld, send avg time: %ld us",
+    logInfo("%s:%d msg count: %ld, avg time used (recv start to send done): %d us, "
+        "send msg count: %ld, send avg time: %d us",
       pMachine->hostname, pMachine->cluster_port,
-      pServerSessions->msg_stat.count,
-      server_avg_time_used/ 1000,  pServerSessions->msg_send.count,
-      send_avg_time_used / 1000);
+      pServerSessions->msg_stat.count, server_avg_time_used / 1000,
+      pServerSessions->msg_send.count, send_avg_time_used / 1000);
 
     pServerSessions->msg_stat.count = 0;
     pServerSessions->msg_stat.time_used = 0;
@@ -1140,8 +1155,8 @@ void log_msg_time_stat()
   else {
     send_avg_time_used = 0;
   }
-  logInfo("SERVER: msg count: %ld, avg time used (recv start to send done): %ld us, "
-      "send msg count: %ld, send avg time: %ld us",
+  logInfo("SERVER: msg count: %ld, avg time used (recv start to send done): %d us, "
+      "send msg count: %ld, send avg time: %d us",
       serverTimeUsed.count, server_avg_time_used / 1000,
       sendTimeUsed.count, send_avg_time_used / 1000);
 
@@ -1160,8 +1175,8 @@ void log_msg_time_stat()
   else {
     send_avg_time_used = 0;
   }
-  logInfo("CLIENT: msg count: %ld, avg time used (send start to recv done): %ld us, "
-      "send msg count: %ld, send avg time: %ld us\n",
+  logInfo("CLIENT: msg count: %ld, avg time used (send start to recv done): %d us, "
+      "send msg count: %ld, send avg time: %d us\n",
       pClientSessions->msg_stat.count, client_avg_time_used / 1000,
       pClientSessions->msg_send.count, send_avg_time_used / 1000);
 

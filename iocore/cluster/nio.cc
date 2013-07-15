@@ -10,7 +10,6 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <assert.h>
 #include <sys/epoll.h>
 #include <sys/prctl.h>
 #include "logger.h"
@@ -260,7 +259,7 @@ int nio_add_to_epoll(SocketContext *pSockContext)
 	pSockContext->epoll_events = EPOLLIN;
 
   set_socket_rw_buff_size(pSockContext->sock);
-  init_machine_sessions(pSockContext->machine);
+  init_machine_sessions(pSockContext->machine, false);
   add_machine_sock_context(pSockContext);
 
 	event.data.ptr = pSockContext;
@@ -481,7 +480,7 @@ static int deal_write_event(SocketContext * pSockContext)
               msg_indexes[vec_count].index = msgs[priority].msg_count;
               vec_count++;
             }
-            assert(read_bytes <= remain_data_len);
+            //assert(read_bytes <= remain_data_len);
 
             total_bytes += read_bytes;
             last_msg_complete = read_bytes == remain_data_len;
@@ -747,38 +746,15 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
       pHeader->func_id, data_len, count + 1);
   */
 
-  /*
-  switch (pHeader->func_id) {
-      case FUNC_ID_CLUSTER_HELLO_REQUEST:
-        result = deal_hello_message(pSockContext, data, data_len);
-        if (result == 0) {
-          result = cluster_reply_hello(pSockContext);
-          if (result != 0) {
-            logError("file: "__FILE__", line: %d, " \
-                "cluster_reply_hello fail, errno: %d", __LINE__, result);
-          }
-        }
-        return result;
-      case FUNC_ID_CLUSTER_HELLO_RESPONSE:
-        result = deal_hello_message(pSockContext, data, data_len);
-        if (result == 0) {
-        }
-        return result;
-      case FUNC_ID_CLUSTER_PING_REQUEST:
-      case FUNC_ID_CLUSTER_PING_RESPONSE:
-        return 0;
-      default:
-        break;
-  }
-  */
-
   result = get_response_session(pHeader, &pMachineSessions,
       &pSessionEntry, pSockContext, &call_func, &user_data);
   if (result != 0) {
+    /*
     if (pHeader->session_id.fields.ip != g_my_machine_ip) {  //request by other
       cluster_send_msg_internal(&pHeader->session_id, pSockContext,
           FUNC_ID_CONNECTION_CLOSED_NOTIFY, NULL, 0, PRIORITY_HIGH);
     }
+    */
 
     return result;
   }
@@ -792,7 +768,7 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
       __sync_fetch_and_add(&pMachineSessions->msg_stat.count, 1);
       __sync_fetch_and_add(&pMachineSessions->msg_stat.time_used,
         CURRENT_NS() - pSessionEntry->client_start_time);
-      pSessionEntry->client_start_time= 0;
+      pSessionEntry->client_start_time = 0;
     }
     SESSION_UNLOCK(pMachineSessions, session_index);
   }
@@ -845,7 +821,6 @@ static int deal_read_event(SocketContext *pSockContext)
 {
   int result;
   int read_bytes;
-  int deal_result;
   MsgHeader *pHeader;
 
   read_bytes = read(pSockContext->sock, pSockContext->reader.current,
@@ -901,9 +876,8 @@ static int deal_read_event(SocketContext *pSockContext)
         pSockContext->reader.msg_header;
       if (msg_bytes < MSG_HEADER_LENGTH) //expect whole msg header
       {
-        if (msg_bytes + (pSockContext->reader.buff_end -
-              pSockContext->reader.current) < MSG_HEADER_LENGTH +
-            MINI_MESSAGE_SIZE)
+        if ((pSockContext->reader.buff_end -
+              pSockContext->reader.current) < 4 * 1024)
         {
           if (msg_bytes > 0) {  //remain bytes should be copied
             MOVE_TO_NEW_BUFFER(pSockContext, msg_bytes);
@@ -924,13 +898,6 @@ static int deal_read_event(SocketContext *pSockContext)
         pSockContext->reader.buffer->_data;
       recv_body_bytes = pSockContext->reader.recv_body_bytes + msg_bytes;
       bFirstBlock = false;
-
-      /*
-      logDebug("file: " __FILE__ ", line: %d, "
-          "msg_bytes: %d, first body len: %d, recv_body_bytes: %d",
-          __LINE__, msg_bytes, pSockContext->reader.blocks->read_avail(),
-          recv_body_bytes);
-      */
     }
 
     pHeader = (MsgHeader *)pSockContext->reader.msg_header;
@@ -988,7 +955,14 @@ static int deal_read_event(SocketContext *pSockContext)
 
       //must be only one block
       if (pHeader->func_id < 0) {
-        assert(bFirstBlock);
+        if (!bFirstBlock) {
+          logError("file: "__FILE__", line: %d, " \
+              "func_id: %d, data length: %d too large exceeds %d",
+              __LINE__, pHeader->func_id, pHeader->data_len,
+              (int)(READ_BUFFER_SIZE - MSG_HEADER_LENGTH));
+          return EINVAL;
+        }
+
         MOVE_TO_NEW_BUFFER(pSockContext, msg_bytes);
         return result;
       }
@@ -1005,27 +979,19 @@ static int deal_read_event(SocketContext *pSockContext)
       }
 
       if (bFirstBlock) {
-        if (current_true_body_bytes > 0) {
+        if (current_true_body_bytes > 0) {  //should keep the msg_header
           ALLOC_READER_BUFFER(pSockContext->reader, READ_BUFFER_SIZE);
         }
         else { //no data yet!
           MOVE_TO_NEW_BUFFER(pSockContext, msg_bytes);
         }
       }
-      else {
+      else {  //should keep the msg_header
         ALLOC_READER_BUFFER(pSockContext->reader, READ_BUFFER_SIZE);
       }
 
       return result;
     }
-
-    /*
-    logDebug("file: " __FILE__ ", line: %d, "
-        "%s:%d msg body length: %d", __LINE__,
-        pSockContext->machine->hostname,
-        pSockContext->machine->cluster_port,
-        pHeader->data_len);
-    */
 
     if (bFirstBlock) {
       padding_body_bytes = pHeader->aligned_data_len;
@@ -1051,10 +1017,8 @@ static int deal_read_event(SocketContext *pSockContext)
       append_to_blocks(&pSockContext->reader, current_true_body_bytes);
     }
 
-    if ((deal_result=deal_message(pHeader, pSockContext, pSockContext->
-            reader.blocks)) != 0)
-    {
-    }
+    deal_message(pHeader, pSockContext, pSockContext->reader.blocks);
+
     pSockContext->reader.blocks = NULL;  //free memory pointer
     if (pSockContext->reader.recv_body_bytes > 0) {
       pSockContext->reader.recv_body_bytes = 0;

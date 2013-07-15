@@ -46,7 +46,7 @@ extern "C" {
 #endif
 
 int session_init();
-int init_machine_sessions(ClusterMachine *machine);
+int init_machine_sessions(ClusterMachine *machine, const bool bMyself);
 
 int get_session_for_send(const SessionId *session,
     MachineSessions **ppMachineSessions, SessionEntry **sessionEntry);
