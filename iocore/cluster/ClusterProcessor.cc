@@ -808,32 +808,35 @@ ClusterProcessor::init()
 
   memset(channel_dummy_output, 0, sizeof(channel_dummy_output));
 
-  Debug(CL_NOTE, "before connection_manager_init, ip: %u, port: %d, "
-      "num_of_cluster_threads: %d, num_of_cluster_connections: %d",
-      this_cluster_machine()->ip, cluster_port, num_of_cluster_threads,
-      num_of_cluster_connections);
-
-  g_my_machine_ip = this_cluster_machine()->ip;
-  g_work_threads = num_of_cluster_threads;
-  g_connections_per_machine = num_of_cluster_connections;
-  if (g_connections_per_machine % 2 != 0) {
-    g_connections_per_machine++;
-  }
-  g_server_port = cluster_port;
-  cluster_global_init(cluster_main_handler, machine_change_notify);
-  int result = 0;
+  int result;
 
 #ifdef DEBUG
   eventProcessor.schedule_every(new ClusterCacheVCPrinter, HRTIME_SECONDS(10));
 #endif
   if (cluster_type == 1) {
-    cache_clustering_enabled = 1;
-    Note("cache clustering enabled");
-    compute_cluster_mode();
+    g_my_machine_ip = this_cluster_machine()->ip;
+    g_work_threads = num_of_cluster_threads;
+    g_connections_per_machine = num_of_cluster_connections;
+    if (g_connections_per_machine % 2 != 0) {
+      g_connections_per_machine++;
+    }
+    g_server_port = cluster_port;
+    cluster_global_init(cluster_main_handler, machine_change_notify);
+
     result = connection_manager_init(this_cluster_machine()->ip, cluster_port);
+    if (result == 0) {
+      cache_clustering_enabled = 1;
+      Note("cache clustering enabled");
+      compute_cluster_mode();
+    }
+    else {
+      cache_clustering_enabled = 0;
+      Note("init fail, cache clustering disabled");
+    }
   } else {
     cache_clustering_enabled = 0;
     Note("cache clustering disabled");
+    result = 0;
   }
   return result;
 }
@@ -874,9 +877,6 @@ ClusterProcessor::start()
 
     //accept_handler = NEW(new ClusterAccept(&cluster_port, cluster_receive_buffer_size, cluster_send_buffer_size));
     //accept_handler->Init();
-
-    Note("cluster_receive_buffer_size: %d, cluster_send_buffer_size: %d",
-        (int)cluster_receive_buffer_size, (int)cluster_send_buffer_size);
 
     g_socket_recv_bufsize = cluster_receive_buffer_size;
     g_socket_send_bufsize = cluster_send_buffer_size;
