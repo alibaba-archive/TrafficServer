@@ -27,7 +27,7 @@
 
 #ifndef _HTTP_CONNECTION_COUNT_H_
 
-#define IP_HASH_TABLE_SIZE   10949
+#define IP_HASH_TABLE_SIZE  1361
 
 /**
  * Singleton class to keep track of the number of connections per host
@@ -73,6 +73,13 @@ public:
    */
   void incrementCount(const IpEndpoint& addr, const int delta = 1);
 
+  /**
+   * return total count of ip addresses
+   */
+  inline int64_t getIpCount() {
+    return _ipCount;
+  }
+
 protected:
   inline ConnAddr *find(IpHashBucket *pBucket, const IpEndpoint& addr)
   {
@@ -101,6 +108,7 @@ private:
   ConnectionCount(const ConnectionCount & x) { NOWARN_UNUSED(x); }
 
   static ConnectionCount _connectionCount;
+  volatile int64_t _ipCount;
   IpHashBucket *_ipTable;
 };
 

@@ -26,7 +26,7 @@
 
 ConnectionCount ConnectionCount::_connectionCount;
 
-ConnectionCount::ConnectionCount()
+ConnectionCount::ConnectionCount() : _ipCount(0)
 {
   int bytes;
   IpHashBucket *pBucket;
@@ -87,6 +87,7 @@ void ConnectionCount::incrementCount(const IpEndpoint& addr, const int delta)
       qsort(pBucket->_addrs, pBucket->_count, sizeof(ConnAddr),
           ConnAddr::compare);
     }
+    ink_atomic_increment64(&_ipCount, 1);
   }
   ink_mutex_release(&pBucket->_mutex);
 }
