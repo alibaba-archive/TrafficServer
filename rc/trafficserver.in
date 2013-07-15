@@ -252,14 +252,10 @@ case "$1" in
             test "x$VERBOSE" != "xno" && log_daemon_msg "$retval"
             exit "$retval"
         elif [ "$DISTRIB_ID" = "fedora" -o "$DISTRIB_ID" = "redhat" ]; then
-            RECORD_FILENAME='/etc/trafficserver/records.config'
-            TYPE_CLUSTER='LOCAL proxy.local.cluster.type INT 1'
             if [ "x$2" = 'xquick' ]; then
               action "Starting ${TS_PACKAGE_NAME}:" forkdaemon $TC_DAEMON $TC_DAEMON_ARGS
             else
-              /bin/grep -e "^$TYPE_CLUSTER" $RECORD_FILENAME >/dev/null 2>&1
-              ret=$?
-              if [ "x$2" != 'xcluster' ] && [ $ret -ne 0 ]; then
+              if [ "x$2" != 'xcluster' ] && [ ! -f $NOTIFY_FILENAME ]; then
                 action "Starting ${TS_PACKAGE_NAME}:" forkdaemon $TC_DAEMON $TC_DAEMON_ARGS
               else
                 status -p $TC_PIDFILE $TC_NAME > /dev/null
@@ -270,6 +266,8 @@ case "$1" in
 
                 /usr/bin/killall trafficrecovery.sh >/dev/null 2>&1
 
+                RECORD_FILENAME='/etc/trafficserver/records.config'
+                TYPE_CLUSTER='LOCAL proxy.local.cluster.type INT 1'
                 BAK_FILENAME="${RECORD_FILENAME}.bak"
                 /bin/cp -f $RECORD_FILENAME $BAK_FILENAME
 
@@ -312,7 +310,7 @@ case "$1" in
             test "x$VERBOSE" != "xno" && log_daemon_msg "$retval"
             exit "$retval"
         elif [ "$DISTRIB_ID" = "fedora" -o "$DISTRIB_ID" = "redhat" ]; then
-            if [ "x$2" != 'xquick' ]; then
+            if [ "x$2" != 'xquick' ] && [ -f $NOTIFY_FILENAME ]; then
               if [ -f $TS_PIDFILE ]; then
                 pid=$(cat $TS_PIDFILE)
                 action "Safe stopping ${TS_NAME}:" /usr/bin/traffic_line -S
@@ -473,7 +471,7 @@ case "$1" in
         fi
         ;;
     activate)
-      content=$(/bin/cat $NOTIFY_FILENAME)
+      content=$(/bin/cat $NOTIFY_FILENAME 2>&1)
       if [ "x$content" = 'x0' ]; then
         echo "can't activate $NAME, the content of $NOTIFY_FILENAME must be 1"
       else
