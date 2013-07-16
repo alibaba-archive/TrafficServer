@@ -814,7 +814,19 @@ ClusterProcessor::init()
   eventProcessor.schedule_every(new ClusterCacheVCPrinter, HRTIME_SECONDS(10));
 #endif
   if (cluster_type == 1) {
-    g_my_machine_ip = this_cluster_machine()->ip;
+    bool found;
+    IpEndpoint cluster_ip;    // ip addr of the cluster interface
+    char *intrName;               // Name of the interface we are to use
+    intrName = REC_readString("proxy.config.cluster.ethernet_interface", &found);
+    ink_assert(found && intrName != NULL);
+
+    found = mgmt_getAddrForIntr(intrName, &cluster_ip.sa);
+    if (!found) {
+      mgmt_fatal(stderr, "[ClusterProcessor::init] Unable to find network interface %s.  Exiting...\n", intrName);
+    } else if (!ats_is_ip4(&cluster_ip)) {
+      mgmt_fatal(stderr, "[ClusterProcessor::init] Unable to find IPv4 network interface %s.  Exiting...\n", intrName);
+    }
+
     g_work_threads = num_of_cluster_threads;
     g_connections_per_machine = num_of_cluster_connections;
     if (g_connections_per_machine % 2 != 0) {
@@ -823,7 +835,7 @@ ClusterProcessor::init()
     g_server_port = cluster_port;
     cluster_global_init(cluster_main_handler, machine_change_notify);
 
-    result = connection_manager_init(this_cluster_machine()->ip, cluster_port);
+    result = connection_manager_init(cluster_ip.sin.sin_addr.s_addr, cluster_port);
     if (result == 0) {
       cache_clustering_enabled = 1;
       Note("cache clustering enabled");
