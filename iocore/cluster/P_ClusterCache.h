@@ -102,9 +102,8 @@
 
 // internal event code
 #define CLUSTER_EVENT_STEAL_THREAD      (CLUSTER_EVENT_EVENTS_START+50)
-#define CLUSTER_STAT_PRINT              1
 
-#ifdef CLUSTER_STAT_PRINT
+#ifdef DEBUG
 extern int64_t num_of_cluster_cachevc;
 #endif
 //////////////////////////////////////////////////////////////
@@ -1508,7 +1507,7 @@ extern ClassAllocator<ClusterCacheVC> clusterCacheVCAllocator;
 inline ClusterCacheVC *
 new_ClusterCacheVC(Continuation *cont)
 {
-#ifdef CLUSTER_STAT_PRINT
+#ifdef DEBUG
   ink_atomic_increment(&num_of_cluster_cachevc, 1);
 #endif
   EThread *t = cont->mutex->thread_holding;
@@ -1526,7 +1525,7 @@ new_ClusterCacheVC(Continuation *cont)
 inline void
 free_ClusterCacheVC(ClusterCacheVC *cont)
 {
-#ifdef CLUSTER_STAT_PRINT
+#ifdef DEBUG
   ink_atomic_increment(&num_of_cluster_cachevc, -1);
 #endif
   Debug("cluster_cache_free", "free %p", cont);

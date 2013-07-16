@@ -464,7 +464,7 @@ static int machine_change_notify(ClusterMachine * m)
   return result;
 }
 
-#ifdef CLUSTER_STAT_PRINT
+#ifdef DEBUG
 struct ClusterCacheVCPrinter: public Continuation
 {
   ClusterCacheVCPrinter() {
@@ -810,9 +810,6 @@ ClusterProcessor::init()
 
   int result;
 
-#ifdef DEBUG
-  eventProcessor.schedule_every(new ClusterCacheVCPrinter, HRTIME_SECONDS(10));
-#endif
   if (cluster_type == 1) {
     bool found;
     IpEndpoint cluster_ip;    // ip addr of the cluster interface
@@ -894,6 +891,9 @@ ClusterProcessor::start()
     g_socket_send_bufsize = cluster_send_buffer_size;
     pthread_t connection_tid;
     connection_manager_start(&connection_tid);
+#ifdef DEBUG
+  eventProcessor.schedule_every(new ClusterCacheVCPrinter, HRTIME_SECONDS(10));
+#endif
   }
 
   return 0;
