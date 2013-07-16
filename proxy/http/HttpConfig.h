@@ -401,7 +401,7 @@ struct HttpConfigPortRange
 struct OverridableHttpConfigParams {
   OverridableHttpConfigParams(const bool needFreeProxyResponseServerString = false)
     :  need_free_proxy_response_server_string(needFreeProxyResponseServerString), 
-       maintain_pristine_host_hdr(0), chunking_enabled(0),
+       maintain_pristine_host_hdr(0), chunking_enabled(0), allow_anyway(0),
        negative_caching_enabled(0), cache_when_to_revalidate(0),
        keep_alive_enabled_in(0), keep_alive_enabled_out(0), keep_alive_post_out(0),
        share_server_sessions(0), fwd_proxy_auth_to_parent(0),
@@ -452,6 +452,7 @@ struct OverridableHttpConfigParams {
   // The first three configs used to be @-parameters in remap.config
   MgmtByte maintain_pristine_host_hdr;
   MgmtByte chunking_enabled;
+  MgmtByte allow_anyway;
 
   ////////////////////////////////
   //  Negative Response Caching //
@@ -616,6 +617,7 @@ public:
   IpAddr inbound_ip4, inbound_ip6;
   IpAddr outbound_ip4, outbound_ip6;
 
+  MgmtInt client_max_connections;
   MgmtInt server_max_connections;
   MgmtInt origin_min_keep_alive_connections; // TODO: This one really ought to be overridable, but difficult right now.
 
@@ -901,6 +903,7 @@ inline
 HttpConfigParams::HttpConfigParams()
   : proxy_hostname(0),
     proxy_hostname_len(0),
+    client_max_connections(0),
     server_max_connections(0),
     origin_min_keep_alive_connections(0),
     parent_proxy_routing_enable(0),

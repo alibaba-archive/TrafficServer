@@ -167,6 +167,17 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
     return false;
   }
 
+  if (s->http_config_param->client_max_connections) {
+    int64_t sval = 0;
+
+    HTTP_READ_GLOBAL_DYN_SUM(http_current_client_connections_stat, sval);
+    if ((sval > s->http_config_param->client_max_connections) && !s->txn_conf->allow_anyway) {
+      s->client_connection_enabled = false;
+      s->server_busy = true;
+      return false;
+    } 
+  }
+
   // Do fast ACL filtering (it is safe to check map here)
   if (rewrite_table->PerformACLFiltering(s, map) == ACL_ACTION_DENY_INT) {
     return false;

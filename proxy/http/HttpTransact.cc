@@ -827,7 +827,17 @@ HttpTransact::EndRemapRequest(State* s)
   int host_len;
   const char *host = incoming_request->host_get(&host_len);
   DebugTxn("http_trans","EndRemapRequest host is %.*s", host_len,host);
-  
+
+  /////////////////////////////////////////////////////////////////////////////////////////
+  // if http_current_client_connections_stat > client_max_connections return server busy //
+  /////////////////////////////////////////////////////////////////////////////////////////
+
+  if (s->server_busy) {
+    build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
+    s->reverse_proxy = false;
+    goto done;
+  }
+ 
   ////////////////////////////////////////////////////////////////
   // if we got back a URL to redirect to, vector the user there //
   ////////////////////////////////////////////////////////////////

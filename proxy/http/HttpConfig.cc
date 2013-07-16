@@ -1146,6 +1146,7 @@ HttpConfig::startup()
   HttpEstablishStaticConfigFloat(cfg_reclaim_factor, "proxy.config.allocator.reclaim_factor");
 #endif
 
+  HttpEstablishStaticConfigLongLong(c.client_max_connections, "proxy.config.http.client_max_connections");
   HttpEstablishStaticConfigLongLong(c.server_max_connections, "proxy.config.http.server_max_connections");
   HttpEstablishStaticConfigLongLong(c.oride.server_tcp_init_cwnd, "proxy.config.http.server_tcp_init_cwnd");
   HttpEstablishStaticConfigLongLong(c.oride.origin_max_connections, "proxy.config.http.origin_max_connections");
@@ -1183,6 +1184,7 @@ HttpConfig::startup()
   HttpEstablishStaticConfigByte(c.oride.keep_alive_enabled_in, "proxy.config.http.keep_alive_enabled_in");
   HttpEstablishStaticConfigByte(c.oride.keep_alive_enabled_out, "proxy.config.http.keep_alive_enabled_out");
   HttpEstablishStaticConfigByte(c.oride.chunking_enabled, "proxy.config.http.chunking_enabled");
+  HttpEstablishStaticConfigByte(c.oride.allow_anyway, "proxy.config.http.allow_anyway");
   HttpEstablishStaticConfigByte(c.session_auth_cache_keep_alive_enabled,
                                 "proxy.config.http.session_auth_cache_keep_alive_enabled");
   HttpEstablishStaticConfigLongLong(c.origin_server_pipeline, "proxy.config.http.origin_server_pipeline");
@@ -1430,6 +1432,7 @@ HttpConfig::reconfigure()
 
   params->disable_ssl_parenting = INT_TO_BOOL(m_master.disable_ssl_parenting);
 
+  params->client_max_connections = m_master.client_max_connections;
   params->server_max_connections = m_master.server_max_connections;
   params->oride.server_tcp_init_cwnd = m_master.oride.server_tcp_init_cwnd;
   params->oride.origin_max_connections = m_master.oride.origin_max_connections;
@@ -1462,6 +1465,7 @@ HttpConfig::reconfigure()
   params->oride.keep_alive_enabled_in = INT_TO_BOOL(m_master.oride.keep_alive_enabled_in);
   params->oride.keep_alive_enabled_out = INT_TO_BOOL(m_master.oride.keep_alive_enabled_out);
   params->oride.chunking_enabled = INT_TO_BOOL(m_master.oride.chunking_enabled);
+  params->oride.allow_anyway = INT_TO_BOOL(m_master.oride.allow_anyway);
   params->session_auth_cache_keep_alive_enabled = INT_TO_BOOL(m_master.session_auth_cache_keep_alive_enabled);
   params->origin_server_pipeline = m_master.origin_server_pipeline;
   params->user_agent_pipeline = m_master.user_agent_pipeline;

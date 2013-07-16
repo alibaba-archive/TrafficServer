@@ -7617,6 +7617,9 @@ _conf_to_memberp(TSOverridableConfigKey conf,
   case TS_CONFIG_HTTP_CHUNKING_ENABLED:
     ret = &overridablehttpConfig->chunking_enabled;
     break;
+  case TS_CONFIG_HTTP_ALLOW_ANYWAY:
+    ret = &overridablehttpConfig->allow_anyway;
+    break;
   case TS_CONFIG_HTTP_NEGATIVE_CACHING_ENABLED:
     ret = &overridablehttpConfig->negative_caching_enabled;
     break;
@@ -8052,6 +8055,11 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
   case 28:
     if (!strncmp(name, "proxy.config.http.cache.http", length))
       cnf = TS_CONFIG_HTTP_CACHE_HTTP;
+    break;
+
+  case 30:
+    if (!strncmp(name, "proxy.config.http.allow_anyway", length))
+      cnf = TS_CONFIG_HTTP_ALLOW_ANYWAY;
     break;
 
   case 33:

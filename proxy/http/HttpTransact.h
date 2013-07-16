@@ -1007,6 +1007,7 @@ public:
 
     // new ACL filtering result (calculated immediately after remap)
     bool client_connection_enabled;
+    bool server_busy;
     bool acl_filtering_performed;
 
     // INK API/Remap API plugin interface
@@ -1122,6 +1123,7 @@ public:
         srv_lookup(false),
         www_auth_content(CACHE_AUTH_NONE),
         client_connection_enabled(true),
+        server_busy(false),
         acl_filtering_performed(false),
         fp_tsremap_os_response(NULL),
         remap_plugin_instance(0),
