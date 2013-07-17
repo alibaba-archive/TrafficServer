@@ -819,9 +819,9 @@ ClusterProcessor::init()
 
     found = mgmt_getAddrForIntr(intrName, &cluster_ip.sa);
     if (!found) {
-      mgmt_fatal(stderr, "[ClusterProcessor::init] Unable to find network interface %s.  Exiting...\n", intrName);
+      ink_fatal(1, "[ClusterProcessor::init] Unable to find network interface %s.  Exiting...\n", intrName);
     } else if (!ats_is_ip4(&cluster_ip)) {
-      mgmt_fatal(stderr, "[ClusterProcessor::init] Unable to find IPv4 network interface %s.  Exiting...\n", intrName);
+      ink_fatal(1, "[ClusterProcessor::init] Unable to find IPv4 network interface %s.  Exiting...\n", intrName);
     }
 
     g_work_threads = num_of_cluster_threads;
