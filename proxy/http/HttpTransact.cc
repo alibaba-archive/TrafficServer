@@ -494,6 +494,7 @@ how_to_open_connection(HttpTransact::State* s)
     if (ConnectionCount::getInstance()->getCount(host_name, host_len) >= s->txn_conf->origin_max_connections) {
       ink_atomic_increment64(&os_conn_exceed_counter, 1);
       HttpTransact::build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
+      s->transact_return_point = NULL;
       return HttpTransact::PROXY_SEND_ERROR_CACHE_NOOP;
     }
   }
