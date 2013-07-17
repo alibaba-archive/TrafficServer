@@ -269,6 +269,7 @@ HCSM::handle_con2os()
         return ;
       }
     }
+    /*
     if (txn_conf.origin_max_connections > 0) {
       ConnectionCount *connections = ConnectionCount::getInstance();
       if (connections->getCount(ip) >= txn_conf.origin_max_connections) {
@@ -277,6 +278,7 @@ HCSM::handle_con2os()
         return ;
       }
     }
+    */
     NetVCOptions opt;
     opt.f_blocking_connect = false;
     opt.set_sock_param(txn_conf.sock_recv_buffer_size_out, txn_conf.sock_send_buffer_size_out, txn_conf.sock_option_flag_out);

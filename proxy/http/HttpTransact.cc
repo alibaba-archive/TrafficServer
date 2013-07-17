@@ -48,6 +48,7 @@
 #include "HttpClientSession.h"
 #include "I_Machine.h"
 #include "IPAllow.h"
+#include "HttpConnectionCount.h"
 
 static const char *URL_MSG = "Unable to process requested URL.\n";
 
@@ -459,12 +460,43 @@ does_method_require_cache_copy_deletion(int method)
            method == HTTP_WKSIDX_PUT || method == HTTP_WKSIDX_POST));
 }
 
+static volatile int64_t os_conn_exceed_counter = 0;
+struct OSConnectionExceedLogger: public Continuation
+{
+  OSConnectionExceedLogger() {
+    mutex = new_ProxyMutex();
+    SET_HANDLER(&OSConnectionExceedLogger::mainEvent);
+  }
+
+  int mainEvent(int event, void *data) {
+    int64_t count = ink_atomic_increment64(&os_conn_exceed_counter, 0);
+    if (count > 0) {
+      Warning("last 1 minute exceeds origin_max_connections count: %"PRId64, count);
+      ink_atomic_increment64(&os_conn_exceed_counter, -1 * count);
+    }
+    return EVENT_CONT;
+  }
+};
 
 inline static
 HttpTransact::StateMachineAction_t
 how_to_open_connection(HttpTransact::State* s)
 {
+  static Event *ev = eventProcessor.schedule_every(new OSConnectionExceedLogger, HRTIME_SECONDS(60));
+
+  NOWARN_UNUSED(ev);
   ink_debug_assert(s->pending_work == NULL);
+
+  if (s->txn_conf->origin_max_connections > 0) {
+    int host_len;
+    const char *host_name = s->hdr_info.client_request.host_get(&host_len);
+
+    if (ConnectionCount::getInstance()->getCount(host_name, host_len) >= s->txn_conf->origin_max_connections) {
+      ink_atomic_increment64(&os_conn_exceed_counter, 1);
+      HttpTransact::build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
+      return HttpTransact::PROXY_SEND_ERROR_CACHE_NOOP;
+    }
+  }
 
   // Originally we returned which type of server to open
   // Now, however, we may want to issue a cache
@@ -2852,9 +2884,8 @@ HttpTransact::handle_cache_write_lock(State* s)
         s->next_action = next;
         TRANSACT_RETURN(next, NULL);
       } else {
-        // hehe!
         s->next_action = next;
-        ink_assert(s->next_action == DNS_LOOKUP);
+        ink_assert(s->next_action == DNS_LOOKUP || s->next_action == PROXY_SEND_ERROR_CACHE_NOOP);
         return;
       }
     } else
@@ -3422,7 +3453,7 @@ HttpTransact::handle_response_from_parent(State* s)
       default:
         // This handles:
         // UNDEFINED_LOOKUP, ICP_SUGGESTED_HOST,
-        // INCOMING_ROUTER
+        // INCOMING_ROUTER, PROXY_SEND_ERROR_CACHE_NOOP
         break;
       }
 
@@ -4172,9 +4203,11 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
                   (s->current.server->keep_alive == HTTP_PIPELINE));
 
     s->next_action = how_to_open_connection(s);
-
+    if (s->next_action == PROXY_SEND_ERROR_CACHE_NOOP) {
+      s->already_downgraded = true;
+    }
     /* Downgrade the request level and retry */
-    if (!HttpTransactHeaders::downgrade_request(&keep_alive, &s->hdr_info.server_request)) {
+    else if (!HttpTransactHeaders::downgrade_request(&keep_alive, &s->hdr_info.server_request)) {
       build_error_response(s, HTTP_STATUS_HTTPVER_NOT_SUPPORTED, "HTTP Version Not Supported", "response#bad_version", "");
       s->next_action = PROXY_SEND_ERROR_CACHE_NOOP;
       s->already_downgraded = true;
@@ -4536,9 +4569,11 @@ HttpTransact::handle_no_cache_operation_on_forward_server_response(State* s)
     break;
   case HTTP_STATUS_HTTPVER_NOT_SUPPORTED:
     s->next_action = how_to_open_connection(s);
-
+    if (s->next_action == PROXY_SEND_ERROR_CACHE_NOOP) {
+      s->already_downgraded = true;
+    }
     /* Downgrade the request level and retry */
-    if (!HttpTransactHeaders::downgrade_request(&keep_alive, &s->hdr_info.server_request)) {
+    else if (!HttpTransactHeaders::downgrade_request(&keep_alive, &s->hdr_info.server_request)) {
       s->already_downgraded = true;
       build_error_response(s, HTTP_STATUS_HTTPVER_NOT_SUPPORTED, "HTTP Version Not Supported", "response#bad_version", "");
       s->next_action = PROXY_SEND_ERROR_CACHE_NOOP;

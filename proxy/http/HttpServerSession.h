@@ -76,7 +76,9 @@ public:
       enable_origin_connection_limiting(false),
       connection_count(NULL), read_buffer(NULL),
       server_vc(NULL), magic(HTTP_SS_MAGIC_DEAD), buf_reader(NULL)
-    { 
+    {
+      hostname = NULL;
+      host_len = 0;
       ink_zero(server_ip);
     }
 
@@ -107,11 +109,28 @@ public:
   virtual void reenable(VIO *vio);
 
   void release();
-  void attach_hostname(const char *hostname);
+  void attach_hostname(const char *host);
   NetVConnection *get_netvc()
   {
     return server_vc;
   };
+
+  inline void set_hostname(const char *name)
+  {
+    host_len = strlen(name);
+    if (host_len < (int)sizeof(fixed_hostname)) {
+      hostname = fixed_hostname;
+    }
+    else {
+      hostname = (char *)ats_malloc(host_len + 1);
+    }
+
+    memcpy(hostname, name, host_len + 1);
+  }
+
+  char *hostname;
+  int host_len;
+  char fixed_hostname[128];
 
   // Keys for matching hostnames
   IpEndpoint server_ip;
@@ -169,11 +188,12 @@ private:
 extern ClassAllocator<HttpServerSession> httpServerSessionAllocator;
 
 inline void
-HttpServerSession::attach_hostname(const char *hostname)
+HttpServerSession::attach_hostname(const char *host)
 {
   if (!host_hash_computed) {
-    ink_code_MMH((unsigned char *) hostname, strlen(hostname), (unsigned char *) &hostname_hash);
+    ink_code_MMH((unsigned char *) host, strlen(host), (unsigned char *) &hostname_hash);
     host_hash_computed = true;
   }
 }
+
 #endif

@@ -1635,6 +1635,7 @@ HttpSM::state_http_server_open(int event, void *data)
        printf("client fd is :%d , server fd is %d\n",vc->con.fd,
        server_vc->con.fd); */
     ats_ip_copy(&session->server_ip, &t_state.current.server->addr);
+    session->set_hostname(t_state.current.server->name);
     session->new_connection((NetVConnection *) data);
     ats_ip_port_cast(&session->server_ip) = htons(t_state.current.server->port);
     session->state = HSS_ACTIVE;
@@ -4390,6 +4391,8 @@ HttpSM::do_http_server_open(bool raw)
       ua_session->attach_server_session(NULL);
     }
   }
+
+  /*
   // Check to see if we have reached the max number of connections.
   // Atomically read the current number of connections and check to see
   // if we have gone above the max allowed.
@@ -4409,6 +4412,9 @@ HttpSM::do_http_server_open(bool raw)
       return;
     }
   }
+  */
+
+  /*
   // Check to see if we have reached the max number of connections on this
   // host.
   if (t_state.txn_conf->origin_max_connections > 0) {
@@ -4423,6 +4429,7 @@ HttpSM::do_http_server_open(bool raw)
       return;
     }
   }
+  */
 
   // We did not manage to get an exisiting session
   //  and need to open a new connection

@@ -34,18 +34,36 @@
  */
 class ConnectionCount
 {
-  struct ConnAddr {
-    IpEndpoint _addr;
+  struct HostEntry {
+    char *_hostname;
+    int _length;
     int _count;
+    
+    inline bool equals(const char *hostname, const int host_len) {
+      return (_length == host_len && memcmp(_hostname, hostname, host_len) == 0);
+    }
 
-    static int compare(const void *p1, const void *p2) {
-      return ats_ip_addr_cmp(&((ConnAddr *)p1)->_addr, &((ConnAddr *)p2)->_addr);
+    inline static int compare(const void *p1, const void *p2)
+    {
+      HostEntry *host1;
+      HostEntry *host2;
+      host1 = (HostEntry *)p1;
+      host2 = (HostEntry *)p2;
+      if (host1->_length < host2->_length) {
+        return -1;
+      }
+      else if (host1->_length > host2->_length) {
+        return 1;
+      }
+      else {
+        return memcmp(host1->_hostname, host2->_hostname, host1->_length);
+      }
     }
   };
  
-  struct IpHashBucket {
+  struct HostHashBucket {
     ink_mutex _mutex; //use for locking this bucket
-    ConnAddr *_addrs; //ip address items
+    HostEntry *_hosts; //ip address items
     int _allocSize;   //alloc count
     int _count;       //real count
   };
@@ -64,42 +82,66 @@ public:
    * @param ip IP address of the host
    * @return Number of connections
    */
-  int getCount(const IpEndpoint& addr);
+  int getCount(const char *hostname, const int host_len);
 
   /**
    * Change (increment/decrement) the connection count
    * @param ip IP address of the host
    * @param delta Default is +1, can be set to negative to decrement
    */
-  void incrementCount(const IpEndpoint& addr, const int delta = 1);
+  void incrementCount(const char *hostname, const int host_len, const int delta);
 
   /**
-   * return total count of ip addresses
+   * return total count of host
    */
-  inline int64_t getIpCount() {
-    return _ipCount;
+  inline int64_t getHostCount() {
+    return _hostCount;
   }
 
+  /**
+   * stat host hash table
+   * @param hostCount host count
+   * @param min the min host count of a bucket
+   * @param max the max host count of a bucket
+   * @param avg the avg host count
+   */
+  void hostTableStat(int &hostCount, int &min, int &max, double &avg);
+
 protected:
-  inline ConnAddr *find(IpHashBucket *pBucket, const IpEndpoint& addr)
+  inline uint64_t time33Hash(const char *key, const int key_len)
   {
-    ConnAddr target;
+    uint64_t nHash;
+    unsigned char *pKey;
+    unsigned char *pEnd;
+
+    nHash = 0;
+    pEnd = (unsigned char *)key + key_len;
+    for (pKey = (unsigned char *)key; pKey < pEnd; pKey++) {
+      nHash += (nHash << 5) + (*pKey);
+    }
+    return nHash;
+  }
+
+  inline HostEntry *find(HostHashBucket *pBucket, const char *hostname, const int host_len)
+  {
+    HostEntry target;
 
     if (pBucket->_count == 0) {
       return NULL;
     }
     if (pBucket->_count == 1) {
-      if (ats_ip_addr_eq(&pBucket->_addrs->_addr, &addr)) {
-        return pBucket->_addrs;
+      if (pBucket->_hosts->equals(hostname, host_len)) {
+        return pBucket->_hosts;
       }
       else {
         return NULL;
       }
     }
 
-    target._addr = addr;
-    return (ConnAddr *)bsearch(&target, pBucket->_addrs, pBucket->_count,
-        sizeof(ConnAddr), ConnAddr::compare);
+    target._hostname = (char *)hostname;
+    target._length = host_len;
+    return (HostEntry *)bsearch(&target, pBucket->_hosts, pBucket->_count,
+        sizeof(HostEntry), HostEntry::compare);
   }
 
 private:
@@ -108,8 +150,8 @@ private:
   ConnectionCount(const ConnectionCount & x) { NOWARN_UNUSED(x); }
 
   static ConnectionCount _connectionCount;
-  volatile int64_t _ipCount;
-  IpHashBucket *_ipTable;
+  volatile int64_t _hostCount;
+  HostHashBucket *_hostTable;
 };
 
 #endif
