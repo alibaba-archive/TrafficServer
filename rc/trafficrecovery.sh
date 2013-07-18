@@ -1,6 +1,6 @@
 #!/bin/sh
 
-NOTIFY_FILENAME='/var/log/trafficserver/trafficserver.notify'
+NOTIFY_FILENAME='/var/run/trafficserver/trafficserver.notify'
 run_prefix='/etc/init.d'
 bin_prefix='/usr/bin'
 

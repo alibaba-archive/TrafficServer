@@ -239,7 +239,7 @@ do_stop()
     return "$RETVAL"
 }
 
-NOTIFY_FILENAME='/var/log/trafficserver/trafficserver.notify'
+NOTIFY_FILENAME='/var/run/trafficserver/trafficserver.notify'
 
 # main
 case "$1" in
