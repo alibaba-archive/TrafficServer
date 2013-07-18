@@ -62,10 +62,10 @@ class ConnectionCount
   };
  
   struct HostHashBucket {
-    ink_mutex _mutex; //use for locking this bucket
-    HostEntry *_hosts; //ip address items
-    int _allocSize;   //alloc count
-    int _count;       //real count
+    ink_mutex _mutex;  //use for locking this bucket
+    HostEntry *_hosts; //hosts items
+    int _allocSize;    //alloc count
+    int _count;        //real count
   };
 
 public:
@@ -79,15 +79,17 @@ public:
 
   /**
    * Gets the number of connections for the host
-   * @param ip IP address of the host
+   * @param hostname the host
+   * @param host_len the hostname length
    * @return Number of connections
    */
   int getCount(const char *hostname, const int host_len);
 
   /**
    * Change (increment/decrement) the connection count
-   * @param ip IP address of the host
-   * @param delta Default is +1, can be set to negative to decrement
+   * @param hostname the host
+   * @param host_len the hostname length
+   * @param delta can be set to negative to decrement
    */
   void incrementCount(const char *hostname, const int host_len, const int delta);
 
@@ -100,7 +102,7 @@ public:
 
   /**
    * stat host hash table
-   * @param hostCount host count
+   * @param hostCount the host count
    * @param min the min host count of a bucket
    * @param max the max host count of a bucket
    * @param avg the avg host count

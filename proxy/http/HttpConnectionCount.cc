@@ -130,3 +130,4 @@ void ConnectionCount::hostTableStat(int &hostCount, int &min, int &max, double &
     avg = 0.00;
   }
 }
+
