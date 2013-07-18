@@ -478,26 +478,32 @@ struct OSConnectionExceedLogger: public Continuation
   }
 };
 
+inline static bool is_os_connecion_exceed(HttpTransact::State* s)
+{
+  static Event *ev = eventProcessor.schedule_every(new OSConnectionExceedLogger, HRTIME_SECONDS(60));
+  NOWARN_UNUSED(ev);
+
+  if (s->txn_conf->origin_max_connections > 0) {
+    if (!s->backdoor_request) {
+      int host_len;
+      const char *host_name = s->hdr_info.client_request.host_get(&host_len);
+      if (ConnectionCount::getInstance()->getCount(host_name, host_len) >=
+          s->txn_conf->origin_max_connections)
+      {
+        ink_atomic_increment64(&os_conn_exceed_counter, 1);
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 inline static
 HttpTransact::StateMachineAction_t
 how_to_open_connection(HttpTransact::State* s)
 {
-  static Event *ev = eventProcessor.schedule_every(new OSConnectionExceedLogger, HRTIME_SECONDS(60));
-
-  NOWARN_UNUSED(ev);
   ink_debug_assert(s->pending_work == NULL);
-
-  if (s->txn_conf->origin_max_connections > 0) {
-    int host_len;
-    const char *host_name = s->hdr_info.client_request.host_get(&host_len);
-
-    if (ConnectionCount::getInstance()->getCount(host_name, host_len) >= s->txn_conf->origin_max_connections) {
-      ink_atomic_increment64(&os_conn_exceed_counter, 1);
-      HttpTransact::build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
-      s->transact_return_point = NULL;
-      return HttpTransact::PROXY_SEND_ERROR_CACHE_NOOP;
-    }
-  }
 
   // Originally we returned which type of server to open
   // Now, however, we may want to issue a cache
