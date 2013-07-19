@@ -1183,6 +1183,7 @@ bool HttpTunnel::producer_handler(int event, HttpTunnelProducer * p)
 bool HttpTunnel::consumer_handler(int event, HttpTunnelConsumer * c)
 {
   bool sm_callback = false;
+  int new_event = event;
   HttpConsumerHandler jump_point;
 
   Debug("http_tunnel", "[%" PRId64 "] consumer_handler [%s %s]", sm->sm_id, c->name, HttpDebugNames::get_event_name(event));
@@ -1215,8 +1216,13 @@ bool HttpTunnel::consumer_handler(int event, HttpTunnelConsumer * c)
 #endif
 
       }
+      break;
+    } else {
+      if (c->buffer_reader->read_avail())
+        break;
+      else
+        new_event = VC_EVENT_EOS;
     }
-    break;
 
   case VC_EVENT_WRITE_COMPLETE:
   case VC_EVENT_EOS:
@@ -1231,7 +1237,7 @@ bool HttpTunnel::consumer_handler(int event, HttpTunnelConsumer * c)
 
     // Interesting tunnel event, call SM
     jump_point = c->vc_handler;
-    (sm->*jump_point) (event, c);
+    (sm->*jump_point) (new_event, c);
     sm_callback = true;
 
     // Deallocate the reader after calling back the sm
