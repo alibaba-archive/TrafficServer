@@ -1739,6 +1739,12 @@ HttpTransact::StartAccessControl(State* s)
     // Heartbeats should always be allowed.
     // s->content_control.access = ACCESS_ALLOW;
     HandleRequestAuthorized(s);
+    if (s->current.mode == TUNNELLING_PROXY) {
+      if (is_os_connecion_exceed(s)) {
+        build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
+        TRANSACT_RETURN(HttpTransact::PROXY_SEND_ERROR_CACHE_NOOP, NULL);
+      }
+    }
   //  return;
  // }
   // ua_session is NULL for scheduled updates.
@@ -2115,6 +2121,11 @@ HttpTransact::HandleCacheOpenRead(State* s)
     // cache miss
     DebugTxn("http_trans", "CacheOpenRead -- miss");
     SET_VIA_STRING(VIA_DETAIL_CACHE_LOOKUP, VIA_DETAIL_MISS_NOT_CACHED);
+    if (is_os_connecion_exceed(s)) {
+      build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+          "Server is too busy", "default", "");
+      TRANSACT_RETURN(HttpTransact::PROXY_SEND_ERROR_CACHE_NOOP, NULL);
+    }
     //StartAccessControl(s);
     if (s->force_dns) {
       HandleCacheOpenReadMiss(s);
@@ -2334,7 +2345,12 @@ HttpTransact::HandleCacheOpenReadHitFreshness(State* s)
 
   if (!s->force_dns) {          // If DNS is not performed before
     if (need_to_revalidate(s)) {
-      TRANSACT_RETURN(HTTP_API_CACHE_LOOKUP_COMPLETE, CallOSDNSLookup); // content needs to be revalidated and we did not perform a dns ....calling DNS lookup
+      if (is_os_connecion_exceed(s)) {
+        build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+            "Server is too busy", "default", "");
+        TRANSACT_RETURN(HttpTransact::PROXY_SEND_ERROR_CACHE_NOOP, NULL);
+      } else
+        TRANSACT_RETURN(HTTP_API_CACHE_LOOKUP_COMPLETE, CallOSDNSLookup); // content needs to be revalidated and we did not perform a dns ....calling DNS lookup
     } else {                    // document can be served can cache
       TRANSACT_RETURN(HTTP_API_CACHE_LOOKUP_COMPLETE, HttpTransact::HandleCacheOpenReadHit);
     }
@@ -2585,8 +2601,8 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
       //  we serve is potentially stale
       //
       if (s->current.request_to == ORIGIN_SERVER &&
-          is_server_negative_cached(s) && response_returnable == true &&
-          is_stale_cache_response_returnable(s) == true) {
+          (is_server_negative_cached(s) || is_os_connecion_exceed(s)) &&
+          response_returnable == true && is_stale_cache_response_returnable(s) == true) {
         server_up = false;
         update_current_info(&s->current, NULL, UNDEFINED_LOOKUP, 0);
         DebugTxn("http_trans", "CacheOpenReadHit - server_down, returning stale document");
@@ -2594,6 +2610,12 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
     }
 
     if (server_up || s->stale_icp_lookup) {
+      if (is_os_connecion_exceed(s)) {
+        build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+          "Server is too busy", "default", "");
+        s->cache_info.action = CACHE_DO_NO_ACTION;
+        TRANSACT_RETURN(HttpTransact::PROXY_SEND_ERROR_CACHE_NOOP, NULL);
+      }
       if (!s->stale_icp_lookup && !ats_is_ip(&s->current.server->addr)) {
 //        ink_release_assert(s->current.request_to == PARENT_PROXY ||
 //                    s->http_config_param->no_dns_forward_to_parent != 0);
@@ -2767,6 +2789,13 @@ HttpTransact::build_response_from_cache(State* s, HTTPWarningCode warning_code)
           s->next_action = PROXY_INTERNAL_CACHE_NOOP;
           break;
         } else if (s->range_setup == RANGE_NOT_SATISFIABLE || s->range_setup == RANGE_NOT_HANDLED) {
+          if (is_os_connecion_exceed(s)) {
+            build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
+            s->cache_info.action = CACHE_DO_NO_ACTION;
+            s->next_action = PROXY_INTERNAL_CACHE_NOOP;
+            break;
+          }
+
           // we switch to tunneing for Range requests either
           // 1. we need to revalidate or
           // 2. out-of-order Range requests
@@ -2892,7 +2921,7 @@ HttpTransact::handle_cache_write_lock(State* s)
         TRANSACT_RETURN(next, NULL);
       } else {
         s->next_action = next;
-        ink_assert(s->next_action == DNS_LOOKUP || s->next_action == PROXY_SEND_ERROR_CACHE_NOOP);
+        ink_assert(s->next_action == DNS_LOOKUP);
         return;
       }
     } else
@@ -4210,11 +4239,9 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
                   (s->current.server->keep_alive == HTTP_PIPELINE));
 
     s->next_action = how_to_open_connection(s);
-    if (s->next_action == PROXY_SEND_ERROR_CACHE_NOOP) {
-      s->already_downgraded = true;
-    }
+
     /* Downgrade the request level and retry */
-    else if (!HttpTransactHeaders::downgrade_request(&keep_alive, &s->hdr_info.server_request)) {
+    if (!HttpTransactHeaders::downgrade_request(&keep_alive, &s->hdr_info.server_request)) {
       build_error_response(s, HTTP_STATUS_HTTPVER_NOT_SUPPORTED, "HTTP Version Not Supported", "response#bad_version", "");
       s->next_action = PROXY_SEND_ERROR_CACHE_NOOP;
       s->already_downgraded = true;
@@ -4576,11 +4603,9 @@ HttpTransact::handle_no_cache_operation_on_forward_server_response(State* s)
     break;
   case HTTP_STATUS_HTTPVER_NOT_SUPPORTED:
     s->next_action = how_to_open_connection(s);
-    if (s->next_action == PROXY_SEND_ERROR_CACHE_NOOP) {
-      s->already_downgraded = true;
-    }
+
     /* Downgrade the request level and retry */
-    else if (!HttpTransactHeaders::downgrade_request(&keep_alive, &s->hdr_info.server_request)) {
+    if (!HttpTransactHeaders::downgrade_request(&keep_alive, &s->hdr_info.server_request)) {
       s->already_downgraded = true;
       build_error_response(s, HTTP_STATUS_HTTPVER_NOT_SUPPORTED, "HTTP Version Not Supported", "response#bad_version", "");
       s->next_action = PROXY_SEND_ERROR_CACHE_NOOP;
