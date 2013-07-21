@@ -159,23 +159,19 @@ link_string_alloc(const char *name, RecDataT data_type, RecData data, void *cook
   REC_NOWARN_UNUSED(name);
   REC_NOWARN_UNUSED(data_type);
 
-  RecString _ss = (RecString) cookie;
-  RecString _new_value = 0;
-
-  int len = -1;
-  if (_ss) {
-    len = strlen(_ss);
-    _new_value = (RecString)ats_malloc(len + 1);
-    memcpy(_new_value, _ss, len + 1);
+  RecString *_ss = (RecString *) cookie;
+  if (_ss == NULL) {
+    return REC_ERR_OKAY;
   }
 
-  RecString _temp2 = data.rec_string;
-  data.rec_string = _new_value;
-  ats_free(_temp2);
+  //RecString _temp = *_ss;
+  *_ss = ats_strdup(data.rec_string);
+
+  //should free delay, such as 60 minutes
+  //ats_free(_temp);
 
   return REC_ERR_OKAY;
 }
-
 
 //-------------------------------------------------------------------------
 // RecCoreInit

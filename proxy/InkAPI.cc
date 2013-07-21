@@ -8022,6 +8022,9 @@ TSHttpConfigParamSet(OverridableHttpConfigParams *overridableHttpConfig,
       break;
     case OVERRIDABLE_TYPE_STRING:
       if (conf == TS_CONFIG_HTTP_RESPONSE_SERVER_STR) {
+        if (overridableHttpConfig->proxy_response_server_string != NULL) {
+          ats_free(overridableHttpConfig->proxy_response_server_string);
+        }
         overridableHttpConfig->proxy_response_server_string = ats_strdup(value);
         overridableHttpConfig->proxy_response_server_string_len = valueLen;
         break;

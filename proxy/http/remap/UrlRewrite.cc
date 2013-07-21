@@ -1879,6 +1879,8 @@ bool UrlRewrite::_getRecordsConfig(url_mapping *new_mapping,
   new_mapping->overridableHttpConfig = new OverridableHttpConfigParams(true);
   memcpy(new_mapping->overridableHttpConfig, &httpConfig->oride,
       sizeof(OverridableHttpConfigParams));
+  new_mapping->overridableHttpConfig->proxy_response_server_string =
+    ats_strdup(httpConfig->oride.proxy_response_server_string);
 
   ConfigKeyValue *kv;
   ConfigKeyValue *end;

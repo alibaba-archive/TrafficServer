@@ -400,7 +400,7 @@ struct HttpConfigPortRange
 // to be overridable per transaction more easily.
 struct OverridableHttpConfigParams {
   OverridableHttpConfigParams(const bool needFreeProxyResponseServerString = false)
-    :  need_free_proxy_response_server_string(needFreeProxyResponseServerString), 
+   :  need_free_proxy_response_server_string(needFreeProxyResponseServerString), 
        maintain_pristine_host_hdr(0), chunking_enabled(0), allow_anyway(0),
        negative_caching_enabled(0), cache_when_to_revalidate(0),
        keep_alive_enabled_in(0), keep_alive_enabled_out(0), keep_alive_post_out(0),
@@ -991,13 +991,13 @@ HttpConfigParams::~HttpConfigParams()
   ats_free(proxy_server_other_ports);
   ats_free(anonymize_other_header_list);
   ats_free(global_user_agent_header);
-  ats_free(oride.proxy_response_server_string);
   ats_free(cache_vary_default_text);
   ats_free(cache_vary_default_images);
   ats_free(cache_vary_default_other);
   ats_free(connect_ports_string);
   ats_free(reverse_proxy_no_host_redirect);
   ats_free(url_expansions);
+  ats_free(oride.proxy_response_server_string);
 
   if (connect_ports) {
     delete connect_ports;

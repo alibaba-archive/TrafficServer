@@ -188,11 +188,8 @@ void RecSignalManager(int, const char *);
  * For now, we're using the return value to indicate this, even though it's
  * not always the case.  If we're wrong, we'll leak the RecString.
  */
-#define REC_EstablishStaticConfigStringAlloc(_var, _config_var_name) do { \
-  if (RecLinkConfigString(_config_var_name, &_var) == REC_ERR_OKAY) \
-    ats_free(_var);                                                    \
-  _var = (RecString)REC_ConfigReadString(_config_var_name); \
-} while (0)
+#define REC_EstablishStaticConfigStringAlloc(_var, _config_var_name) \
+  RecLinkConfigString(_config_var_name, &_var)
 
 #define REC_EstablishStaticConfigFloat(_var, _config_var_name) do { \
   RecLinkConfigFloat(_config_var_name, &_var); \
