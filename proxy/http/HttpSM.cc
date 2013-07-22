@@ -1574,7 +1574,9 @@ HttpSM::handle_api_return()
       }
       break;
     }
-
+  case HttpTransact::PROXY_OS_CONNECTIONS_LIMITS_EXCEED:
+    cache_sm.end_both();
+    transform_cache_sm.end_both();
   case HttpTransact::PROXY_INTERNAL_CACHE_NOOP:
   case HttpTransact::PROXY_INTERNAL_CACHE_DELETE:
   case HttpTransact::PROXY_INTERNAL_CACHE_UPDATE_HEADERS:
@@ -6897,7 +6899,11 @@ HttpSM::set_next_state()
       break;
 
     }
-
+  case HttpTransact::PROXY_OS_CONNECTIONS_LIMITS_EXCEED:
+    {
+      cache_sm.end_both();
+      transform_cache_sm.end_both();
+    }
   case HttpTransact::PROXY_SEND_ERROR_CACHE_NOOP:
     {
       setup_error_transfer();

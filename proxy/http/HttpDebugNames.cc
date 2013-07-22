@@ -330,6 +330,9 @@ HttpDebugNames::get_action_name(HttpTransact::StateMachineAction_t e)
   case HttpTransact::PROXY_INTERNAL_REQUEST:
     return ("PROXY_INTERNAL_REQUEST");
 
+  case HttpTransact::PROXY_OS_CONNECTIONS_LIMITS_EXCEED:
+    return ("PROXY_OS_CONNECTIONS_LIMITS_EXCEED");
+
   case HttpTransact::PROXY_SEND_ERROR_CACHE_NOOP:
     return ("PROXY_SEND_ERROR_CACHE_NOOP");
 
