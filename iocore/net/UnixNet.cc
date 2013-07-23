@@ -26,13 +26,11 @@
 ink_hrtime last_throttle_warning;
 ink_hrtime last_shedding_warning;
 ink_hrtime emergency_throttle_time;
-int net_connections_throttle;
-int net_max_accept;
-int net_max_active_client;
-int fds_throttle;
-int fds_accept;
-int active_client;
-bool throttle_enabled;
+int net_connections_throttle = 0;
+int net_max_accept = 0;
+int net_max_active_client = 0;
+int fds_throttle = 0;
+bool throttle_enabled = false;
 int fds_limit = 8000;
 ink_hrtime last_transient_accept_error;
 

@@ -130,8 +130,6 @@ extern ink_hrtime emergency_throttle_time;
 extern int net_connections_throttle;
 extern int net_max_accept;
 extern int net_max_active_client;
-extern int fds_accept;
-extern int active_client;
 extern int fds_throttle;
 extern bool throttle_enabled;
 extern int fds_limit;
@@ -333,35 +331,15 @@ check_emergency_throttle(Connection & con)
   return false;
 }
 
-
-TS_INLINE int
-change_net_max_accept(const char *token, RecDataT data_type, RecData value, void *data)
-{
-  (void) token;
-  (void) data_type;
-  (void) value;
-  (void) data;
-  if (fds_accept < 0)
-    net_max_accept = 0;
-  else
-    net_max_accept = fds_accept;
-
-  if (active_client < 0)
-    net_max_active_client = 0;
-  else
-    net_max_active_client = active_client;
-  return 0;
-}
-
-
 TS_INLINE int
 change_net_connections_throttle(const char *token, RecDataT data_type, RecData value, void *data)
 {
   (void) token;
   (void) data_type;
-  (void) value;
   (void) data;
   int throttle = fds_limit - THROTTLE_FD_HEADROOM;
+
+  fds_throttle = (int32_t)value.rec_int;
   if (fds_throttle < 0)
     net_connections_throttle = throttle;
   else {

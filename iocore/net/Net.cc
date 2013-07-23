@@ -40,12 +40,9 @@ configure_net(void)
   IOCORE_RegisterConfigUpdateFunc("proxy.config.net.connections_throttle", change_net_connections_throttle, NULL);
   IOCORE_ReadConfigInteger(fds_throttle, "proxy.config.net.connections_throttle");
   IOCORE_ReadConfigInteger(throttle_enabled,"proxy.config.net.throttle_enabled");
-  IOCORE_RegisterConfigUpdateFunc("proxy.config.net.max_accept", change_net_max_accept, NULL);
-  IOCORE_ReadConfigInteger(fds_accept, "proxy.config.net.max_accept");
-  IOCORE_RegisterConfigUpdateFunc("proxy.config.net.max_active_client", change_net_max_accept, NULL);
-  IOCORE_ReadConfigInteger(active_client, "proxy.config.net.max_active_client");
+  REC_EstablishStaticConfigInt32(net_max_accept, "proxy.config.net.max_accept");
+  REC_EstablishStaticConfigInt32(net_max_active_client, "proxy.config.net.max_active_client");
 }
-
 
 static inline void
 register_net_stats()
