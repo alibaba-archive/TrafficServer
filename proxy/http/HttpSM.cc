@@ -168,7 +168,7 @@ HttpSM::_instantiate_func(HttpSM * prototype, HttpSM * new_instance)
 
 SparceClassAllocator<HttpSM> httpSMAllocator("httpSMAllocator", 128, 16, HttpSM::_instantiate_func);
 
-#define HTTP_INCREMENT_TRANS_STAT(X) HttpTransact::update_stat(&t_state, X, 1);
+#define HTTP_INCREMENT_TRANS_STAT(X) HttpTransact::update_stat(&t_state, X, 1)
 
 HttpVCTable::HttpVCTable()
 {

@@ -178,9 +178,14 @@ register_stat_callbacks()
                      RECD_INT, RECP_NON_PERSISTENT, (int) http_current_server_raw_transactions_stat, RecRawStatSyncSum);
   HTTP_CLEAR_DYN_STAT(http_current_server_raw_transactions_stat);
   RecRegisterRawStat(http_rsb, RECT_PROCESS,
-                     "proxy.process.http.total_transaction_drop_stat",
+                     "proxy.process.http.total_transaction_drop_count",
                      RECD_INT, RECP_NON_PERSISTENT, (int) http_total_transaction_drop_stat, RecRawStatSyncCount);
   HTTP_CLEAR_DYN_STAT(http_total_transaction_drop_stat);
+
+  RecRegisterRawStat(http_rsb, RECT_PROCESS,
+                     "proxy.process.http.total_os_connection_exceed_count",
+                     RECD_INT, RECP_NON_PERSISTENT, (int) http_total_os_connection_exceed_stat, RecRawStatSyncCount);
+  HTTP_CLEAR_DYN_STAT(http_total_os_connection_exceed_stat);
 
   // Total connections stats
 

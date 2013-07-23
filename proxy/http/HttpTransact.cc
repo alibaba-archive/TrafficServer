@@ -52,8 +52,8 @@
 
 static const char *URL_MSG = "Unable to process requested URL.\n";
 
-#define HTTP_INCREMENT_TRANS_STAT(X) update_stat(s, X, 1);
-#define HTTP_SUM_TRANS_STAT(X,S) update_stat(s, X, (ink_statval_t) S);
+#define HTTP_INCREMENT_TRANS_STAT(X) HttpTransact::update_stat(s, X, 1)
+#define HTTP_SUM_TRANS_STAT(X,S) HttpTransact::update_stat(s, X, (ink_statval_t) S)
 
 #define TRANSACT_REMEMBER(_s,_e,_d) \
 { \
@@ -460,29 +460,8 @@ does_method_require_cache_copy_deletion(int method)
            method == HTTP_WKSIDX_PUT || method == HTTP_WKSIDX_POST));
 }
 
-static volatile int64_t os_conn_exceed_counter = 0;
-struct OSConnectionExceedLogger: public Continuation
+inline static bool is_os_connection_exceed(HttpTransact::State* s)
 {
-  OSConnectionExceedLogger() {
-    mutex = new_ProxyMutex();
-    SET_HANDLER(&OSConnectionExceedLogger::mainEvent);
-  }
-
-  int mainEvent(int event, void *data) {
-    int64_t count = ink_atomic_increment64(&os_conn_exceed_counter, 0);
-    if (count > 0) {
-      Warning("last 1 minute exceeds origin_max_connections count: %"PRId64, count);
-      ink_atomic_increment64(&os_conn_exceed_counter, -1 * count);
-    }
-    return EVENT_CONT;
-  }
-};
-
-inline static bool is_os_connecion_exceed(HttpTransact::State* s)
-{
-  static Event *ev = eventProcessor.schedule_every(new OSConnectionExceedLogger, HRTIME_SECONDS(60));
-  NOWARN_UNUSED(ev);
-
   if (s->txn_conf->origin_max_connections > 0) {
     if (!s->backdoor_request) {
       int host_len;
@@ -490,7 +469,7 @@ inline static bool is_os_connecion_exceed(HttpTransact::State* s)
       if (ConnectionCount::getInstance()->getCount(host_name, host_len) >=
           s->txn_conf->origin_max_connections)
       {
-        ink_atomic_increment64(&os_conn_exceed_counter, 1);
+        HTTP_INCREMENT_TRANS_STAT(http_total_os_connection_exceed_stat);
         return true;
       }
     }
@@ -1741,7 +1720,7 @@ HttpTransact::StartAccessControl(State* s)
     // s->content_control.access = ACCESS_ALLOW;
     HandleRequestAuthorized(s);
     if (s->current.mode == TUNNELLING_PROXY) {
-      if (is_os_connecion_exceed(s)) {
+      if (is_os_connection_exceed(s)) {
         build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
         TRANSACT_RETURN(PROXY_OS_CONNECTIONS_LIMITS_EXCEED, NULL);
       }
@@ -2122,7 +2101,7 @@ HttpTransact::HandleCacheOpenRead(State* s)
     // cache miss
     DebugTxn("http_trans", "CacheOpenRead -- miss");
     SET_VIA_STRING(VIA_DETAIL_CACHE_LOOKUP, VIA_DETAIL_MISS_NOT_CACHED);
-    if (is_os_connecion_exceed(s)) {
+    if (is_os_connection_exceed(s)) {
       build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR,
           "Server is too busy", "default", "");
       TRANSACT_RETURN(PROXY_OS_CONNECTIONS_LIMITS_EXCEED, NULL);
@@ -2346,7 +2325,7 @@ HttpTransact::HandleCacheOpenReadHitFreshness(State* s)
 
   if (!s->force_dns) {          // If DNS is not performed before
     if (need_to_revalidate(s)) {
-      if (is_os_connecion_exceed(s)) {
+      if (is_os_connection_exceed(s)) {
         build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR,
             "Server is too busy", "default", "");
         TRANSACT_RETURN(PROXY_OS_CONNECTIONS_LIMITS_EXCEED, NULL);
@@ -2602,7 +2581,7 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
       //  we serve is potentially stale
       //
       if (s->current.request_to == ORIGIN_SERVER &&
-          (is_server_negative_cached(s) || is_os_connecion_exceed(s)) &&
+          (is_server_negative_cached(s) || is_os_connection_exceed(s)) &&
           response_returnable == true && is_stale_cache_response_returnable(s) == true) {
         server_up = false;
         update_current_info(&s->current, NULL, UNDEFINED_LOOKUP, 0);
@@ -2611,7 +2590,7 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
     }
 
     if (server_up || s->stale_icp_lookup) {
-      if (is_os_connecion_exceed(s)) {
+      if (is_os_connection_exceed(s)) {
         build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR,
           "Server is too busy", "default", "");
         s->cache_info.action = CACHE_DO_NO_ACTION;
@@ -2790,7 +2769,7 @@ HttpTransact::build_response_from_cache(State* s, HTTPWarningCode warning_code)
           s->next_action = PROXY_INTERNAL_CACHE_NOOP;
           break;
         } else if (s->range_setup == RANGE_NOT_SATISFIABLE || s->range_setup == RANGE_NOT_HANDLED) {
-          if (is_os_connecion_exceed(s)) {
+          if (is_os_connection_exceed(s)) {
             build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
             s->cache_info.action = CACHE_DO_NO_ACTION;
             s->next_action = PROXY_OS_CONNECTIONS_LIMITS_EXCEED;
