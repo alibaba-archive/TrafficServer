@@ -74,6 +74,7 @@ enum
   http_current_parent_proxy_raw_transactions_stat,
   http_current_icp_raw_transactions_stat,
   http_current_server_raw_transactions_stat,
+  http_total_transaction_drop_stat,
 
   //  Http Abort information (from HttpNetConnection)
   http_ua_msecs_counts_errors_pre_accept_hangups_stat,

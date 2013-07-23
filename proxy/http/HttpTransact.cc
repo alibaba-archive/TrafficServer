@@ -874,6 +874,7 @@ HttpTransact::EndRemapRequest(State* s)
   if (s->server_busy) {
     build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
     s->reverse_proxy = false;
+    HTTP_INCREMENT_TRANS_STAT(http_total_transaction_drop_stat);
     goto done;
   }
  

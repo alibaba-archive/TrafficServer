@@ -177,6 +177,11 @@ register_stat_callbacks()
                      "proxy.process.http.current_server_raw_transactions",
                      RECD_INT, RECP_NON_PERSISTENT, (int) http_current_server_raw_transactions_stat, RecRawStatSyncSum);
   HTTP_CLEAR_DYN_STAT(http_current_server_raw_transactions_stat);
+  RecRegisterRawStat(http_rsb, RECT_PROCESS,
+                     "proxy.process.http.total_transaction_drop_stat",
+                     RECD_INT, RECP_NON_PERSISTENT, (int) http_total_transaction_drop_stat, RecRawStatSyncCount);
+  HTTP_CLEAR_DYN_STAT(http_total_transaction_drop_stat);
+
   // Total connections stats
 
   RecRegisterRawStat(http_rsb, RECT_PROCESS,

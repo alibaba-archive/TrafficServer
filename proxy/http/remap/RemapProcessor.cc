@@ -175,7 +175,7 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
       s->client_connection_enabled = false;
       s->server_busy = true;
       return false;
-    } 
+    }
   }
 
   // Do fast ACL filtering (it is safe to check map here)
