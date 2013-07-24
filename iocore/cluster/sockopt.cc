@@ -48,7 +48,7 @@
 
 #endif
 
-#include "logger.h"
+#include "Diags.h"
 #include "sockopt.h"
 
 #ifdef WIN32
@@ -726,7 +726,7 @@ int socketBind(int sock, const char *bind_ipaddr, const int port)
 	{
 		if (inet_aton(bind_ipaddr, &bindaddr.sin_addr) == 0)
 		{
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"invalid ip addr %s", \
 				__LINE__, bind_ipaddr);
 			return EINVAL;
@@ -735,7 +735,7 @@ int socketBind(int sock, const char *bind_ipaddr, const int port)
 
 	if (bind(sock, (struct sockaddr*)&bindaddr, sizeof(bindaddr)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"bind port %d failed, " \
 			"errno: %d, error info: %s.", \
 			__LINE__, port, errno, STRERROR(errno));
@@ -754,7 +754,7 @@ int socketServer(const char *bind_ipaddr, const int port, int *err_no)
 	if (sock < 0)
 	{
 		*err_no = errno != 0 ? errno : EMFILE;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"socket create failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return -1;
@@ -764,7 +764,7 @@ int socketServer(const char *bind_ipaddr, const int port, int *err_no)
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &result, sizeof(int))<0)
 	{
 		*err_no = errno != 0 ? errno : ENOMEM;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		close(sock);
@@ -780,7 +780,7 @@ int socketServer(const char *bind_ipaddr, const int port, int *err_no)
 	if (listen(sock, 1024) < 0)
 	{
 		*err_no = errno != 0 ? errno : EINVAL;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"listen port %d failed, " \
 			"errno: %d, error info: %s", \
 			__LINE__, port, errno, STRERROR(errno));
@@ -1046,7 +1046,7 @@ int tcpsendfile_ex(int sock, const char *filename, const int64_t file_offset, \
 	result = 1;
 	if (setsockopt(sock, SOL_TCP, TCP_CORK, &result, sizeof(int)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s.", \
 			__LINE__, errno, STRERROR(errno));
 		close(fd);
@@ -1191,7 +1191,7 @@ int tcpsetserveropt(int fd, const int timeout)
 	if (setsockopt(fd, SOL_SOCKET, SO_LINGER, \
                 &linger, (socklen_t)sizeof(struct linger)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -1203,7 +1203,7 @@ int tcpsetserveropt(int fd, const int timeout)
 	if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO,
                &waittime, (socklen_t)sizeof(struct timeval)) < 0)
 	{
-		logWarning("file: "__FILE__", line: %d, " \
+		Warning("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 	}
@@ -1211,7 +1211,7 @@ int tcpsetserveropt(int fd, const int timeout)
 	if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,
                &waittime, (socklen_t)sizeof(struct timeval)) < 0)
 	{
-		logWarning("file: "__FILE__", line: %d, " \
+		Warning("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 	}
@@ -1226,7 +1226,7 @@ int tcpsetserveropt(int fd, const int timeout)
 	if (getsockopt(fd, SOL_SOCKET, SO_SNDBUF,
 		&bytes, (socklen_t *)&size) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"getsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -1236,7 +1236,7 @@ int tcpsetserveropt(int fd, const int timeout)
 	if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF,
 		&bytes, (socklen_t *)&size) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"getsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -1249,7 +1249,7 @@ int tcpsetserveropt(int fd, const int timeout)
 	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, \
 		(char *)&flags, sizeof(flags)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1277,7 +1277,7 @@ int tcpsetkeepalive(int fd, const int idleSeconds)
 	if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, \
 		(char *)&keepAlive, sizeof(keepAlive)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1288,7 +1288,7 @@ int tcpsetkeepalive(int fd, const int idleSeconds)
 	if (setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, (char *)&keepIdle, \
 		sizeof(keepIdle)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1298,7 +1298,7 @@ int tcpsetkeepalive(int fd, const int idleSeconds)
 	if (setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, (char *)&keepInterval, \
 		sizeof(keepInterval)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1308,7 +1308,7 @@ int tcpsetkeepalive(int fd, const int idleSeconds)
 	if (setsockopt(fd, SOL_TCP, TCP_KEEPCNT, (char *)&keepCount, \
 		sizeof(keepCount)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1333,7 +1333,7 @@ int tcpprintkeepalive(int fd)
 	if (getsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, \
 		(char *)&keepAlive, &len) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1344,7 +1344,7 @@ int tcpprintkeepalive(int fd)
 	if (getsockopt(fd, SOL_TCP, TCP_KEEPIDLE, (char *)&keepIdle, \
 		&len) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1354,7 +1354,7 @@ int tcpprintkeepalive(int fd)
 	if (getsockopt(fd, SOL_TCP, TCP_KEEPINTVL, (char *)&keepInterval, \
 		&len) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1364,16 +1364,16 @@ int tcpprintkeepalive(int fd)
 	if (getsockopt(fd, SOL_TCP, TCP_KEEPCNT, (char *)&keepCount, \
 		&len) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
 	}
 
-	logInfo("keepAlive=%d, keepIdle=%d, keepInterval=%d, keepCount=%d", 
+	Note("keepAlive=%d, keepIdle=%d, keepInterval=%d, keepCount=%d", 
 		keepAlive, keepIdle, keepInterval, keepCount);
 #else
-        logInfo("keepAlive=%d", keepAlive);
+  Note("keepAlive=%d", keepAlive);
 #endif
 
 	return 0;
@@ -1386,7 +1386,7 @@ int tcpsetnonblockopt(int fd)
 	flags = fcntl(fd, F_GETFL, 0);
 	if (flags < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"fcntl failed, errno: %d, error info: %s.", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EACCES;
@@ -1394,7 +1394,7 @@ int tcpsetnonblockopt(int fd)
 
 	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"fcntl failed, errno: %d, error info: %s.", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EACCES;
@@ -1417,7 +1417,7 @@ int tcpsetnodelay(int fd, const int timeout)
 	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, \
 			(char *)&flags, sizeof(flags)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1436,7 +1436,7 @@ int getlocaladdrs(char ip_addrs[][IP_ADDRESS_SIZE], \
 	*count = 0;
 	if (0 != getifaddrs(&ifc))
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call getifaddrs fail, " \
 			"errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
@@ -1452,7 +1452,7 @@ int getlocaladdrs(char ip_addrs[][IP_ADDRESS_SIZE], \
 		{
 			if (max_count <= *count)
 			{
-				logError("file: "__FILE__", line: %d, "\
+				Error("file: "__FILE__", line: %d, "\
 				"max_count: %d < iterface count: %d", \
 				__LINE__, max_count, *count);
 				freeifaddrs(ifc1);
@@ -1466,7 +1466,7 @@ int getlocaladdrs(char ip_addrs[][IP_ADDRESS_SIZE], \
 			}
 			else
 			{
-				logWarning("file: "__FILE__", line: %d, " \
+				Warning("file: "__FILE__", line: %d, " \
 					"call inet_ntop fail, " \
 					"errno: %d, error info: %s", \
 					__LINE__, errno, STRERROR(errno));
@@ -1496,7 +1496,7 @@ int getlocaladdrs(char ip_addrs[][IP_ADDRESS_SIZE], \
 	s = socket(AF_INET, SOCK_STREAM, 0);
 	if (s < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"socket create fail, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EMFILE;
@@ -1507,7 +1507,7 @@ int getlocaladdrs(char ip_addrs[][IP_ADDRESS_SIZE], \
 	if (ioctl(s, SIOCGIFCONF, &ifconf) < 0)
 	{
 		result = errno != 0 ? errno : EMFILE;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call ioctl fail, errno: %d, error info: %s", \
 			__LINE__, result, STRERROR(result));
  		close(s);
@@ -1517,7 +1517,7 @@ int getlocaladdrs(char ip_addrs[][IP_ADDRESS_SIZE], \
 	if_count = ifconf.ifc_len / sizeof(ifr[0]);
 	if (max_count < if_count)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"max_count: %d < iterface count: %d", \
 			__LINE__, max_count, if_count);
  		close(s);
@@ -1532,7 +1532,7 @@ int getlocaladdrs(char ip_addrs[][IP_ADDRESS_SIZE], \
 			ip_addrs[*count], IP_ADDRESS_SIZE))
 		{
 			result = errno != 0 ? errno : EMFILE;
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"call inet_ntop fail, " \
 				"errno: %d, error info: %s", \
 				__LINE__, result, STRERROR(result));
@@ -1598,7 +1598,7 @@ int gethostaddrs(char **if_alias_prefixes, const int prefix_count, \
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"socket create failed, errno: %d, error info: %s.", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EMFILE;
@@ -1637,7 +1637,7 @@ int gethostaddrs(char **if_alias_prefixes, const int prefix_count, \
 
 	if (gethostname(hostname, sizeof(hostname)) != 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call gethostname fail, " \
 			"error no: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
@@ -1647,7 +1647,7 @@ int gethostaddrs(char **if_alias_prefixes, const int prefix_count, \
         ent = gethostbyname(hostname);
 	if (ent == NULL)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call gethostbyname fail, " \
 			"error no: %d, error info: %s", \
 			__LINE__, h_errno, STRERROR(h_errno));

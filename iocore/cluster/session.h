@@ -17,10 +17,7 @@ typedef struct {
   SessionEntry *sessions;
 	pthread_mutex_t *locks;
   volatile SequenceType current_seq;
-
-#ifdef SESSION_STAT_FLAG
   volatile SessionStat session_stat;
-#endif
 
 #ifdef TRIGGER_STAT_FLAG
   volatile MsgTimeUsed trigger_stat;
@@ -60,9 +57,7 @@ int push_in_message(const SessionId session,
     MachineSessions *pMachineSessions, SessionEntry *pSessionEntry,
     const int func_id, IOBufferBlock *blocks, const int data_len);
 
-#ifdef SESSION_STAT_FLAG
 void log_session_stat();
-#endif
 
 #ifdef TRIGGER_STAT_FLAG
 void log_trigger_stat();

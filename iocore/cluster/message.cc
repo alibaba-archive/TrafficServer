@@ -11,23 +11,17 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
-#include "logger.h"
-#include "sched_thread.h"
+#include "Diags.h"
 #include "global.h"
 #include "nio.h"
 #include "clusterinterface.h"
 #include "session.h"
-#include "message.h"
-
-#ifndef DEBUG_FLAG
-
 #ifndef TS_INLINE
 #define TS_INLINE inline
 #endif
-
 #include "I_IOBuffer.h"
 #include "P_Cluster.h"
-#endif
+#include "message.h"
 
 #ifndef USE_MULTI_ALLOCATOR
 Allocator g_out_message_allocator("OutMessage", sizeof(OutMessage), 1024);
@@ -70,7 +64,7 @@ int cluster_send_message(ClusterSession session, const int func_id,
 #endif
 
   if (pMessage == NULL) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "malloc %d bytes fail, errno: %d, error info: %s", \
         __LINE__, (int)sizeof(OutMessage), errno, strerror(errno));
     return errno != 0 ? errno : ENOMEM;
@@ -113,7 +107,7 @@ int cluster_send_message(ClusterSession session, const int func_id,
     }
     else {
       if (data_len > MINI_MESSAGE_SIZE) {
-        logError("file: "__FILE__", line: %d, " \
+        Error("file: "__FILE__", line: %d, " \
             "invalid data length: %d exceeds %d!", \
             __LINE__, data_len, MINI_MESSAGE_SIZE);
         result = errno != 0 ? errno : ENOMEM;
@@ -157,7 +151,7 @@ int cluster_send_msg_internal(const ClusterSession *session,
 #endif
 
   if (pMessage == NULL) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "malloc %d bytes fail, errno: %d, error info: %s", \
         __LINE__, (int)sizeof(OutMessage), errno, strerror(errno));
     return errno != 0 ? errno : ENOMEM;
@@ -181,7 +175,7 @@ int cluster_send_msg_internal(const ClusterSession *session,
     }
     else {
       if (data_len > MINI_MESSAGE_SIZE) {
-        logError("file: "__FILE__", line: %d, " \
+        Error("file: "__FILE__", line: %d, " \
             "invalid data length: %d exceeds %d!", \
             __LINE__, data_len, MINI_MESSAGE_SIZE);
         result = errno != 0 ? errno : ENOMEM;

@@ -15,7 +15,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "common_define.h"
-#include "ini_file_reader.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -310,50 +309,6 @@ bool isFile(const char *filename);
  *  return: true for regular file
 */
 bool is_filename_secure(const char *filename, const int len);
-
-/** load log_level from config context
- *  parameters:
- *  	pIniContext: the config context
- *  return: none
-*/
-void load_log_level(IniContext *pIniContext);
-
-/** load log_level from config file
- *  parameters:
- *  	conf_filename: the config filename
- *  return: none
-*/
-int load_log_level_ex(const char *conf_filename);
-
-/** set global log level
- *  parameters:
- *  	pLogLevel: log level string value
- *  return: none
-*/
-void set_log_level(char *pLogLevel);
-
-/** load allow hosts from config context
- *  parameters:
- *  	pIniContext: the config context
- *  	allow_ip_addrs: store allow ip addresses
- *  	allow_ip_count: store allow ip address count
- *  return: error no , 0 success, != 0 fail
-*/
-int load_allow_hosts(IniContext *pIniContext, \
-		in_addr_t **allow_ip_addrs, int *allow_ip_count);
-
-/** get time item from config context
- *  parameters:
- *  	pIniContext: the config context
- *  	item_name: item name in config file, time format: hour:minute, such as 15:25
- *  	pTimeInfo: store time info
- *  	default_hour: default hour value
- *  	default_minute: default minute value
- *  return: error no , 0 success, != 0 fail
-*/
-int get_time_item_from_conf(IniContext *pIniContext, \
-		const char *item_name, TimeInfo *pTimeInfo, \
-		const char default_hour, const char default_minute);
 
 /** trim path tail char /
  *  parameters:

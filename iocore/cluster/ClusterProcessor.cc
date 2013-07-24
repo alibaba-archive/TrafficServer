@@ -409,7 +409,7 @@ static int machine_change_notify(ClusterMachine * m)
   //char textbuf[sizeof("255.255.255.255:65535")];
   int result;
 
-  Note("start notify, machine %s %hhu.%hhu.%hhu.%hhu:%d, version: %d.%d",
+  Debug("cluster_io", "start notify, machine %s %hhu.%hhu.%hhu.%hhu:%d, version: %d.%d",
       m->dead ? "down" : "up",
       DOT_SEPARATED(m->ip), m->cluster_port, m->msg_proto_major,
       m->msg_proto_minor);
@@ -421,8 +421,6 @@ static int machine_change_notify(ClusterMachine * m)
       //CLUSTER_DECREMENT_DYN_STAT(CLUSTER_NODES_STAT);
       this_cluster()->configurations.push(cc);
       result = 0;
-
-      Note("remove machine %hhu.%hhu.%hhu.%hhu:%d", DOT_SEPARATED(m->ip), m->cluster_port);
     }
     else {
       result = ENOENT;
@@ -448,7 +446,6 @@ static int machine_change_notify(ClusterMachine * m)
         //CLUSTER_INCREMENT_DYN_STAT(CLUSTER_NODES_STAT);
         this_cluster()->configurations.push(cconf);
         result = 0;
-        Note("add machine %hhu.%hhu.%hhu.%hhu:%d", DOT_SEPARATED(m->ip), m->cluster_port);
     }
 
     Note("machine up %hhu.%hhu.%hhu.%hhu:%d, version=%d.%d",

@@ -21,7 +21,6 @@ extern int g_server_port;
 extern int g_thread_stack_size;
 extern int g_socket_recv_bufsize;
 extern int g_socket_send_bufsize;
-extern char g_base_path[MAX_PATH_SIZE];
 
 #ifdef __cplusplus
 }

@@ -2,34 +2,11 @@
 #ifndef _CLUSTER_INTERFACE_H
 #define _CLUSTER_INTERFACE_H
 
-#ifdef DEBUG_FLAG
-#include "Allocator.h"
-#include "ClusterMachine.h"
-#include "clusterbuffer.h"
-
-#define new_RecvBuffer(len) new IOBufferData(len)
-#define new_IOBufferBlock(data, len, offset) \
-  new IOBufferBlock(data, len, offset)
-
-#define CURRENT_TIME()  g_current_time
-#define CURRENT_MS()    ((int64_t)g_current_time * 1000)
-#define CURRENT_NS()    ((int64_t)g_current_time * 1000 * 1000 * 1000)
-
-#define CLUSTER_MAJOR_VERSION               3
-#define CLUSTER_MINOR_VERSION               2
-
-// Lowest supported major/minor cluster version
-#define MIN_CLUSTER_MAJOR_VERSION	    CLUSTER_MAJOR_VERSION
-#define MIN_CLUSTER_MINOR_VERSION	    CLUSTER_MINOR_VERSION
-
-#define DOT_SEPARATED(_x)                             \
-  ((unsigned char*)&(_x))[0], ((unsigned char*)&(_x))[1],   \
-  ((unsigned char*)&(_x))[2], ((unsigned char*)&(_x))[3]
-
-#else
 struct ClusterMachine;
 class IOBufferData;
 class IOBufferBlock;
+
+#define CLUSTER_DEBUG_TAG "cluster_io"
 
 #define new_RecvBuffer(len) \
   new_IOBufferData(iobuffer_size_to_index(len, MAX_BUFFER_SIZE_INDEX))
@@ -37,8 +14,6 @@ class IOBufferBlock;
 #define CURRENT_TIME() (ink_get_hrtime() / HRTIME_SECOND)
 #define CURRENT_MS() (ink_get_hrtime() / HRTIME_MSECOND)
 #define CURRENT_NS() (ink_get_hrtime() / HRTIME_NSECOND)
-
-#endif
 
 #define MINI_MESSAGE_SIZE     64  //use internal buffer to store the mini message
 

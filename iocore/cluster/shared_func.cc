@@ -22,8 +22,8 @@
 #include <grp.h>
 #include <pwd.h>
 #include "shared_func.h"
-#include "logger.h"
 #include "sockopt.h"
+#include "Diags.h"
 
 char *formatDatetime(const time_t nTime, \
 	const char *szDateFormat, \
@@ -181,7 +181,7 @@ void daemon_init(bool bCloseFiles)
 	#define MAX_CORE_FILE_SIZE  (256 * 1024 * 1024)
 	if (set_rlimit(RLIMIT_CORE, MAX_CORE_FILE_SIZE) != 0)
 	{
-		logWarning("file: "__FILE__", line: %d, " \
+		Warning("file: "__FILE__", line: %d, " \
 			"set max core dump file size to %d MB fail, " \
 			"errno: %d, error info: %s", \
 			__LINE__, MAX_CORE_FILE_SIZE / (1024 * 1024), \
@@ -190,7 +190,7 @@ void daemon_init(bool bCloseFiles)
 #else
 	if (chdir("/") != 0)
 	{
-		logWarning("file: "__FILE__", line: %d, " \
+		Warning("file: "__FILE__", line: %d, " \
 			"change directory to / fail, " \
 			"errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
@@ -395,7 +395,7 @@ char **split(char *src, const char seperator, const int nMaxCols, int *nColCount
 	pCurrent = pCols = (char **)malloc(sizeof(char *) * (*nColCount));
 	if (pCols == NULL)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"malloc %d bytes fail", __LINE__, \
 			(int)sizeof(char *) * (*nColCount));
 		return NULL;
@@ -678,7 +678,7 @@ int getFileContent(const char *filename, char **buff, int64_t *file_size)
 	{
 		*buff = NULL;
 		*file_size = 0;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"open file %s fail, " \
 			"errno: %d, error info: %s", __LINE__, \
 			filename, errno, STRERROR(errno));
@@ -690,7 +690,7 @@ int getFileContent(const char *filename, char **buff, int64_t *file_size)
 		*buff = NULL;
 		*file_size = 0;
 		close(fd);
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"lseek file %s fail, " \
 			"errno: %d, error info: %s", __LINE__, \
 			filename, errno, STRERROR(errno));
@@ -703,7 +703,7 @@ int getFileContent(const char *filename, char **buff, int64_t *file_size)
 		*file_size = 0;
 		close(fd);
 
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"malloc %d bytes fail", __LINE__, \
 			(int)(*file_size + 1));
 		return errno != 0 ? errno : ENOMEM;
@@ -714,7 +714,7 @@ int getFileContent(const char *filename, char **buff, int64_t *file_size)
 		*buff = NULL;
 		*file_size = 0;
 		close(fd);
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"lseek file %s fail, " \
 			"errno: %d, error info: %s", __LINE__, \
 			filename, errno, STRERROR(errno));
@@ -726,7 +726,7 @@ int getFileContent(const char *filename, char **buff, int64_t *file_size)
 		*buff = NULL;
 		*file_size = 0;
 		close(fd);
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"read from file %s fail, " \
 			"errno: %d, error info: %s", __LINE__, \
 			filename, errno, STRERROR(errno));
@@ -747,7 +747,7 @@ int getFileContentEx(const char *filename, char *buff, \
 
 	if (*size <= 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"invalid size: "INT64_PRINTF_FORMAT, \
 			__LINE__, *size);
 		return EINVAL;
@@ -757,7 +757,7 @@ int getFileContentEx(const char *filename, char *buff, \
 	if (fd < 0)
 	{
 		*size = 0;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"open file %s fail, " \
 			"errno: %d, error info: %s", __LINE__, \
 			filename, errno, STRERROR(errno));
@@ -768,7 +768,7 @@ int getFileContentEx(const char *filename, char *buff, \
 	{
 		*size = 0;
 		close(fd);
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"lseek file %s fail, " \
 			"errno: %d, error info: %s", __LINE__, \
 			filename, errno, STRERROR(errno));
@@ -779,7 +779,7 @@ int getFileContentEx(const char *filename, char *buff, \
 	{
 		*size = 0;
 		close(fd);
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"read from file %s fail, " \
 			"errno: %d, error info: %s", __LINE__, \
 			filename, errno, STRERROR(errno));
@@ -802,7 +802,7 @@ int writeToFile(const char *filename, const char *buff, const int file_size)
 	if (fd < 0)
 	{
 		result = errno != 0 ? errno : EIO;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"open file %s fail, " \
 			"errno: %d, error info: %s", \
 			__LINE__, filename, \
@@ -813,7 +813,7 @@ int writeToFile(const char *filename, const char *buff, const int file_size)
 	if (write(fd, buff, file_size) != file_size)
 	{
 		result = errno != 0 ? errno : EIO;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"write file %s fail, " \
 			"errno: %d, error info: %s", \
 			__LINE__, filename, \
@@ -825,7 +825,7 @@ int writeToFile(const char *filename, const char *buff, const int file_size)
 	if (fsync(fd) != 0)
 	{
 		result = errno != 0 ? errno : EIO;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"fsync file \"%s\" fail, " \
 			"errno: %d, error info: %s", \
 			__LINE__, filename, \
@@ -853,7 +853,7 @@ int safeWriteToFile(const char *filename, const char *buff, \
 	if (rename(tmpFilename, filename) != 0)
 	{
 		result = errno != 0 ? errno : EIO;
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"rename file \"%s\" to \"%s\" fail, " \
 			"errno: %d, error info: %s", \
 			__LINE__, tmpFilename, filename, \
@@ -978,7 +978,7 @@ int set_rlimit(int resource, const rlim_t value)
 
 	if (getrlimit(resource, &limit) != 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call getrlimit fail, resource=%d, " \
 			"errno: %d, error info: %s", \
 			__LINE__, resource, errno, STRERROR(errno));
@@ -994,7 +994,7 @@ int set_rlimit(int resource, const rlim_t value)
 	limit.rlim_cur = value;
 	if (setrlimit(resource, &limit) != 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call setrlimit fail, resource=%d, value=%d, " \
 			"errno: %d, error info: %s", \
 			__LINE__, resource, (int)value, \
@@ -1020,77 +1020,6 @@ bool is_filename_secure(const char *filename, const int len)
 	return (strstr(filename, "/../") == NULL);
 }
 
-void load_log_level(IniContext *pIniContext)
-{
-	set_log_level(iniGetStrValue(NULL, "log_level", pIniContext));
-}
-
-int load_log_level_ex(const char *conf_filename)
-{
-	int result;
-	IniContext iniContext;
-
-	if ((result=iniLoadFromFile(conf_filename, &iniContext)) != 0)
-	{
-		logError("file: "__FILE__", line: %d, " \
-			"load conf file \"%s\" fail, ret code: %d", \
-			__LINE__, conf_filename, result);
-		return result;
-	}
-
-	load_log_level(&iniContext);
-	iniFreeContext(&iniContext);
-	return 0;
-}
-
-void set_log_level(char *pLogLevel)
-{
-	if (pLogLevel != NULL)
-	{
-		toUppercase(pLogLevel);
-		if ( strncmp(pLogLevel, "DEBUG", 5) == 0 || \
-		     strcmp(pLogLevel, "LOG_DEBUG") == 0)
-		{
-			g_log_context.log_level = LOG_DEBUG;
-		}
-		else if ( strncmp(pLogLevel, "INFO", 4) == 0 || \
-		     strcmp(pLogLevel, "LOG_INFO") == 0)
-		{
-			g_log_context.log_level = LOG_INFO;
-		}
-		else if ( strncmp(pLogLevel, "NOTICE", 6) == 0 || \
-		     strcmp(pLogLevel, "LOG_NOTICE") == 0)
-		{
-			g_log_context.log_level = LOG_NOTICE;
-		}
-		else if ( strncmp(pLogLevel, "WARN", 4) == 0 || \
-		     strcmp(pLogLevel, "LOG_WARNING") == 0)
-		{
-			g_log_context.log_level = LOG_WARNING;
-		}
-		else if ( strncmp(pLogLevel, "ERR", 3) == 0 || \
-		     strcmp(pLogLevel, "LOG_ERR") == 0)
-		{
-			g_log_context.log_level = LOG_ERR;
-		}
-		else if ( strncmp(pLogLevel, "CRIT", 4) == 0 || \
-		     strcmp(pLogLevel, "LOG_CRIT") == 0)
-		{
-			g_log_context.log_level = LOG_CRIT;
-		}
-		else if ( strncmp(pLogLevel, "ALERT", 5) == 0 || \
-		     strcmp(pLogLevel, "LOG_ALERT") == 0)
-		{
-			g_log_context.log_level = LOG_ALERT;
-		}
-		else if ( strncmp(pLogLevel, "EMERG", 5) == 0 || \
-		     strcmp(pLogLevel, "LOG_EMERG") == 0)
-		{
-			g_log_context.log_level = LOG_EMERG;
-		}
-	}
-}
-
 int fd_add_flags(int fd, int adding_flags)
 {
 	int flags;
@@ -1098,7 +1027,7 @@ int fd_add_flags(int fd, int adding_flags)
 	flags = fcntl(fd, F_GETFL, 0);
 	if (flags < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"fcntl fail, errno: %d, error info: %s.", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EACCES;
@@ -1106,7 +1035,7 @@ int fd_add_flags(int fd, int adding_flags)
 
 	if (fcntl(fd, F_SETFL, flags | adding_flags) == -1)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"fcntl fail, errno: %d, error info: %s.", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EACCES;
@@ -1127,7 +1056,7 @@ int set_run_by(const char *group_name, const char *username)
 		if (pGroup == NULL)
 		{
 			nErrNo = errno != 0 ? errno : ENOENT;
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"getgrnam fail, errno: %d, error info: %s.", \
 				__LINE__, nErrNo, STRERROR(nErrNo));
 			return nErrNo;
@@ -1136,7 +1065,7 @@ int set_run_by(const char *group_name, const char *username)
 		if (setegid(pGroup->gr_gid) != 0)
 		{
 			nErrNo = errno != 0 ? errno : EPERM;
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"setegid fail, errno: %d, error info: %s.", \
 				__LINE__, nErrNo, STRERROR(nErrNo));
 			return nErrNo;
@@ -1149,7 +1078,7 @@ int set_run_by(const char *group_name, const char *username)
 		if (pUser == NULL)
 		{
 			nErrNo = errno != 0 ? errno : ENOENT;
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"getpwnam fail, errno: %d, error info: %s.", \
 				__LINE__, nErrNo, STRERROR(nErrNo));
 			return nErrNo;
@@ -1158,310 +1087,13 @@ int set_run_by(const char *group_name, const char *username)
 		if (seteuid(pUser->pw_uid) != 0)
 		{
 			nErrNo = errno != 0 ? errno : EPERM;
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"seteuid fail, errno: %d, error info: %s.", \
 				__LINE__, nErrNo, STRERROR(nErrNo));
 			return nErrNo;
 		}
 	}
 #endif
-
-	return 0;
-}
-
-int load_allow_hosts(IniContext *pIniContext, \
-		in_addr_t **allow_ip_addrs, int *allow_ip_count)
-{
-	int count;
-	IniItem *pItem;
-	IniItem *pItemStart;
-	IniItem *pItemEnd;
-	char *pItemValue;
-	char *pStart;
-	char *pEnd;
-	char *p;
-	char *pTail;
-	int alloc_count;
-	int nHeadLen;
-	int i;
-	in_addr_t addr;
-	char hostname[256];
-
-	if ((pItemStart=iniGetValuesEx(NULL, "allow_hosts", \
-		pIniContext, &count)) == NULL)
-	{
-		*allow_ip_count = -1; /* -1 means match any ip address */
-		*allow_ip_addrs = NULL;
-		return 0;
-	}
-
-	pItemEnd = pItemStart + count;
-	for (pItem=pItemStart; pItem<pItemEnd; pItem++)
-	{
-		if (strcmp(pItem->value, "*") == 0)
-		{
-			*allow_ip_count = -1; /* -1 means match any ip address*/
-			*allow_ip_addrs = NULL;
-			return 0;
-		}
-	}
-
-	alloc_count = count;
-	*allow_ip_count = 0;
-	*allow_ip_addrs = (in_addr_t *)malloc(sizeof(in_addr_t) * alloc_count);
-	if (*allow_ip_addrs == NULL)
-	{
-		logError("file: "__FILE__", line: %d, " \
-			"malloc %d bytes fail, errno: %d, error info: %s.", \
-			__LINE__, (int)sizeof(in_addr_t) * alloc_count, \
-			errno, STRERROR(errno));
-		return errno != 0 ? errno : ENOMEM;
-	}
-
-	for (pItem=pItemStart; pItem<pItemEnd; pItem++)
-	{
-		if (*(pItem->value) == '\0')
-		{
-			continue;
-		}
-
-		pStart = strchr(pItem->value, '[');
-		if (pStart == NULL)
-		{
-			addr = getIpaddrByName(pItem->value, NULL, 0);
-			if (addr == INADDR_NONE)
-			{
-				logWarning("file: "__FILE__", line: %d, " \
-					"invalid host name: %s", \
-					__LINE__, pItem->value);
-			}
-			else
-			{
-				if (alloc_count < (*allow_ip_count) + 1)
-				{
-					alloc_count = (*allow_ip_count) + \
-							(pItemEnd - pItem);
-					*allow_ip_addrs = (in_addr_t *)realloc(
-						*allow_ip_addrs, 
-						sizeof(in_addr_t)*alloc_count);
-					if (*allow_ip_addrs == NULL)
-					{
-					logError("file: "__FILE__", line: %d, "\
-						"malloc %d bytes fail, " \
-						"errno: %d, error info: %s", \
-						__LINE__, (int)sizeof(in_addr_t)
-							* alloc_count, \
-						errno, STRERROR(errno));
-
-					return errno != 0 ? errno : ENOMEM;
-					}
-				}
-
-				(*allow_ip_addrs)[*allow_ip_count] = addr;
-				(*allow_ip_count)++;
-			}
-
-			continue;
-		}
-
-		
-		pEnd = strchr(pStart, ']');
-		if (pEnd == NULL)
-		{
-			logWarning("file: "__FILE__", line: %d, " \
-				"invalid host name: %s, expect \"]\"", \
-				__LINE__, pItem->value);
-			continue;
-		}
-
-		pItemValue = strdup(pItem->value);
-		if (pItemValue == NULL)
-		{
-			logWarning("file: "__FILE__", line: %d, " \
-				"strdup fail, " \
-				"errno: %d, error info: %s.", \
-				__LINE__, errno, STRERROR(errno));
-			continue;
-		}
-
-		nHeadLen = pStart - pItem->value;
-		pStart = pItemValue + nHeadLen;
-		pEnd = pItemValue + (pEnd - pItem->value);
-		pTail = pEnd + 1;
-
-		memcpy(hostname, pItem->value, nHeadLen);
-		p = pStart + 1;  //skip [
-
-		while (p <= pEnd)
-		{
-			char *pNumStart1;
-			char *pNumStart2;
-			int nStart;
-			int nEnd;
-			int nNumLen1;
-			int nNumLen2;
-			char end_ch1;
-			char end_ch2;
-			char szFormat[16];
-
-			while (*p == ' ' || *p == '\t') //trim prior spaces
-			{
-				p++;
-			}
-
-			pNumStart1 = p;
-			while (*p >='0' && *p <= '9')
-			{
-				p++;
-			}
-
-			nNumLen1 = p - pNumStart1;
-			while (*p == ' ' || *p == '\t') //trim tail spaces
-			{
-				p++;
-			}
-
-			if (!(*p == ',' || *p == '-' || *p == ']'))
-			{
-				logWarning("file: "__FILE__", line: %d, " \
-					"invalid char \"%c\" in host name: %s",\
-					__LINE__, *p, pItem->value);
-				break;
-			}
-
-			end_ch1 = *p;
-			*(pNumStart1 + nNumLen1) = '\0';
-
-			if (nNumLen1 == 0)
-			{
-				logWarning("file: "__FILE__", line: %d, " \
-					"invalid host name: %s, " \
-					"empty entry before \"%c\"", \
-					__LINE__, pItem->value, end_ch1);
-				break;
-			}
-
-			nStart = atoi(pNumStart1);
-			if (end_ch1 == '-')
-			{
-				p++;   //skip -
-
-				/* trim prior spaces */
-				while (*p == ' ' || *p == '\t')
-				{
-					p++;
-				}
-
-				pNumStart2 = p;
-				while (*p >='0' && *p <= '9')
-				{
-					p++;
-				}
-
-				nNumLen2 = p - pNumStart2;
-				/* trim tail spaces */
-				while (*p == ' ' || *p == '\t')
-				{
-					p++;
-				}
-
-				if (!(*p == ',' || *p == ']'))
-				{
-				logWarning("file: "__FILE__", line: %d, " \
-					"invalid char \"%c\" in host name: %s",\
-					__LINE__, *p, pItem->value);
-				break;
-				}
-
-				end_ch2 = *p;
-				*(pNumStart2 + nNumLen2) = '\0';
-
-				if (nNumLen2 == 0)
-				{
-				logWarning("file: "__FILE__", line: %d, " \
-					"invalid host name: %s, " \
-					"empty entry before \"%c\"", \
-					__LINE__, pItem->value, end_ch2);
-				break;
-				}
-
-				nEnd = atoi(pNumStart2);
-			}
-			else
-			{
-				nEnd = nStart;
-			}
-
-			if (alloc_count < *allow_ip_count+(nEnd - nStart + 1))
-			{
-				alloc_count = *allow_ip_count + (nEnd - nStart)
-						 + (pItemEnd - pItem);
-				*allow_ip_addrs = (in_addr_t *)realloc(
-					*allow_ip_addrs, 
-					sizeof(in_addr_t)*alloc_count);
-				if (*allow_ip_addrs == NULL)
-				{
-					logError("file: "__FILE__", line: %d, "\
-						"malloc %d bytes fail, " \
-						"errno: %d, error info: %s.", \
-						__LINE__, \
-						(int)sizeof(in_addr_t) * \
-						alloc_count,\
-						errno, STRERROR(errno));
-
-					free(pItemValue);
-					return errno != 0 ? errno : ENOMEM;
-				}
-			}
-
-			sprintf(szFormat, "%%0%dd%%s",  nNumLen1);
-			for (i=nStart; i<=nEnd; i++)
-			{
-				sprintf(hostname + nHeadLen, szFormat, \
-					i, pTail);
-
-				addr = getIpaddrByName(hostname, NULL, 0);
-				if (addr == INADDR_NONE)
-				{
-				logWarning("file: "__FILE__", line: %d, " \
-					"invalid host name: %s", \
-					__LINE__, hostname);
-				}
-				else
-				{
-					(*allow_ip_addrs)[*allow_ip_count]=addr;
-					(*allow_ip_count)++;
-				}
-
-			}
-
-			p++;
-		}
-
-		free(pItemValue);
-	}
-
-	if (*allow_ip_count == 0)
-	{
-		logWarning("file: "__FILE__", line: %d, " \
-			"allow ip count: 0", __LINE__);
-	}
-
-	if (*allow_ip_count > 0)
-	{
-		qsort(*allow_ip_addrs,  *allow_ip_count, sizeof(in_addr_t), \
-			cmp_by_ip_addr_t);
-	}
-
-	/*
-	printf("*allow_ip_count=%d\n", *allow_ip_count);
-	for (i=0; i<*allow_ip_count; i++)
-	{
-		struct in_addr address;
-		address.s_addr = (*allow_ip_addrs)[i];
-		printf("%s\n", inet_ntoa(address));
-	}
-	*/
 
 	return 0;
 }
@@ -1479,7 +1111,7 @@ int parse_bytes(char *pStr, const int default_unit_bytes, int64_t *bytes)
 	*bytes = strtol(pStr, &pReservedEnd, 10);
 	if (*bytes < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"bytes: "INT64_PRINTF_FORMAT" < 0", \
 			__LINE__, *bytes);
 		return EINVAL;
@@ -1511,7 +1143,7 @@ int set_rand_seed()
 
 	if (gettimeofday(&tv, NULL) != 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			 "call gettimeofday fail, " \
 			 "errno=%d, error info: %s", \
 			 __LINE__, errno, STRERROR(errno));
@@ -1519,44 +1151,6 @@ int set_rand_seed()
 	}
 
 	srand(tv.tv_sec ^ tv.tv_usec);
-	return 0;
-}
-
-int get_time_item_from_conf(IniContext *pIniContext, \
-		const char *item_name, TimeInfo *pTimeInfo, \
-		const char default_hour, const char default_minute)
-{
-	char *pValue;
-	int hour;
-	int minute;
-
-	pValue = iniGetStrValue(NULL, item_name, pIniContext);
-	if (pValue == NULL)
-	{
-		pTimeInfo->hour = default_hour;
-		pTimeInfo->minute = default_minute;
-		return 0;
-	}
-
-	if (sscanf(pValue, "%d:%d", &hour, &minute) != 2)
-	{
-		logError("file: "__FILE__", line: %d, " \
-			"item \"%s\" 's value \"%s\" is not an valid time", \
-			__LINE__, item_name, pValue);
-		return EINVAL;
-	}
-
-	if ((hour < 0 || hour > 23) || (minute < 0 || minute > 59))
-	{
-		logError("file: "__FILE__", line: %d, " \
-			"item \"%s\" 's value \"%s\" is not an valid time", \
-			__LINE__, item_name, pValue);
-		return EINVAL;
-	}
-
-	pTimeInfo->hour = (char)hour;
-	pTimeInfo->minute = (char)minute;
-
 	return 0;
 }
 
@@ -1680,7 +1274,7 @@ int buffer_strcpy(BufferInfo *pBuff, const char *str)
 		pBuff->buff = (char *)malloc(pBuff->alloc_size);
 		if (pBuff->buff == NULL)
 		{
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"malloc %d bytes fail, " \
 				"errno: %d, error info: %s", \
 				__LINE__, pBuff->alloc_size, \
@@ -1708,7 +1302,7 @@ int buffer_memcpy(BufferInfo *pBuff, const char *buff, const int len)
 		pBuff->buff = (char *)malloc(pBuff->alloc_size);
 		if (pBuff->buff == NULL)
 		{
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"malloc %d bytes fail, " \
 				"errno: %d, error info: %s", \
 				__LINE__, pBuff->alloc_size, \
@@ -1733,7 +1327,7 @@ int set_timer(const int first_remain_seconds, const int interval, \
 	act.sa_handler = sighandler;
 	if(sigaction(SIGALRM, &act, NULL) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call sigaction fail, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1744,7 +1338,7 @@ int set_timer(const int first_remain_seconds, const int interval, \
 	value.it_value.tv_sec = first_remain_seconds;
 	if (setitimer(ITIMER_REAL, &value, NULL) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call setitimer fail, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
@@ -1763,7 +1357,7 @@ int set_file_utimes(const char *filename, const time_t new_time)
 	tvs[1].tv_usec = 0;
 	if (utimes(filename, tvs) != 0)
 	{
-		logWarning("file: "__FILE__", line: %d, " \
+		Warning("file: "__FILE__", line: %d, " \
 			"call utimes file: %s fail" \
 			", errno: %d, error info: %s", \
 			__LINE__, filename, errno, STRERROR(errno));

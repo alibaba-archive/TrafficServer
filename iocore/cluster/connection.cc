@@ -13,25 +13,16 @@
 #include <assert.h>
 #include <sys/prctl.h>
 #include <sys/epoll.h>
-#include "logger.h"
+#include "Diags.h"
 #include "global.h"
 #include "sockopt.h"
 #include "pthread_func.h"
 #include "shared_func.h"
-#include "sched_thread.h"
 #include "nio.h"
 #include "message.h"
 #include "session.h"
-
-#ifdef DEBUG_FLAG
-#include "rpc_test.h"
-#endif
-
 #include "connection.h"
-
-#ifndef DEBUG_FLAG
 #include "P_Cluster.h"
-#endif
 
 typedef enum {
   STATE_NOT_CONNECT = 0,
@@ -83,7 +74,7 @@ static int remove_connection(SocketContext *pSockContext, const bool needLock)
   ConnectContext **ppNext;
 
   /*
-  logDebug("file: "__FILE__", line: %d, " \
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
       "free connection, current count: %d", __LINE__,
       connect_thread_context.connection_count);
   */
@@ -105,7 +96,7 @@ static int remove_connection(SocketContext *pSockContext, const bool needLock)
   }
 
   if (ppConnection == ppConnectionEnd) {
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "Can't found connection to release!", __LINE__);
     pthread_mutex_unlock(&connect_thread_context.lock);
     return ENOENT;
@@ -128,7 +119,7 @@ static int remove_connection(SocketContext *pSockContext, const bool needLock)
 static void close_connection(SocketContext *pSockContext)
 {
   if (pSockContext->sock >= 0) {
-    logDebug("file: " __FILE__ ", line: %d, "
+    Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
         "close connection #%d %s:%d",
         __LINE__, pSockContext->sock,
         pSockContext->machine->hostname,
@@ -235,7 +226,7 @@ static int deal_hello_message(SocketContext *pSockContext, char *data)
   pHeader = (MsgHeader *)data;
 #ifdef CHECK_MAGIC_NUMBER
   if (pHeader->magic != MAGIC_NUMBER) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "magic number: %08x != %08x", \
         __LINE__, pHeader->magic, MAGIC_NUMBER);
     return EINVAL;
@@ -243,7 +234,7 @@ static int deal_hello_message(SocketContext *pSockContext, char *data)
 #endif
 
   if (pHeader->data_len != sizeof(HelloMessage)) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "message length: %d != %d!", __LINE__,
         pHeader->data_len, (int)sizeof(HelloMessage));
     return EINVAL;
@@ -256,7 +247,7 @@ static int deal_hello_message(SocketContext *pSockContext, char *data)
     expect_func_id = FUNC_ID_CLUSTER_HELLO_REQUEST;
   }
   if (pHeader->func_id != expect_func_id) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "invalid function id: %d != %d!", __LINE__,
         pHeader->func_id, expect_func_id);
     return EINVAL;
@@ -281,7 +272,7 @@ static int deal_hello_message(SocketContext *pSockContext, char *data)
       proto_minor = pHelloMessage->minor;
 
       if (proto_minor != CLUSTER_MINOR_VERSION) {
-        logWarning("file: "__FILE__", line: %d, " \
+        Warning("file: "__FILE__", line: %d, " \
             "Different clustering minor versions (%d,%d) for " \
             "node %u.%u.%u.%u, continuing", __LINE__,
             proto_minor, CLUSTER_MINOR_VERSION,
@@ -292,7 +283,7 @@ static int deal_hello_message(SocketContext *pSockContext, char *data)
     }
   }
   else {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "Bad cluster major version range (%d-%d) for " \
         "node %u.%u.%u.%u, close connection", __LINE__,
         pHelloMessage->min_major, pHelloMessage->major,
@@ -300,7 +291,7 @@ static int deal_hello_message(SocketContext *pSockContext, char *data)
     return EINVAL;
   }
 
-  logDebug("file: "__FILE__", line: %d, " \
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
       "node: %u.%u.%u.%u, version: %d.%d", __LINE__,
       DOT_SEPARATED(pSockContext->machine->ip),
       proto_major, proto_minor);
@@ -322,12 +313,12 @@ static int do_send_data(ConnectContext *pConnectContext)
   if (bytes < 0) {
     result = errno != 0 ? errno : EAGAIN;
     if (result == EINTR) {
-      logWarning("file: "__FILE__", line: %d, " \
+      Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
           "write failed, errno: %d, error info: %s", \
           __LINE__, result, strerror(result));
     }
     else if (!(result == EAGAIN)) {
-      logError("file: "__FILE__", line: %d, " \
+      Error("file: "__FILE__", line: %d, " \
           "write failed, errno: %d, error info: %s", \
           __LINE__, result, strerror(result));
     }
@@ -335,7 +326,7 @@ static int do_send_data(ConnectContext *pConnectContext)
     return result;
   }
   else if (bytes == 0) {
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "%s:%d connection closed", __LINE__,
         pConnectContext->pSockContext->machine->hostname,
         pConnectContext->pSockContext->machine->cluster_port);
@@ -358,12 +349,12 @@ static int do_recv_data(ConnectContext *pConnectContext)
   if (bytes < 0) {
     result = errno != 0 ? errno : EAGAIN;
     if (result == EINTR) {
-      logWarning("file: "__FILE__", line: %d, " \
+      Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
           "read failed, errno: %d, error info: %s", \
           __LINE__, result, strerror(result));
     }
     else if (!(result == EAGAIN)) {
-      logError("file: "__FILE__", line: %d, " \
+      Error("file: "__FILE__", line: %d, " \
           "read failed, errno: %d, error info: %s", \
           __LINE__, result, strerror(result));
     }
@@ -371,7 +362,7 @@ static int do_recv_data(ConnectContext *pConnectContext)
     return result;
   }
   else if (bytes == 0) {
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "%s:%d connection closed", __LINE__,
         pConnectContext->pSockContext->machine->hostname,
         pConnectContext->pSockContext->machine->cluster_port);
@@ -494,7 +485,7 @@ static int connection_handler(ConnectContext *pConnectContext)
     }
 
     result = errno != 0 ? errno : ENOMEM;
-    logError("file: " __FILE__ ", line: %d, "
+    Error("file: " __FILE__ ", line: %d, "
         "epoll_ctl fail, errno: %d, error info: %s", \
         __LINE__, result, strerror(result));
   }
@@ -503,7 +494,7 @@ static int connection_handler(ConnectContext *pConnectContext)
         pSockContext->sock, NULL) != 0)
   {
     result = errno != 0 ? errno : ENOMEM;
-    logError("file: " __FILE__ ", line: %d, "
+    Error("file: " __FILE__ ", line: %d, "
         "epoll_ctl #%d fail, errno: %d, error info: %s", \
         __LINE__, pSockContext->sock,
         result, strerror(result));
@@ -642,7 +633,7 @@ static int alloc_socket_contexts(const int connections_per_machine,
   bytes = sizeof(SocketContext) * total_connections;
   *pool =	(SocketContext *)malloc(bytes);
   if (*pool == NULL) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "malloc %d bytes fail, errno: %d, error info: %s", \
         __LINE__, bytes, errno, strerror(errno));
     return errno != 0 ? errno : ENOMEM;
@@ -716,7 +707,7 @@ int connection_init()
 	bytes = sizeof(SocketContextsByMachine) * MAX_MACHINE_COUNT;
 	g_machine_sockets = (SocketContextsByMachine *)malloc(bytes);
 	if (g_machine_sockets == NULL) {
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"malloc %d bytes fail, errno: %d, error info: %s", \
 			__LINE__, bytes, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -728,7 +719,7 @@ int connection_init()
   bytes = sizeof(struct epoll_event) * connect_thread_context.alloc_size;
   connect_thread_context.events = (struct epoll_event *)malloc(bytes);
   if (connect_thread_context.events == NULL) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "malloc %d bytes fail, errno: %d, error info: %s", \
         __LINE__, bytes, errno, strerror(errno));
     return errno != 0 ? errno : ENOMEM;
@@ -737,7 +728,7 @@ int connection_init()
 	bytes = sizeof(ConnectContext) * connect_thread_context.alloc_size;
 	connect_thread_context.connections_buffer = (ConnectContext *)malloc(bytes);
 	if (connect_thread_context.connections_buffer == NULL) {
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"malloc %d bytes fail, errno: %d, error info: %s", \
 			__LINE__, bytes, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -747,7 +738,7 @@ int connection_init()
 	bytes = sizeof(ConnectContext *) * connect_thread_context.alloc_size;
 	connect_thread_context.connections = (ConnectContext **)malloc(bytes);
 	if (connect_thread_context.connections == NULL) {
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"malloc %d bytes fail, errno: %d, error info: %s", \
 			__LINE__, bytes, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -758,7 +749,7 @@ int connection_init()
   connect_thread_context.epoll_fd = epoll_create(
       connect_thread_context.alloc_size);
   if (connect_thread_context.epoll_fd < 0) {
-    logError("file: " __FILE__ ", line: %d, "
+    Error("file: " __FILE__ ", line: %d, "
         "poll_create fail, errno: %d, error info: %s", \
         __LINE__, errno, strerror(errno));
     return errno != 0 ? errno : ENOMEM;
@@ -770,6 +761,7 @@ int connection_init()
 
   if ((result=init_socket_contexts()) != 0) {
     return result;
+
   }
 
   return 0;
@@ -811,7 +803,7 @@ static int do_connect(ConnectContext *pConnectContext, const bool needLock)
   pConnectContext->connect_count++;
   pConnectContext->state = STATE_CONNECTING;
   if (pSockContext->sock < 0) {
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "socket create failed, errno: %d, error info: %s", \
         __LINE__, errno, strerror(errno));
     return errno != 0 ? errno : EMFILE;
@@ -843,7 +835,7 @@ static int do_connect(ConnectContext *pConnectContext, const bool needLock)
 
   result = errno != 0 ? errno : EINPROGRESS;
   if (result != EINPROGRESS) {
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "connect to %s:%d failed, errno: %d, error info: %s", \
         __LINE__, pSockContext->machine->hostname,
         pSockContext->machine->cluster_port, result, strerror(result));
@@ -857,7 +849,7 @@ static int do_connect(ConnectContext *pConnectContext, const bool needLock)
 		pSockContext->sock, &event) != 0)
 	{
     result = errno != 0 ? errno : ENOMEM;
-		logError("file: " __FILE__ ", line: %d, "
+		Error("file: " __FILE__ ", line: %d, "
 			"epoll_ctl fail, errno: %d, error info: %s", \
 			__LINE__, errno, strerror(errno));
     close_connection(pSockContext);
@@ -878,7 +870,7 @@ static ConnectContext *alloc_connect_context()
       connect_thread_context.alloc_size)
   {
     pthread_mutex_unlock(&connect_thread_context.lock);
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "exceeds max connection: %d",
         __LINE__, connect_thread_context.alloc_size);
     return NULL;
@@ -895,7 +887,7 @@ static ConnectContext *alloc_connect_context()
   }
   if (pConnectContext == pConnectEnd) {
     pthread_mutex_unlock(&connect_thread_context.lock);
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "alloc connection from buffer fail", __LINE__);
     return NULL;
   }
@@ -969,13 +961,13 @@ int make_connection(SocketContext *pSockContext)
   ConnectContext *pConnectContext;
 
   /*
-  logDebug("file: "__FILE__", line: %d, " \
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
       "alloc connection, current count: %d", __LINE__,
       connect_thread_context.connection_count);
   */
 
   if (find_connection(pSockContext) != NULL) {
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "connection: %p already exist!", __LINE__, pSockContext);
     return EEXIST;
   }
@@ -990,60 +982,6 @@ int make_connection(SocketContext *pSockContext)
   return do_connect(pConnectContext, true);
 }
 
-static int check_and_mkdir(const char *file_path)
-{
-	int result;
-	if (access(file_path, F_OK) == 0)
-	{
-		return 0;
-	}
-
-	result = errno != 0 ? errno : EPERM;
-	if (result != ENOENT)
-	{
-		logError("file: "__FILE__", line: %d, " \
-			"access %s fail, errno: %d, error info: %s",
-			__LINE__, file_path, result, strerror(result));
-		return result;
-	}
-
-	if (mkdir(file_path, 0755) != 0)
-	{
-		result = errno != 0 ? errno : EPERM;
-		logError("file: "__FILE__", line: %d, " \
-			"mkdir %s fail, errno: %d, error info: %s",
-			__LINE__, file_path, result, strerror(result));
-		return result;
-	}
-
-	return 0;
-}
-
-static int init()
-{
-	int result;
-	char file_path[MAX_PATH_SIZE];
-
-	snprintf(file_path, sizeof(file_path), "%s/data", g_base_path);
-	if ((result=check_and_mkdir(file_path)) != 0)
-	{
-		return result;
-	}
-
-	snprintf(file_path, sizeof(file_path), "%s/logs", g_base_path);
-	if ((result=check_and_mkdir(file_path)) != 0)
-	{
-		return result;
-	}
-
-	if ((result=log_set_prefix(g_base_path, "proxyio")) != 0)
-	{
-		return result;
-	}
-
-	return 0;
-}
-
 int connection_manager_init(const unsigned int my_ip, const int port)
 {
   ConnectContext *pConnectContext;
@@ -1052,14 +990,7 @@ int connection_manager_init(const unsigned int my_ip, const int port)
   int result;
 	int server_sock;
 
-	log_init();
-  g_log_context.log_level = LOG_DEBUG;
-
   assert(MSG_HEADER_LENGTH % 16 == 0);
-  if ((result=init()) != 0) {
-    return result;
-  }
-
 	*bind_addr = '\0';
 	server_sock = socketServer(bind_addr, g_server_port, &result);
 	if (server_sock < 0)
@@ -1085,12 +1016,6 @@ int connection_manager_init(const unsigned int my_ip, const int port)
     add_machine(my_ip, port);
   }
 
-#ifdef DEBUG_FLAG
-  if ((result=rpc_test_init()) != 0) {
-		return result;
-	}
-#endif
-
 	if ((result=nio_init()) != 0 || (result=connection_init()) != 0
       || (result=session_init()) != 0)
 	{
@@ -1112,7 +1037,7 @@ int connection_manager_init(const unsigned int my_ip, const int port)
 		server_sock, &event) != 0)
 	{
     result = errno != 0 ? errno : ENOMEM;
-		logError("file: " __FILE__ ", line: %d, "
+		Error("file: " __FILE__ ", line: %d, "
 			"epoll_ctl fail, errno: %d, error info: %s", \
 			__LINE__, errno, strerror(errno));
 		return result;
@@ -1131,7 +1056,7 @@ int connection_manager_start(pthread_t *tid)
   if ((result=pthread_create(tid, NULL,
           connect_worker_entrance, NULL)) != 0)
   {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "create thread failed, " \
         "errno: %d, error info: %s",
         __LINE__, result, strerror(result));
@@ -1188,13 +1113,13 @@ static int close_timeout_connections()
     if (epoll_ctl(connect_thread_context.epoll_fd, EPOLL_CTL_DEL,
           pSockContext->sock, NULL) != 0)
     {
-      logError("file: " __FILE__ ", line: %d, "
+      Error("file: " __FILE__ ", line: %d, "
           "epoll_ctl #%d fail, errno: %d, error info: %s", \
           __LINE__, pSockContext->sock,
           errno, strerror(errno));
     }
 
-    logError("file: " __FILE__ ", line: %d, "
+    Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
         "close timeout %s connection #%d %s:%d, type: %c",
         __LINE__, timeoutConnectContexts[i]->state == STATE_RECV_DATA ?
         "recv" : "connect", pSockContext->sock,
@@ -1273,19 +1198,19 @@ static int deal_income_connection(const int incomesock)
   ip = getPeerIpaddr(incomesock, client_ip, sizeof(client_ip));
   machine = get_machine(ip, g_server_port);
   if (machine == NULL) {
-		logError("file: " __FILE__ ", line: %d, "
+		Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
 			"client: %s not in my machine list", \
 			__LINE__, client_ip);
     return ENOENT;
   }
 
-  logDebug("file: " __FILE__ ", line: %d, "
+  Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
       "client_ip: %s, sock: #%d", __LINE__,
       client_ip, incomesock);
 
   pSockContext = alloc_accept_sock_context(machine->ip);
 	if (pSockContext == NULL) {
-		logError("file: " __FILE__ ", line: %d, "
+		Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
 			"client: %s, too many income connections, exceeds %d",
       __LINE__, client_ip, g_connections_per_machine / 2);
 		return ENOSPC;
@@ -1320,14 +1245,14 @@ static int deal_accept_event(SocketContext *pSockContext)
   if (incomesock < 0) {  //error
     result = errno != 0 ? errno : EAGAIN;
     if (result == EINTR) {
-      logWarning("file: "__FILE__", line: %d, " \
+      Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
           "accept failed, " \
           "errno: %d, error info: %s", \
           __LINE__, errno, strerror(errno));
       return 0; //should try again
     }
     else if (!(errno == EAGAIN)) {
-      logError("file: "__FILE__", line: %d, " \
+      Error("file: "__FILE__", line: %d, " \
           "accept failed, " \
           "errno: %d, error info: %s", \
           __LINE__, result, strerror(result));
@@ -1365,7 +1290,7 @@ static int deal_connect_events(const int count)
     }
 
     /*
-    logDebug("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "%d. connections #%d  %s:%d, type: %c, epoll events: %d", __LINE__,
         ++counter, pSockContext->sock, pSockContext->machine->hostname,
         pSockContext->machine->cluster_port, pSockContext->connect_type,
@@ -1375,7 +1300,7 @@ static int deal_connect_events(const int count)
     if ((pEvent->events & EPOLLRDHUP) || (pEvent->events & EPOLLERR) ||
         (pEvent->events & EPOLLHUP))
     {
-        logError("file: " __FILE__ ", line: %d, "
+        Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
             "connect to %s:%d fail, connection closed",
             __LINE__, pSockContext->machine->hostname,
             pSockContext->machine->cluster_port);
@@ -1384,7 +1309,7 @@ static int deal_connect_events(const int count)
     }
 
     /*
-    logDebug("file: " __FILE__ ", line: %d, "
+    Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
         "====in: %d, out: %d====", __LINE__, (pEvent->events & EPOLLIN),
         (pEvent->events & EPOLLOUT));
         */
@@ -1400,15 +1325,42 @@ static int deal_connect_events(const int count)
 void *connect_worker_entrance(void *arg)
 {
   int count;
-  time_t last_stat_time;
+  time_t last_session_stat_time;
+#if defined(TRIGGER_STAT_FLAG) || defined(MSG_TIME_STAT_FLAG)
+  time_t last_msg_stat_time;
+#endif
 
 //#if defined(HAVE_SYS_PRCTL_H) && defined(PR_SET_NAME)
 #if defined(PR_SET_NAME)
   prctl(PR_SET_NAME, "[ET_CLUSTER 0]", 0, 0, 0); 
 #endif
 
-  last_stat_time = CURRENT_TIME();
+  last_session_stat_time = CURRENT_TIME();
+#if defined(TRIGGER_STAT_FLAG) || defined(MSG_TIME_STAT_FLAG)
+  last_msg_stat_time = CURRENT_TIME();
+#endif
+
   while (g_continue_flag) {
+    if (CURRENT_TIME() - last_session_stat_time >= 5) {
+      log_session_stat();
+      last_session_stat_time = CURRENT_TIME();
+    }
+
+#if defined(TRIGGER_STAT_FLAG) || defined(MSG_TIME_STAT_FLAG)
+      if (CURRENT_TIME() - last_msg_stat_time >= 60) {
+#ifdef TRIGGER_STAT_FLAG
+        log_trigger_stat();
+#endif
+
+#ifdef MSG_TIME_STAT_FLAG
+        log_msg_time_stat();
+#endif
+
+        last_msg_stat_time = CURRENT_TIME();
+      }
+#endif
+
+
     if (connect_thread_context.connection_count > 1) {
       do_reconnect();
     }
@@ -1419,32 +1371,14 @@ void *connect_worker_entrance(void *arg)
       if (connect_thread_context.connection_count > 1) {
         close_timeout_connections();
       }
-
-      if (CURRENT_TIME() - last_stat_time >= 60) {
-
-#ifdef SESSION_STAT_FLAG
-        log_session_stat();
-#endif
-
-#ifdef TRIGGER_STAT_FLAG
-        log_trigger_stat();
-#endif
-
-#ifdef MSG_TIME_STAT_FLAG
-        log_msg_time_stat();
-#endif
-
-        last_stat_time = CURRENT_TIME();
-      }
-
 			continue;
 		}
 		if (count < 0) {
-			logError("file: "__FILE__", line: %d, " \
-				"call epoll_wait fail, " \
-				"errno: %d, error info: %s",
-				__LINE__, errno, strerror(errno));
       if (errno != EINTR) {
+        Error("file: "__FILE__", line: %d, " \
+            "call epoll_wait fail, " \
+            "errno: %d, error info: %s",
+            __LINE__, errno, strerror(errno));
         sleep(1);
       }
 			continue;
@@ -1493,7 +1427,7 @@ int add_machine_sock_context(SocketContext *pSockContext)
     bytes = sizeof(SocketContext *) * contextArray->alloc_size;
     newContexts = (SocketContext **)malloc(bytes);
     if (newContexts == NULL) {
-      logError("file: "__FILE__", line: %d, " \
+      Error("file: "__FILE__", line: %d, " \
           "malloc %d bytes fail, errno: %d, error info: %s", \
           __LINE__, bytes, errno, strerror(errno));
       pthread_mutex_unlock(&connect_thread_context.lock);
@@ -1565,7 +1499,7 @@ SocketContext *get_socket_context(const ClusterMachine *machine)
 	unsigned int context_index;
 
   if ((machine_id=get_machine_index(machine->ip)) < 0) {
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "the index of ip addr: %s not exist", __LINE__, machine->hostname);
     return NULL;
   }
@@ -1574,7 +1508,7 @@ SocketContext *get_socket_context(const ClusterMachine *machine)
 	context_count = pSocketContextArray->count;
 	if (context_count <= 0) {
     /*
-    logError("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "the socket context count of ip addr: %s is zero",
         __LINE__, machine->hostname);
     */

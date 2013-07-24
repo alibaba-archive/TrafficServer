@@ -17,7 +17,6 @@ extern int g_machine_count;
 extern struct ClusterMachine *g_machines;
 
 int init_machines();
-int start_machines_connection();
 ClusterMachine *add_machine(const unsigned int ip, const int port);
 
 ClusterMachine *get_machine(const unsigned int ip, const int port);

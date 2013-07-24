@@ -28,8 +28,7 @@ AM_CPPFLAGS = \
   -I$(top_srcdir)/proxy \
   -I$(top_srcdir)/mgmt \
   -I$(top_srcdir)/mgmt/preparse \
-  -I$(top_srcdir)/mgmt/utils  \
-  -I$(top_srcdir)/iocore/cluster/common
+  -I$(top_srcdir)/mgmt/utils
 
 DEFS += @IOCORE_MODULARIZED_DEFS@
 
@@ -59,15 +58,9 @@ libinkcluster_a_SOURCES = \
   P_ClusterMachine.h \
   P_TimeTrace.h \
   Inline.cc \
-	common/ini_file_reader.c  \
-	common/local_ip_func.c  \
-	common/http_func.c  \
-	common/hash.c  \
-	common/logger.c  \
-	common/pthread_func.c  \
-	common/sched_thread.c  \
-	common/shared_func.c  \
-	common/sockopt.c  \
+	shared_func.cc  \
+	pthread_func.cc  \
+	sockopt.cc  \
 	global.cc  \
   nio.cc \
 	session.cc  \

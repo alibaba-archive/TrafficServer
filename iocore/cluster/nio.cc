@@ -12,26 +12,20 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <sys/prctl.h>
-#include "logger.h"
+#include "Diags.h"
 #include "global.h"
 #include "shared_func.h"
 #include "pthread_func.h"
-#include "sched_thread.h"
 #include "sockopt.h"
 #include "session.h"
 #include "message.h"
 #include "connection.h"
-#include "nio.h"
-
-#ifndef DEBUG_FLAG
-
 #ifndef TS_INLINE
 #define TS_INLINE inline
 #endif
-
 #include "I_IOBuffer.h"
 #include "P_Cluster.h"
-#endif
+#include "nio.h"
 
 int g_worker_thread_count = 0;
 
@@ -93,7 +87,7 @@ int nio_init()
 	bytes = sizeof(struct worker_thread_context) * g_work_threads;
 	g_worker_thread_contexts = (struct worker_thread_context *)malloc(bytes);
 	if (g_worker_thread_contexts == NULL) {
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"malloc %d bytes fail, errno: %d, error info: %s", \
 			__LINE__, bytes, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -115,7 +109,7 @@ int nio_init()
 		pThreadContext->events = (struct epoll_event *)malloc(bytes);
 		if (pThreadContext->events == NULL)
 		{
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"malloc %d bytes fail, errno: %d, error info: %s", \
 				__LINE__, bytes, errno, strerror(errno));
 			return errno != 0 ? errno : ENOMEM;
@@ -124,7 +118,7 @@ int nio_init()
 		pThreadContext->epoll_fd = epoll_create(pThreadContext->alloc_size);
 		if (pThreadContext->epoll_fd < 0)
 		{
-			logError("file: " __FILE__ ", line: %d, "
+			Error("file: " __FILE__ ", line: %d, "
 				"poll_create fail, errno: %d, error info: %s", \
 				__LINE__, errno, strerror(errno));
 			return errno != 0 ? errno : ENOMEM;
@@ -138,7 +132,7 @@ int nio_init()
 		if ((result=pthread_create(&tid, NULL,
 			work_thread_entrance, pThreadContext)) != 0)
 		{
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"create thread failed, startup threads: %d, " \
 				"errno: %d, error info: %s",
 				__LINE__, g_worker_thread_count,
@@ -148,14 +142,14 @@ int nio_init()
 		else
 		{
 			if ((result=pthread_mutex_lock(&worker_thread_lock)) != 0) {
-				logError("file: "__FILE__", line: %d, " \
+				Error("file: "__FILE__", line: %d, " \
 					"call pthread_mutex_lock fail, " \
 					"errno: %d, error info: %s",
 					__LINE__, result, strerror(result));
 			}
 			g_worker_thread_count++;
 			if ((result=pthread_mutex_unlock(&worker_thread_lock)) != 0) {
-				logError("file: "__FILE__", line: %d, " \
+				Error("file: "__FILE__", line: %d, " \
 					"call pthread_mutex_unlock fail, " \
 					"errno: %d, error info: %s",
 					__LINE__, result, strerror(result));
@@ -216,7 +210,7 @@ static int set_socket_rw_buff_size(int sock)
 	if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
 		(char *)&bytes, sizeof(int)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s",
 			__LINE__, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -226,7 +220,7 @@ static int set_socket_rw_buff_size(int sock)
 	if (setsockopt(sock, SOL_SOCKET, SO_RCVBUF,
 		(char *)&bytes, sizeof(int)) < 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"setsockopt failed, errno: %d, error info: %s",
 			__LINE__, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -241,7 +235,7 @@ int nio_add_to_epoll(SocketContext *pSockContext)
   int i;
 
   /*
-  logDebug("file: " __FILE__ ", line: %d, "
+  Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
       "%s:%d nio_add_to_epoll", __LINE__, pSockContext->machine->hostname,
       pSockContext->machine->cluster_port);
   */
@@ -267,7 +261,7 @@ int nio_add_to_epoll(SocketContext *pSockContext)
 	if (epoll_ctl(pSockContext->thread_context->epoll_fd, EPOLL_CTL_ADD,
 		pSockContext->sock, &event) != 0)
 	{
-		logError("file: " __FILE__ ", line: %d, "
+		Error("file: " __FILE__ ", line: %d, "
 			"epoll_ctl fail, errno: %d, error info: %s", \
 			__LINE__, errno, strerror(errno));
     remove_machine_sock_context(pSockContext);  //rollback
@@ -311,7 +305,7 @@ static void clear_send_queue(SocketContext * pSockContext)
     pthread_mutex_unlock(&send_queue->lock);
   }
 
-  logDebug("file: " __FILE__ ", line: %d, "
+  Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
       "release %s:%d #%d message count: %d",
       __LINE__, pSockContext->machine->hostname,
       pSockContext->machine->cluster_port, pSockContext->sock, count);
@@ -322,13 +316,13 @@ static int close_socket(SocketContext * pSockContext)
 	if (epoll_ctl(pSockContext->thread_context->epoll_fd, EPOLL_CTL_DEL,
 		pSockContext->sock, NULL) != 0)
 	{
-		logError("file: " __FILE__ ", line: %d, "
+		Error("file: " __FILE__ ", line: %d, "
 			"epoll_ctl fail, errno: %d, error info: %s", \
 			__LINE__, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
 	}
 
-  logDebug("file: " __FILE__ ", line: %d, "
+  Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
       "before call machine_remove_connection", __LINE__);
 
   machine_remove_connection(pSockContext);
@@ -342,7 +336,7 @@ static int close_socket(SocketContext * pSockContext)
   notify_connection_closed(pSockContext);
 
   if (pSockContext->connect_type == CONNECT_TYPE_CLIENT) {
-    logDebug("file: " __FILE__ ", line: %d, "
+    Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
       "before call make_connection", __LINE__);
     make_connection(pSockContext);
   }
@@ -520,7 +514,7 @@ static int deal_write_event(SocketContext * pSockContext)
       total_msg_count++;
 
       /*
-      logDebug("file: " __FILE__ ", line: %d, "
+      Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
           "%s:%d sending msg, data body: %d, msg send bytes: %d, total_bytes: %d",
           __LINE__,
           pSockContext->machine->hostname,
@@ -555,7 +549,7 @@ static int deal_write_event(SocketContext * pSockContext)
   }
 
   /*
-  logDebug("==wwwwww==file: " __FILE__ ", line: %d, "
+  Debug(CLUSTER_DEBUG_TAG, "==wwwwww==file: " __FILE__ ", line: %d, "
       "%s:%d total_bytes: %d, vec_count: %d, total_msg_count: %d", __LINE__,
       pSockContext->machine->hostname,
       pSockContext->machine->cluster_port,
@@ -568,7 +562,7 @@ static int deal_write_event(SocketContext * pSockContext)
 
 	write_bytes = writev(pSockContext->sock, write_vec, vec_count);
 	if (write_bytes == 0) {   //connection closed
-		logError("file: "__FILE__", line: %d, "
+		Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
 			"write fail, connection closed",
 			__LINE__);
 		return ECONNRESET;
@@ -578,14 +572,14 @@ static int deal_write_event(SocketContext * pSockContext)
 			return EAGAIN;
 		}
     else if (errno == EINTR) {  //should try again
-			logWarning("file: "__FILE__ ", line: %d, "
+			Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__ ", line: %d, "
 				"write fail, errno: %d, error info: %s", \
 				__LINE__, errno, strerror(errno));
       return 0;
     }
 		else {
 			result = errno != 0 ? errno : EIO;
-      logError("file: "__FILE__", line: %d, "
+      Error("file: "__FILE__", line: %d, "
 				"write fail, errno: %d, error info: %s", \
 				__LINE__, result, strerror(result));
 			return result;
@@ -715,7 +709,7 @@ static int deal_write_event(SocketContext * pSockContext)
 
 
       /*
-      logDebug("file: " __FILE__ ", line: %d, "
+      Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
           "%s:%d send msg done, data body: %d, send bytes: %d",
           __LINE__,
           pSockContext->machine->hostname,
@@ -741,7 +735,7 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
   void *user_data;
 
  /*
-  logDebug("file: "__FILE__", line: %d, " \
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
       "func_id: %d, data length: %d, recv_msg_count: %ld", __LINE__,
       pHeader->func_id, data_len, count + 1);
   */
@@ -826,7 +820,7 @@ static int deal_read_event(SocketContext *pSockContext)
   read_bytes = read(pSockContext->sock, pSockContext->reader.current,
       pSockContext->reader.buff_end - pSockContext->reader.current);
 /*
-  logDebug("======file: " __FILE__ ", line: %d, "
+  Debug(CLUSTER_DEBUG_TAG, "======file: " __FILE__ ", line: %d, "
       "%s:%d remain bytes: %ld, recv bytes: %d", __LINE__,
       pSockContext->machine->hostname,
       pSockContext->machine->cluster_port,
@@ -834,7 +828,7 @@ static int deal_read_event(SocketContext *pSockContext)
       read_bytes);
 */
 	if (read_bytes == 0) {
-     logError("file: " __FILE__ ", line: %d, "
+     Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
           "==type: %c, read fail, connection #%d closed", __LINE__,
           pSockContext->connect_type, pSockContext->sock);
       return ECONNRESET;
@@ -844,14 +838,14 @@ static int deal_read_event(SocketContext *pSockContext)
 			return EAGAIN;
 		}
     else if (errno == EINTR) {  //should try again
-			logWarning("file: " __FILE__ ", line: %d, "
+			Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
 				"read fail, errno: %d, error info: %s", \
 				__LINE__, errno, strerror(errno));
       return 0;
     }
 		else {
 			result = errno != 0 ? errno : EIO;
-			logError("file: " __FILE__ ", line: %d, "
+			Error("file: " __FILE__ ", line: %d, "
 				"read fail, errno: %d, error info: %s", \
 				__LINE__, result, strerror(result));
 			return result;
@@ -903,7 +897,7 @@ static int deal_read_event(SocketContext *pSockContext)
     pHeader = (MsgHeader *)pSockContext->reader.msg_header;
 #ifdef CHECK_MAGIC_NUMBER
     if (pHeader->magic != MAGIC_NUMBER) {
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"magic number: %08x != %08x", \
 				__LINE__, pHeader->magic, MAGIC_NUMBER);
       return EINVAL;
@@ -911,7 +905,7 @@ static int deal_read_event(SocketContext *pSockContext)
 #endif
 
     if (pHeader->aligned_data_len > MAX_MSG_LENGTH) {
-			logError("file: "__FILE__", line: %d, " \
+			Error("file: "__FILE__", line: %d, " \
 				"message length: %d is too large, exceeds: %d", \
 				__LINE__, pHeader->aligned_data_len, MAX_MSG_LENGTH);
       return ENOSPC;
@@ -956,7 +950,7 @@ static int deal_read_event(SocketContext *pSockContext)
       //must be only one block
       if (pHeader->func_id < 0) {
         if (!bFirstBlock) {
-          logError("file: "__FILE__", line: %d, " \
+          Error("file: "__FILE__", line: %d, " \
               "func_id: %d, data length: %d too large exceeds %d",
               __LINE__, pHeader->func_id, pHeader->data_len,
               (int)(READ_BUFFER_SIZE - MSG_HEADER_LENGTH));
@@ -1114,7 +1108,7 @@ static void deal_epoll_events(struct worker_thread_context *
 	  pSockContext = (SocketContext *)pEvent->data.ptr;
 
     /*
-    logDebug("======file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "======file: "__FILE__", line: %d, " \
         "sock #%d get epoll event: %d", __LINE__,
         pSockContext->sock, pEvent->events);
     */
@@ -1122,7 +1116,7 @@ static void deal_epoll_events(struct worker_thread_context *
     if ((pEvent->events & EPOLLRDHUP) || (pEvent->events & EPOLLERR) ||
         (pEvent->events & EPOLLHUP))
     {
-      logError("file: " __FILE__ ", line: %d, "
+      Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
           "connection %s %s:%d closed", __LINE__,
           pSockContext->connect_type == CONNECT_TYPE_CLIENT ? "to" : "from",
           pSockContext->machine->hostname, pSockContext->machine->cluster_port);
@@ -1174,11 +1168,11 @@ static void *work_thread_entrance(void* arg)
 			continue;
 		}
 		if (count < 0) {
-			logError("file: "__FILE__", line: %d, " \
-				"call epoll_wait fail, " \
-				"errno: %d, error info: %s",
-				__LINE__, errno, strerror(errno));
       if (errno != EINTR) {
+        Error("file: "__FILE__", line: %d, " \
+            "call epoll_wait fail, " \
+            "errno: %d, error info: %s",
+            __LINE__, errno, strerror(errno));
         sleep(1);
       }
 			continue;
@@ -1189,7 +1183,7 @@ static void *work_thread_entrance(void* arg)
 
 	if ((result=pthread_mutex_lock(&worker_thread_lock)) != 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call pthread_mutex_lock fail, " \
 			"errno: %d, error info: %s", \
 			__LINE__, result, strerror(result));
@@ -1197,7 +1191,7 @@ static void *work_thread_entrance(void* arg)
 	g_worker_thread_count--;
 	if ((result=pthread_mutex_unlock(&worker_thread_lock)) != 0)
 	{
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"call pthread_mutex_unlock fail, " \
 			"errno: %d, error info: %s", \
 			__LINE__, result, strerror(result));
@@ -1214,7 +1208,7 @@ inline static int notify_to_send(SocketContext *pSockContext)
 	if (epoll_ctl(pSockContext->thread_context->epoll_fd, EPOLL_CTL_MOD,
 		pSockContext->sock, &event) != 0)
 	{
-		logError("file: " __FILE__ ", line: %d, "
+		Error("file: " __FILE__ ", line: %d, "
 			"epoll_ctl fail, errno: %d, error info: %s", \
 			__LINE__, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -1232,7 +1226,7 @@ static int set_epoll_recv_only(SocketContext *pSockContext)
 	if (epoll_ctl(pSockContext->thread_context->epoll_fd, EPOLL_CTL_MOD,
 		pSockContext->sock, &event) != 0)
 	{
-		logError("file: " __FILE__ ", line: %d, "
+		Error("file: " __FILE__ ", line: %d, "
 			"epoll_ctl fail, errno: %d, error info: %s", \
 			__LINE__, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;

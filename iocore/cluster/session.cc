@@ -11,22 +11,19 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
-#include "logger.h"
+#include "Diags.h"
 #include "global.h"
-#include "sched_thread.h"
 #include "pthread_func.h"
 #include "connection.h"
 #include "clusterinterface.h"
 #include "nio.h"
-#include "session.h"
-
-#ifndef DEBUG_FLAG
 #ifndef TS_INLINE
 #define TS_INLINE inline
 #endif
 #include "I_IOBuffer.h"
 #include "P_Cluster.h"
-#endif
+#include "P_RecCore.h"
+#include "session.h"
 
 #ifndef USE_MULTI_ALLOCATOR
 static Allocator g_in_message_allocator("InMessage", sizeof(InMessage), 1024);
@@ -35,7 +32,22 @@ static Allocator g_in_message_allocator("InMessage", sizeof(InMessage), 1024);
 static Allocator g_session_allocator("SessionEntry", sizeof(SessionEntry), 1024);
 
 static MachineSessions *all_sessions;  //[src ip % MAX_MACHINE_COUNT]
-pthread_mutex_t session_lock;
+static pthread_mutex_t session_lock;
+
+typedef struct session_records {
+  RecRecord * create_total_count;   //create session total count
+  RecRecord * create_success_count; //create session success count
+  RecRecord * create_retry_times;   //create session retry times
+  RecRecord * close_total_count;    //close session count
+  RecRecord * close_success_count;  //close session success count
+  RecRecord * session_miss_count;     //session miss count
+  RecRecord * session_occupied_count; //session occupied count
+} SessionRecords;
+
+static SessionRecords server_session_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+static SessionRecords client_session_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+
+static void init_session_stat(SessionRecords *pSessionRecords, const char *prefix);
 
 inline static int get_session_machine_index(const unsigned int ip)
 {
@@ -124,7 +136,7 @@ int init_machine_sessions(ClusterMachine *machine, const bool bMyself)
 	sessions_bytes = sizeof(SessionEntry) * MAX_SESSION_COUNT_PER_MACHINE;
   pMachineSessions->sessions = (SessionEntry *)malloc(sessions_bytes);
   if (pMachineSessions->sessions == NULL) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "malloc %d bytes fail, errno: %d, error info: %s", \
         __LINE__, sessions_bytes, errno, strerror(errno));
     pthread_mutex_unlock(&session_lock);
@@ -135,7 +147,7 @@ int init_machine_sessions(ClusterMachine *machine, const bool bMyself)
   locks_bytes = sizeof(pthread_mutex_t) * SESSION_LOCK_COUNT_PER_MACHINE;
   pMachineSessions->locks = (pthread_mutex_t *)malloc(locks_bytes);
   if (pMachineSessions->locks == NULL) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "malloc %d bytes fail, errno: %d, error info: %s", \
         __LINE__, locks_bytes, errno, strerror(errno));
     pthread_mutex_unlock(&session_lock);
@@ -164,7 +176,7 @@ int session_init()
 	bytes = sizeof(MachineSessions) * MAX_MACHINE_COUNT;
 	all_sessions = (MachineSessions *)malloc(bytes);
 	if (all_sessions == NULL) {
-		logError("file: "__FILE__", line: %d, " \
+		Error("file: "__FILE__", line: %d, " \
 			"malloc %d bytes fail, errno: %d, error info: %s", \
 			__LINE__, bytes, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
@@ -181,8 +193,11 @@ int session_init()
   }
 
   g_my_machine_id = get_session_machine_index(myMachine->ip);
-  logInfo("g_my_machine_id: %d, g_my_machine_index: %u",
+  Debug(CLUSTER_DEBUG_TAG, "g_my_machine_id: %d, g_my_machine_index: %u",
       g_my_machine_id, g_my_machine_index);
+
+  init_session_stat(&server_session_records, "proxy.process.cluster.server_session");
+  init_session_stat(&client_session_records, "proxy.process.cluster.client_session");
 
 	return 0;
 }
@@ -199,9 +214,7 @@ int cluster_create_session(ClusterSession *session,
 
   pMachineSessions = all_sessions + g_my_machine_id;
 
-#ifdef SESSION_STAT_FLAG
   __sync_fetch_and_add(&pMachineSessions->session_stat.create_total_count, 1);
-#endif
 
   if ((pSockContext=get_socket_context(machine)) == NULL) {
     return ENOENT;
@@ -233,18 +246,16 @@ int cluster_create_session(ClusterSession *session,
 
         /*
         if (i > 0) {
-          logWarning("file: "__FILE__", line: %d, " \
+          Warning("file: "__FILE__", line: %d, " \
               "alloc session slot in %d times, session seq: %ld",
               __LINE__, i + 1, seq);
         }
         */
 
-#ifdef SESSION_STAT_FLAG
         __sync_fetch_and_add(&pMachineSessions->session_stat.
             create_success_count, 1);
         __sync_fetch_and_add(&pMachineSessions->session_stat.
             create_retry_times, i + 1);
-#endif
         return 0;
       }
       SESSION_UNLOCK(pMachineSessions, session_index);
@@ -252,7 +263,7 @@ int cluster_create_session(ClusterSession *session,
   }
 
   /*
-  logWarning("file: "__FILE__", line: %d, " \
+  Warning("file: "__FILE__", line: %d, " \
       "can't alloc session slot! seq: %ld", __LINE__, seq);
       */
 
@@ -262,13 +273,13 @@ int cluster_create_session(ClusterSession *session,
 #define GET_MACHINE_INDEX(machine_id, ip, pMachineSessions, return_value) \
   do { \
     if ((machine_id=get_session_machine_index(ip)) < 0) { \
-      logDebug("file: "__FILE__", line: %d, " \
+      Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
           "ip: %u not exist!", __LINE__, ip); \
       return return_value; \
     } \
     pMachineSessions = all_sessions + machine_id; \
     if (!(pMachineSessions)->init_done) { \
-      logDebug("file: "__FILE__", line: %d, " \
+      Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
           "ip: %u not init!", __LINE__, ip); \
       return return_value; \
     } \
@@ -413,9 +424,7 @@ void *cluster_close_session(ClusterSession session)
 
   GET_MACHINE_INDEX(machine_id, session.fields.ip, pMachineSessions, NULL);
 
-#ifdef SESSION_STAT_FLAG
   __sync_fetch_and_add(&pMachineSessions->session_stat.close_total_count, 1);
-#endif
 
   session_index = session.fields.seq % MAX_SESSION_COUNT_PER_MACHINE;
   pSessionEntry = pMachineSessions->sessions + session_index;
@@ -455,10 +464,8 @@ void *cluster_close_session(ClusterSession session)
     }
 #endif
 
-#ifdef SESSION_STAT_FLAG
     __sync_fetch_and_add(&pMachineSessions->session_stat.
         close_success_count, 1);
-#endif
 
 #ifdef MSG_TIME_STAT_FLAG
       if (pMachineSessions->is_myself)
@@ -637,7 +644,7 @@ int get_response_session(const MsgHeader *pHeader,
 
     if ((*ppMachineSessions)->is_myself) { //request by me
       if (IS_SESSION_EMPTY(pSession->session_id)) {
-        logWarning("file: "__FILE__", line: %d, " \
+        Warning("file: "__FILE__", line: %d, " \
             "client sessionEntry: %16lX:%lX not exist, func_id: %d",
             __LINE__, pHeader->session_id.ids[0],
             pHeader->session_id.ids[1], pHeader->func_id);
@@ -645,10 +652,9 @@ int get_response_session(const MsgHeader *pHeader,
         *call_func = false;
         *user_data = NULL;
         result = ENOENT;
-#ifdef SESSION_STAT_FLAG
+
         __sync_fetch_and_add(&(*ppMachineSessions)->session_stat.
             session_miss_count, 1);
-#endif
         break;
       }
     }
@@ -659,7 +665,7 @@ int get_response_session(const MsgHeader *pHeader,
         *call_func = false;
         result = ENOENT;
 
-        logWarning("file: "__FILE__", line: %d, " \
+        Warning("file: "__FILE__", line: %d, " \
             "server sessionEntry: %08X:%u:%ld not exist, msg seq: %u, " \
             "func_id: %d, data_len: %d",
             __LINE__, pHeader->session_id.fields.ip,
@@ -667,10 +673,8 @@ int get_response_session(const MsgHeader *pHeader,
             pHeader->session_id.ids[1], pHeader->msg_seq,
             pHeader->func_id, pHeader->data_len);
 
-#ifdef SESSION_STAT_FLAG
         __sync_fetch_and_add(&(*ppMachineSessions)->session_stat.
             session_miss_count, 1);
-#endif
         break;
       }
 
@@ -715,7 +719,7 @@ int get_response_session(const MsgHeader *pHeader,
       if (pTail != NULL) {
         pTail->next = pSession;
 
-        logDebug("file: "__FILE__", line: %d, " \
+        Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
             "sessionEntry: %08X:%u:%ld, chain count: %d",
             __LINE__, pHeader->session_id.fields.ip,
             pHeader->session_id.fields.timestamp,
@@ -727,14 +731,12 @@ int get_response_session(const MsgHeader *pHeader,
       *call_func = true;
       result = 0;
 
-#ifdef SESSION_STAT_FLAG
       __sync_fetch_and_add(&(*ppMachineSessions)->session_stat.
           create_total_count, 1);
-#endif
       break;
     }
 
-    logWarning("file: "__FILE__", line: %d, " \
+    Warning("file: "__FILE__", line: %d, " \
         "sessionEntry: %08X:%u:%ld, position occupied by %08X:%u:%ld, "
         "quest by me: %d, time distance: %u, func_id: %d",
         __LINE__, pHeader->session_id.fields.ip,
@@ -748,10 +750,8 @@ int get_response_session(const MsgHeader *pHeader,
     *call_func = false;
     result = EEXIST;
 
-#ifdef SESSION_STAT_FLAG
     __sync_fetch_and_add(&(*ppMachineSessions)->session_stat.
         session_occupied_count, 1);
-#endif
   } while (0);
 
 #ifdef TRIGGER_STAT_FLAG
@@ -830,13 +830,13 @@ int notify_connection_closed(SocketContext *pSockContext)
   int machine_id;
 
   count1 = do_notify_connection_closed(g_my_machine_id, pSockContext);
-  logDebug("file: "__FILE__", line: %d, " \
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
       "notify my session close count: %d", __LINE__, count1);
 
   machine_id = get_session_machine_index(pSockContext->machine->ip);
   if (machine_id >= 0 && all_sessions[machine_id].init_done) {
     count2 = do_notify_connection_closed(machine_id, pSockContext);
-    logDebug("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "notify %s session close count: %d", __LINE__,
         pSockContext->machine->hostname, count2);
   }
@@ -874,7 +874,7 @@ int push_in_message(const SessionId session,
 #endif
 
   if (pMessage == NULL) {
-    logError("file: "__FILE__", line: %d, " \
+    Error("file: "__FILE__", line: %d, " \
         "malloc %d bytes fail, errno: %d, error info: %s", \
         __LINE__, (int)sizeof(InMessage), errno, strerror(errno));
     SESSION_UNLOCK(pMachineSessions, session_index);
@@ -934,7 +934,82 @@ int push_in_message(const SessionId session,
   return 0;
 }
 
-#ifdef SESSION_STAT_FLAG
+static void set_session_stat(SessionRecords *pSessionRecords,
+    const SessionStat *pNewtat, SessionStat *pOldStat)
+{
+  if (pNewtat->create_total_count != pOldStat->create_total_count) {
+    pOldStat->create_total_count = pNewtat->create_total_count;
+    RecDataSetFromInk64(RECD_INT, &pSessionRecords->create_total_count->data,
+        pNewtat->create_total_count);
+  }
+  if (pNewtat->create_success_count != pOldStat->create_success_count) {
+    pOldStat->create_success_count = pNewtat->create_success_count;
+    RecDataSetFromInk64(RECD_INT, &pSessionRecords->create_success_count->data,
+        pNewtat->create_success_count);
+  }
+  if (pNewtat->create_retry_times != pOldStat->create_retry_times) {
+    pOldStat->create_retry_times = pNewtat->create_retry_times;
+    RecDataSetFromInk64(RECD_INT, &pSessionRecords->create_retry_times->data,
+        pNewtat->create_retry_times);
+  }
+  if (pNewtat->close_total_count != pOldStat->close_total_count) {
+    pOldStat->close_total_count = pNewtat->close_total_count;
+    RecDataSetFromInk64(RECD_INT, &pSessionRecords->close_total_count->data,
+        pNewtat->close_total_count);
+  }
+  if (pNewtat->close_success_count != pOldStat->close_success_count) {
+    pOldStat->close_success_count = pNewtat->close_success_count;
+    RecDataSetFromInk64(RECD_INT, &pSessionRecords->close_success_count->data,
+        pNewtat->close_success_count);
+  }
+  if (pNewtat->session_miss_count != pOldStat->session_miss_count) {
+    pOldStat->session_miss_count = pNewtat->session_miss_count;
+    RecDataSetFromInk64(RECD_INT, &pSessionRecords->session_miss_count->data,
+        pNewtat->session_miss_count);
+  }
+  if (pNewtat->session_occupied_count != pOldStat->session_occupied_count) {
+    pOldStat->session_occupied_count = pNewtat->session_occupied_count;
+    RecDataSetFromInk64(RECD_INT, &pSessionRecords->session_occupied_count->data,
+        pNewtat->session_occupied_count);
+  }
+}
+
+static void init_session_stat(SessionRecords *pSessionRecords, const char *prefix)
+{
+  char name[256];
+  RecData data_default;
+  memset(&data_default, 0, sizeof(RecData));
+
+  sprintf(name, "%s.create_total_count", prefix);
+  pSessionRecords->create_total_count = RecRegisterStat(RECT_PROCESS,
+      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+
+  sprintf(name, "%s.create_success_count", prefix);
+  pSessionRecords->create_success_count = RecRegisterStat(RECT_PROCESS,
+      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+
+  sprintf(name, "%s.create_retry_times", prefix);
+  pSessionRecords->create_retry_times = RecRegisterStat(RECT_PROCESS,
+      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+
+  sprintf(name, "%s.close_total_count", prefix);
+  pSessionRecords->close_total_count = RecRegisterStat(RECT_PROCESS,
+      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+
+  sprintf(name, "%s.close_success_count", prefix);
+  pSessionRecords->close_success_count = RecRegisterStat(RECT_PROCESS,
+      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+
+  sprintf(name, "%s.miss_count", prefix);
+  pSessionRecords->session_miss_count = RecRegisterStat(RECT_PROCESS,
+      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+
+  sprintf(name, "%s.occupied_count", prefix);
+  pSessionRecords->session_occupied_count = RecRegisterStat(RECT_PROCESS,
+      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+}
+
+
 void log_session_stat()
 {
   ClusterMachine *pMachine;
@@ -943,6 +1018,8 @@ void log_session_stat()
   MachineSessions *pServerSessions;
   MachineSessions *pClientSessions;
   SessionStat serverSessionStat;
+  static SessionStat serverOldStat = {0, 0, 0, 0, 0, 0, 0};
+  static SessionStat clientOldStat = {0, 0, 0, 0, 0, 0, 0};
 
   serverSessionStat.create_total_count = 0;
   serverSessionStat.create_success_count = 0;
@@ -972,45 +1049,17 @@ void log_session_stat()
       session_miss_count;
     serverSessionStat.session_occupied_count += pServerSessions->session_stat.
       session_occupied_count;
-
-    logInfo("%s:%d session create_total_count: %ld, close_total_count: %ld, " \
-      "close_success_count: %ld, session_miss_count: %ld, " \
-      "session_occupied_count: %ld",
-      pMachine->hostname, pMachine->cluster_port,
-      pServerSessions->session_stat.create_total_count,
-      pServerSessions->session_stat.close_total_count,
-      pServerSessions->session_stat.close_success_count,
-      pServerSessions->session_stat.session_miss_count,
-      pServerSessions->session_stat.session_occupied_count);
-  }
+ }
 
   serverSessionStat.create_success_count = serverSessionStat.create_total_count;
   serverSessionStat.create_retry_times = serverSessionStat.create_total_count;
-  logInfo("SERVER: create_total_count: %ld, " \
-      "close_total_count: %ld, " \
-      "close_success_count: %ld, session_miss_count: %ld, " \
-      "session_occupied_count: %ld",
-      serverSessionStat.create_total_count,
-      serverSessionStat.close_total_count,
-      serverSessionStat.close_success_count,
-      serverSessionStat.session_miss_count,
-      serverSessionStat.session_occupied_count);
 
   pClientSessions = all_sessions + g_my_machine_id;
-  logInfo("CLIENT: create_total_count: %ld, " \
-      "create_success_count: %ld, " \
-      "create_retry_times: %ld, close_total_count: %ld, " \
-      "close_success_count: %ld, session_miss_count: %ld, " \
-      "session_occupied_count: %ld\n",
-      pClientSessions->session_stat.create_total_count,
-      pClientSessions->session_stat.create_success_count,
-      pClientSessions->session_stat.create_retry_times,
-      pClientSessions->session_stat.close_total_count,
-      pClientSessions->session_stat.close_success_count,
-      pClientSessions->session_stat.session_miss_count,
-      pClientSessions->session_stat.session_occupied_count);
+
+  set_session_stat(&server_session_records, &serverSessionStat, &serverOldStat);
+  set_session_stat(&client_session_records, (const SessionStat *)
+      &pClientSessions->session_stat, &clientOldStat);
 }
-#endif
 
 #ifdef TRIGGER_STAT_FLAG
 void log_trigger_stat()
@@ -1047,7 +1096,7 @@ void log_trigger_stat()
     else {
       server_avg_time_used = 0;
     }
-    logInfo("%s:%d trigger msg => %ld, avg time used => %d us",
+    Note("%s:%d trigger msg => %ld, avg time used => %d us",
       pMachine->hostname, pMachine->cluster_port,
       pServerSessions->trigger_stat.count,
       server_avg_time_used / 1000);
@@ -1062,7 +1111,7 @@ void log_trigger_stat()
   else {
     server_avg_time_used = 0;
   }
-  logInfo("SERVER: trigger msg => %ld, avg time used => %d us",
+  Note("SERVER: trigger msg => %ld, avg time used => %d us",
       serverTimeUsed.count, server_avg_time_used / 1000);
 
   pClientSessions = all_sessions + g_my_machine_id;
@@ -1073,7 +1122,7 @@ void log_trigger_stat()
   else {
     client_avg_time_used = 0;
   }
-  logInfo("CLIENT: trigger msg => %ld, avg time used => %d us\n",  \
+  Note("CLIENT: trigger msg => %ld, avg time used => %d us\n",  \
       pClientSessions->trigger_stat.count, client_avg_time_used / 1000);
 
   pClientSessions->trigger_stat.count = 0;
@@ -1130,7 +1179,7 @@ void log_msg_time_stat()
       send_avg_time_used = 0;
     }
 
-    logInfo("%s:%d msg count: %ld, avg time used (recv start to send done): %d us, "
+    Note("%s:%d msg count: %ld, avg time used (recv start to send done): %d us, "
         "send msg count: %ld, send avg time: %d us",
       pMachine->hostname, pMachine->cluster_port,
       pServerSessions->msg_stat.count, server_avg_time_used / 1000,
@@ -1155,7 +1204,7 @@ void log_msg_time_stat()
   else {
     send_avg_time_used = 0;
   }
-  logInfo("SERVER: msg count: %ld, avg time used (recv start to send done): %d us, "
+  Note("SERVER: msg count: %ld, avg time used (recv start to send done): %d us, "
       "send msg count: %ld, send avg time: %d us",
       serverTimeUsed.count, server_avg_time_used / 1000,
       sendTimeUsed.count, send_avg_time_used / 1000);
@@ -1175,7 +1224,7 @@ void log_msg_time_stat()
   else {
     send_avg_time_used = 0;
   }
-  logInfo("CLIENT: msg count: %ld, avg time used (send start to recv done): %d us, "
+  Note("CLIENT: msg count: %ld, avg time used (send start to recv done): %d us, "
       "send msg count: %ld, send avg time: %d us\n",
       pClientSessions->msg_stat.count, client_avg_time_used / 1000,
       pClientSessions->msg_send.count, send_avg_time_used / 1000);

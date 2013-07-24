@@ -8,10 +8,7 @@
 #include <string.h>
 #include <pthread.h>
 #include "clusterinterface.h"
-
-#ifndef DEBUG_FLAG
 #include "libts.h"
-#endif
 
 //#define USE_MULTI_ALLOCATOR  1
 #define CHECK_MAGIC_NUMBER  1
@@ -19,9 +16,8 @@
 #define PRIORITY_COUNT      3   //priority queue count
 
 //statistic marco defines
-#define SESSION_STAT_FLAG  1  //session statistic flag
-#define TRIGGER_STAT_FLAG  1  //trigger statistic flag
-#define MSG_TIME_STAT_FLAG 1  //data statistic flag
+//#define TRIGGER_STAT_FLAG  1  //trigger statistic flag
+//#define MSG_TIME_STAT_FLAG 1  //data statistic flag
 
 #define MSG_HEADER_LENGTH   ((int)sizeof(MsgHeader))
 #define MAGIC_NUMBER        0x3308
@@ -61,7 +57,6 @@ typedef struct msg_timeused {
   volatile int64_t time_used; //time used
 } MsgTimeUsed;
 
-#ifdef SESSION_STAT_FLAG
 typedef struct session_stat {
   volatile int64_t create_total_count;   //create session total count
   volatile int64_t create_success_count; //create session success count
@@ -71,7 +66,6 @@ typedef struct session_stat {
   volatile int64_t session_miss_count;     //session miss count
   volatile int64_t session_occupied_count; //session occupied count
 } SessionStat;
-#endif
 
 typedef struct msg_header {
 #ifdef CHECK_MAGIC_NUMBER

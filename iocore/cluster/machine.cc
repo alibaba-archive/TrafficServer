@@ -8,19 +8,15 @@
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <fcntl.h>
-#include "logger.h"
-#include "local_ip_func.h"
+#include "Diags.h"
 #include "pthread_func.h"
 #include "global.h"
 #include "nio.h"
 #include "connection.h"
 #include "message.h"
 #include "machine.h"
-
-#ifndef DEBUG_FLAG
 #include "ink_config.h"
 #include "P_Cluster.h"
-#endif
 
 unsigned int g_my_machine_index = 0;
 unsigned int g_my_machine_ip = 0;
@@ -32,25 +28,6 @@ static ClusterMachine **sorted_machines = NULL;
 static pthread_mutex_t machine_lock;
 
 static ClusterMachine *do_add_machine(ClusterMachine *m, int *result);
-
-#ifdef DEBUG_FLAG
-static int add_machine(const char *hostname, const int port)
-{
-  ClusterMachine machine;
-  struct in_addr ip_addr;
-  int result;
-
-  memset(&machine, 0, sizeof(machine));
-  machine.hostname_len = strlen(hostname);
-  machine.hostname = strdup(hostname);
-  machine.cluster_port = port;
-  inet_pton(AF_INET, machine.hostname, &ip_addr);
-  machine.ip = ip_addr.s_addr;
-
-  do_add_machine(&machine, &result);
-  return result;
-}
-#endif
 
 ClusterMachine *add_machine(const unsigned int ip, const int port)
 {
@@ -74,7 +51,6 @@ int init_machines()
 {
   int result;
   int bytes;
-  int i;
 
   if ((result=init_pthread_lock(&machine_lock)) != 0) {
     return result;
@@ -84,7 +60,7 @@ int init_machines()
   bytes = sizeof(ClusterMachine) * MAX_MACHINE_COUNT;
   g_machines = (ClusterMachine *)malloc(bytes);
   if (g_machines == NULL) {
-    logError("file: "__FILE__", line: %d, "
+    Error("file: "__FILE__", line: %d, "
         "malloc %d bytes fail!", __LINE__, bytes);
     return ENOMEM;
   }
@@ -93,55 +69,11 @@ int init_machines()
   bytes = sizeof(ClusterMachine *) * MAX_MACHINE_COUNT;
   sorted_machines = (ClusterMachine **)malloc(bytes);
   if (sorted_machines == NULL) {
-    logError("file: "__FILE__", line: %d, "
+    Error("file: "__FILE__", line: %d, "
         "malloc %d bytes fail!", __LINE__, bytes);
     return ENOMEM;
   }
   memset(sorted_machines, 0, bytes);
-
-#ifdef DEBUG_FLAG
-  add_machine("10.235.163.5", g_server_port);
-  add_machine("10.235.163.6", g_server_port);
-  /*
-  add_machine("10.235.163.7", g_server_port);
-  add_machine("10.235.163.8", g_server_port);
-  add_machine("10.235.163.9", g_server_port);
-  add_machine("10.235.163.10", g_server_port);
-  */
-
-  logInfo("ip 0: %d => %d", g_machines[0].ip, g_machines[0].ip % MAX_MACHINE_COUNT);
-  logInfo("ip 1: %d => %d", g_machines[1].ip, g_machines[1].ip % MAX_MACHINE_COUNT);
-  logInfo("ip 0: %d => %d", ntohl(g_machines[0].ip), ntohl(g_machines[0].ip) % MAX_MACHINE_COUNT);
-  logInfo("ip 1: %d => %d", ntohl(g_machines[1].ip), ntohl(g_machines[1].ip) % MAX_MACHINE_COUNT);
-#endif
-
-  logInfo("g_machine_count: %d", g_machine_count);
-
-  load_local_host_ip_addrs();
-  //print_local_host_ip_addrs();
-
-  for (i=0; i<g_machine_count; i++) {
-    if (is_local_host_ip(g_machines[i].hostname)) {
-      g_my_machine_index = i;
-      g_my_machine_ip = g_machines[i].ip;
-      logInfo("my_machine_id: %d", g_my_machine_id);
-      break;
-    }
-  }
-
-  return 0;
-}
-
-//TODO: for test only
-int start_machines_connection()
-{
-  int i;
-  for (i=0; i<g_machine_count; i++) {
-    if (!is_local_host_ip(g_machines[i].hostname)) {
-      logInfo("start connection: %s", g_machines[i].hostname);
-      machine_make_connections(g_machines + i);
-    }
-  }
 
   return 0;
 }
@@ -185,7 +117,7 @@ static ClusterMachine *do_add_machine(ClusterMachine *m, int *result)
     }
 
     if (g_machine_count >= MAX_MACHINE_COUNT) {
-      logError("file: "__FILE__", line: %d, "
+      Error("file: "__FILE__", line: %d, "
           "exceeds max machine: %d!", __LINE__, MAX_MACHINE_COUNT);
       *result = ENOSPC;
       pMachine = NULL;
@@ -209,7 +141,7 @@ static ClusterMachine *do_add_machine(ClusterMachine *m, int *result)
     else {
       pMachine->hostname = (char *)malloc(m->hostname_len + 1);
       if (pMachine->hostname == NULL) {
-        logError("file: "__FILE__", line: %d, "
+        Error("file: "__FILE__", line: %d, "
             "malloc %d bytes fail!", __LINE__, m->hostname_len + 1);
         *result = ENOMEM;
         break;
@@ -253,7 +185,7 @@ int machine_up_notify(ClusterMachine *machine)
 
   pthread_mutex_lock(&machine_lock);
 
-  logDebug("file: "__FILE__", line: %d, "
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
       "machine_up_notify, %s connection count: %d, dead: %d",
       __LINE__, machine->hostname, machine->now_connections, machine->dead);
 
@@ -280,7 +212,7 @@ int machine_add_connection(SocketContext *pSockContext)
   count = ++pSockContext->machine->now_connections;
   pthread_mutex_unlock(&machine_lock);
 
-  logDebug("file: "__FILE__", line: %d, "
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
       "%s add %c connection count: %d, dead: %d", __LINE__,
       pSockContext->machine->hostname, pSockContext->connect_type,
       count, pSockContext->machine->dead);
@@ -306,7 +238,7 @@ int machine_remove_connection(SocketContext *pSockContext)
   }
   pthread_mutex_unlock(&machine_lock);
 
-  logDebug("file: "__FILE__", line: %d, "
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
       "%s remove %c connection count: %d, dead: %d", __LINE__,
       pSockContext->machine->hostname, pSockContext->connect_type,
       count, pSockContext->machine->dead);
