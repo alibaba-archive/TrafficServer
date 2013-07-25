@@ -244,14 +244,6 @@ int cluster_create_session(ClusterSession *session,
 #endif
         SESSION_UNLOCK(pMachineSessions, session_index);
 
-        /*
-        if (i > 0) {
-          Warning("file: "__FILE__", line: %d, " \
-              "alloc session slot in %d times, session seq: %ld",
-              __LINE__, i + 1, seq);
-        }
-        */
-
         __sync_fetch_and_add(&pMachineSessions->session_stat.
             create_success_count, 1);
         __sync_fetch_and_add(&pMachineSessions->session_stat.
@@ -262,10 +254,8 @@ int cluster_create_session(ClusterSession *session,
     }
   }
 
-  /*
-  Warning("file: "__FILE__", line: %d, " \
-      "can't alloc session slot! seq: %ld", __LINE__, seq);
-      */
+  __sync_fetch_and_add(&pMachineSessions->session_stat.
+      create_retry_times, i);
 
 	return ENOSPC;
 }
@@ -644,7 +634,7 @@ int get_response_session(const MsgHeader *pHeader,
 
     if ((*ppMachineSessions)->is_myself) { //request by me
       if (IS_SESSION_EMPTY(pSession->session_id)) {
-        Warning("file: "__FILE__", line: %d, " \
+        Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
             "client sessionEntry: %16lX:%lX not exist, func_id: %d",
             __LINE__, pHeader->session_id.ids[0],
             pHeader->session_id.ids[1], pHeader->func_id);
@@ -665,7 +655,7 @@ int get_response_session(const MsgHeader *pHeader,
         *call_func = false;
         result = ENOENT;
 
-        Warning("file: "__FILE__", line: %d, " \
+        Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
             "server sessionEntry: %08X:%u:%ld not exist, msg seq: %u, " \
             "func_id: %d, data_len: %d",
             __LINE__, pHeader->session_id.fields.ip,
@@ -736,7 +726,7 @@ int get_response_session(const MsgHeader *pHeader,
       break;
     }
 
-    Warning("file: "__FILE__", line: %d, " \
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
         "sessionEntry: %08X:%u:%ld, position occupied by %08X:%u:%ld, "
         "quest by me: %d, time distance: %u, func_id: %d",
         __LINE__, pHeader->session_id.fields.ip,
