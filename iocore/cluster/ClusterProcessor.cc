@@ -385,9 +385,10 @@ bool ClusterProcessor::disable_remote_cluster_ops(ClusterMachine * m)
 // Simplify debug access to stats
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
-
+/*
 GlobalClusterPeriodicEvent *
   PeriodicClusterEvent;
+*/
 
 #ifdef CLUSTER_TOMCAT
 extern int cache_clustering_enabled;
@@ -784,13 +785,17 @@ ClusterProcessor::init()
   IOCORE_ReadConfigInteger(cluster_type, "proxy.local.cluster.type");
 
   create_this_cluster_machine();
+
+  /*
 #ifdef NON_MODULAR
   // Cluster API Initializations
   clusterAPI_init();
 #endif
+
   // Start global Cluster periodic event
   PeriodicClusterEvent = NEW(new GlobalClusterPeriodicEvent);
   PeriodicClusterEvent->init();
+  */
 
   this_cluster = NEW(new Cluster);
   if (cluster_type == 1) {
@@ -801,9 +806,11 @@ ClusterProcessor::init()
   cc->n_machines = 1;
   cc->machines[0] = this_cluster_machine();
   memset(cc->hash_table, 0, CLUSTER_HASH_TABLE_SIZE);
-  // 0 dummy output data
 
+  /*
+  // 0 dummy output data
   memset(channel_dummy_output, 0, sizeof(channel_dummy_output));
+  */
 
   int result;
 
@@ -888,9 +895,12 @@ ClusterProcessor::start()
     g_socket_send_bufsize = cluster_send_buffer_size;
     pthread_t connection_tid;
     connection_manager_start(&connection_tid);
+
+    /*
 #ifdef DEBUG
   eventProcessor.schedule_every(new ClusterCacheVCPrinter, HRTIME_SECONDS(10));
 #endif
+   */
   }
 
   return 0;
