@@ -1721,7 +1721,7 @@ HttpTransact::StartAccessControl(State* s)
     HandleRequestAuthorized(s);
     if (s->current.mode == TUNNELLING_PROXY) {
       if (is_os_connection_exceed(s)) {
-        build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
+        build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server busy", "default", "");
         TRANSACT_RETURN(PROXY_OS_CONNECTIONS_LIMITS_EXCEED, NULL);
       }
     }
@@ -2103,7 +2103,7 @@ HttpTransact::HandleCacheOpenRead(State* s)
     SET_VIA_STRING(VIA_DETAIL_CACHE_LOOKUP, VIA_DETAIL_MISS_NOT_CACHED);
     if (is_os_connection_exceed(s)) {
       build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-          "Server is too busy", "default", "");
+          "Server busy", "default", "");
       TRANSACT_RETURN(PROXY_OS_CONNECTIONS_LIMITS_EXCEED, NULL);
     }
     //StartAccessControl(s);
@@ -2327,7 +2327,7 @@ HttpTransact::HandleCacheOpenReadHitFreshness(State* s)
     if (need_to_revalidate(s)) {
       if (is_os_connection_exceed(s)) {
         build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-            "Server is too busy", "default", "");
+            "Server busy", "default", "");
         TRANSACT_RETURN(PROXY_OS_CONNECTIONS_LIMITS_EXCEED, NULL);
       } else
         TRANSACT_RETURN(HTTP_API_CACHE_LOOKUP_COMPLETE, CallOSDNSLookup); // content needs to be revalidated and we did not perform a dns ....calling DNS lookup
@@ -2592,7 +2592,7 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
     if (server_up || s->stale_icp_lookup) {
       if (is_os_connection_exceed(s)) {
         build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-          "Server is too busy", "default", "");
+          "Server busy", "default", "");
         s->cache_info.action = CACHE_DO_NO_ACTION;
         TRANSACT_RETURN(PROXY_OS_CONNECTIONS_LIMITS_EXCEED, NULL);
       }
@@ -2770,7 +2770,7 @@ HttpTransact::build_response_from_cache(State* s, HTTPWarningCode warning_code)
           break;
         } else if (s->range_setup == RANGE_NOT_SATISFIABLE || s->range_setup == RANGE_NOT_HANDLED) {
           if (is_os_connection_exceed(s)) {
-            build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server is too busy", "default", "");
+            build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server busy", "default", "");
             s->cache_info.action = CACHE_DO_NO_ACTION;
             s->next_action = PROXY_OS_CONNECTIONS_LIMITS_EXCEED;
             break;

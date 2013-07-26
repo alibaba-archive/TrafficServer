@@ -820,15 +820,19 @@ int notify_connection_closed(SocketContext *pSockContext)
   int machine_id;
 
   count1 = do_notify_connection_closed(g_my_machine_id, pSockContext);
-  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
-      "notify my session close count: %d", __LINE__, count1);
+  if (count1 > 0) {
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
+        "notify my session close count: %d", __LINE__, count1);
+  }
 
   machine_id = get_session_machine_index(pSockContext->machine->ip);
   if (machine_id >= 0 && all_sessions[machine_id].init_done) {
     count2 = do_notify_connection_closed(machine_id, pSockContext);
-    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
-        "notify %s session close count: %d", __LINE__,
-        pSockContext->machine->hostname, count2);
+    if (count2 > 0) {
+      Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
+          "notify %s session close count: %d", __LINE__,
+          pSockContext->machine->hostname, count2);
+    }
   }
   else {
     count2 = 0;

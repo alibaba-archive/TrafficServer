@@ -305,10 +305,12 @@ static void clear_send_queue(SocketContext * pSockContext)
     pthread_mutex_unlock(&send_queue->lock);
   }
 
-  Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-      "release %s:%d #%d message count: %d",
-      __LINE__, pSockContext->machine->hostname,
-      pSockContext->machine->cluster_port, pSockContext->sock, count);
+  if (count > 0) {
+    Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
+        "release %s:%d #%d message count: %d",
+        __LINE__, pSockContext->machine->hostname,
+        pSockContext->machine->cluster_port, pSockContext->sock, count);
+  }
 }
 
 static int close_socket(SocketContext * pSockContext)
@@ -322,9 +324,6 @@ static int close_socket(SocketContext * pSockContext)
 		return errno != 0 ? errno : ENOMEM;
 	}
 
-  Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-      "before call machine_remove_connection", __LINE__);
-
   machine_remove_connection(pSockContext);
 	close(pSockContext->sock);
   pSockContext->sock = -1;
@@ -336,8 +335,6 @@ static int close_socket(SocketContext * pSockContext)
   notify_connection_closed(pSockContext);
 
   if (pSockContext->connect_type == CONNECT_TYPE_CLIENT) {
-    Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-      "before call make_connection", __LINE__);
     make_connection(pSockContext);
   }
   else {
@@ -1209,8 +1206,8 @@ inline static int notify_to_send(SocketContext *pSockContext)
 		pSockContext->sock, &event) != 0)
 	{
 		Error("file: " __FILE__ ", line: %d, "
-			"epoll_ctl fail, errno: %d, error info: %s", \
-			__LINE__, errno, strerror(errno));
+			"epoll_ctl fail, peer: %s, errno: %d, error info: %s", \
+			__LINE__, pSockContext->machine->hostname, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
 	}
 

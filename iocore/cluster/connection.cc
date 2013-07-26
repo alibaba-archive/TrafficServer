@@ -35,7 +35,8 @@ typedef enum {
 typedef struct connect_context {
   SocketContext *pSockContext;
   int64_t connect_start_time; //connect start time in ms
-  int64_t server_start_time;    //recv data start time in ms
+  int64_t server_start_time;  //recv data start time in ms
+  int reconnect_interval;     //reconnect interval in ms
   int connect_count; //already connect times
   int send_bytes;
   int recv_bytes;
@@ -119,11 +120,13 @@ static int remove_connection(SocketContext *pSockContext, const bool needLock)
 static void close_connection(SocketContext *pSockContext)
 {
   if (pSockContext->sock >= 0) {
+    /*
     Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
         "close connection #%d %s:%d",
         __LINE__, pSockContext->sock,
         pSockContext->machine->hostname,
         pSockContext->machine->cluster_port);
+    */
 
     close(pSockContext->sock);
     pSockContext->sock = -1;
@@ -291,10 +294,12 @@ static int deal_hello_message(SocketContext *pSockContext, char *data)
     return EINVAL;
   }
 
+  /*
   Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
       "node: %u.%u.%u.%u, version: %d.%d", __LINE__,
       DOT_SEPARATED(pSockContext->machine->ip),
       proto_major, proto_minor);
+  */
 
   pSockContext->machine->msg_proto_major = pHelloMessage->major;
   pSockContext->machine->msg_proto_minor = pHelloMessage->minor;
@@ -510,10 +515,7 @@ static int connection_handler(ConnectContext *pConnectContext)
 
   if (result != 0) {
     close_connection(pSockContext);
-    if (pSockContext->connect_type == CONNECT_TYPE_CLIENT) {
-      make_connection(pSockContext);  //reconnect
-    }
-    else {
+    if (pSockContext->connect_type == CONNECT_TYPE_SERVER) {
       free_accept_sock_context(pSockContext);
     }
   }
@@ -899,6 +901,7 @@ static ConnectContext *alloc_connect_context()
 
   pConnectContext->need_reconnect = false;
   pConnectContext->need_check_timeout = false;
+  pConnectContext->reconnect_interval = 100;
   pConnectContext->connect_count = 0;
   pConnectContext->state = STATE_NOT_CONNECT;
   pConnectContext->send_bytes = 0;
@@ -978,6 +981,7 @@ int make_connection(SocketContext *pSockContext)
   }
 
   pConnectContext->need_reconnect = true;
+  pConnectContext->reconnect_interval = 100;
   pConnectContext->pSockContext = pSockContext;
   return do_connect(pConnectContext, true);
 }
@@ -1139,6 +1143,7 @@ static int do_reconnect()
   ConnectContext **ppConnection;
   ConnectContext **ppConnectionEnd;
 	SocketContext *pSockContext;
+  int max_reconnect_interval;
 
 	pthread_mutex_lock(&connect_thread_context.lock);
   ppConnectionEnd = connect_thread_context.connections +
@@ -1152,10 +1157,22 @@ static int do_reconnect()
 
     if ((*ppConnection)->need_reconnect) {
       if ((*ppConnection)->connect_count > 0) {  //should reconnect
-        if (CURRENT_MS() - (*ppConnection)->connect_start_time < 200) {
+        if (CURRENT_MS() - (*ppConnection)->connect_start_time <
+            (*ppConnection)->reconnect_interval)
+        {
           continue;
         }
 
+        (*ppConnection)->reconnect_interval *= 2;
+        if ((*ppConnection)->pSockContext->machine->dead) {
+          max_reconnect_interval = 1000;
+        }
+        else {
+          max_reconnect_interval = 30000;
+        }
+        if ((*ppConnection)->reconnect_interval > max_reconnect_interval) {
+          (*ppConnection)->reconnect_interval = max_reconnect_interval;
+        }
         (*ppConnection)->need_check_timeout = false;
         do_connect(*ppConnection, false);
         ppConnection++;
@@ -1204,9 +1221,11 @@ static int deal_income_connection(const int incomesock)
     return ENOENT;
   }
 
+  /*
   Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
       "client_ip: %s, sock: #%d", __LINE__,
       client_ip, incomesock);
+  */
 
   pSockContext = alloc_accept_sock_context(machine->ip);
 	if (pSockContext == NULL) {
@@ -1359,7 +1378,6 @@ void *connect_worker_entrance(void *arg)
         last_msg_stat_time = CURRENT_TIME();
       }
 #endif
-
 
     if (connect_thread_context.connection_count > 1) {
       do_reconnect();
