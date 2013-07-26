@@ -1164,7 +1164,7 @@ static void *work_thread_entrance(void* arg)
 
 	while (g_continue_flag) {
 		count = epoll_wait(pThreadContext->epoll_fd,
-			pThreadContext->events, pThreadContext->alloc_size, 1);
+			pThreadContext->events, pThreadContext->alloc_size, 1000);
 		if (count == 0) { //timeout
 			continue;
 		}

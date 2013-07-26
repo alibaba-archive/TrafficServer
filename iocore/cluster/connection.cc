@@ -1384,7 +1384,7 @@ void *connect_worker_entrance(void *arg)
     }
 
 		count = epoll_wait(connect_thread_context.epoll_fd,
-			connect_thread_context.events, connect_thread_context.alloc_size, 1);
+			connect_thread_context.events, connect_thread_context.alloc_size, 1000);
 		if (count == 0) { //timeout
       if (connect_thread_context.connection_count > 1) {
         close_timeout_connections();
