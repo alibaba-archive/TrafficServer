@@ -206,25 +206,29 @@ static int set_socket_rw_buff_size(int sock)
 {
 	int bytes;
 
-	bytes = g_socket_send_bufsize;
-	if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
-		(char *)&bytes, sizeof(int)) < 0)
-	{
-		Error("file: "__FILE__", line: %d, " \
-			"setsockopt failed, errno: %d, error info: %s",
-			__LINE__, errno, strerror(errno));
-		return errno != 0 ? errno : ENOMEM;
-	}
+  if (g_socket_send_bufsize > 0) {
+    bytes = g_socket_send_bufsize;
+    if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
+          (char *)&bytes, sizeof(int)) < 0)
+    {
+      Error("file: "__FILE__", line: %d, " \
+          "setsockopt failed, errno: %d, error info: %s",
+          __LINE__, errno, strerror(errno));
+      return errno != 0 ? errno : ENOMEM;
+    }
+  }
 
-  bytes = g_socket_recv_bufsize;
-	if (setsockopt(sock, SOL_SOCKET, SO_RCVBUF,
-		(char *)&bytes, sizeof(int)) < 0)
-	{
-		Error("file: "__FILE__", line: %d, " \
-			"setsockopt failed, errno: %d, error info: %s",
-			__LINE__, errno, strerror(errno));
-		return errno != 0 ? errno : ENOMEM;
-	}
+  if (g_socket_recv_bufsize > 0) {
+    bytes = g_socket_recv_bufsize;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVBUF,
+          (char *)&bytes, sizeof(int)) < 0)
+    {
+      Error("file: "__FILE__", line: %d, " \
+          "setsockopt failed, errno: %d, error info: %s",
+          __LINE__, errno, strerror(errno));
+      return errno != 0 ? errno : ENOMEM;
+    }
+  }
 
   return 0;
 }
