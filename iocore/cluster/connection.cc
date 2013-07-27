@@ -1160,6 +1160,7 @@ static int do_reconnect()
         if (CURRENT_MS() - (*ppConnection)->connect_start_time <
             (*ppConnection)->reconnect_interval)
         {
+          ppConnection++;
           continue;
         }
 
