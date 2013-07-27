@@ -34,7 +34,7 @@ static Allocator g_session_allocator("SessionEntry", sizeof(SessionEntry), 1024)
 static MachineSessions *all_sessions;  //[src ip % MAX_MACHINE_COUNT]
 static pthread_mutex_t session_lock;
 
-typedef struct session_records {
+struct SessionRecords {
   RecRecord * create_total_count;   //create session total count
   RecRecord * create_success_count; //create session success count
   RecRecord * create_retry_times;   //create session retry times
@@ -42,7 +42,7 @@ typedef struct session_records {
   RecRecord * close_success_count;  //close session success count
   RecRecord * session_miss_count;     //session miss count
   RecRecord * session_occupied_count; //session occupied count
-} SessionRecords;
+};
 
 static SessionRecords server_session_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 static SessionRecords client_session_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};

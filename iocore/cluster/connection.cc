@@ -1345,7 +1345,7 @@ static int deal_connect_events(const int count)
 void *connect_worker_entrance(void *arg)
 {
   int count;
-  time_t last_session_stat_time;
+  time_t last_cluster_stat_time;
 #if defined(TRIGGER_STAT_FLAG) || defined(MSG_TIME_STAT_FLAG)
   time_t last_msg_stat_time;
 #endif
@@ -1355,15 +1355,16 @@ void *connect_worker_entrance(void *arg)
   prctl(PR_SET_NAME, "[ET_CLUSTER 0]", 0, 0, 0); 
 #endif
 
-  last_session_stat_time = CURRENT_TIME();
+  last_cluster_stat_time = CURRENT_TIME();
 #if defined(TRIGGER_STAT_FLAG) || defined(MSG_TIME_STAT_FLAG)
   last_msg_stat_time = CURRENT_TIME();
 #endif
 
   while (g_continue_flag) {
-    if (CURRENT_TIME() - last_session_stat_time >= 5) {
+    if (CURRENT_TIME() - last_cluster_stat_time > 5) {
       log_session_stat();
-      last_session_stat_time = CURRENT_TIME();
+      log_nio_stats();
+      last_cluster_stat_time = CURRENT_TIME();
     }
 
 #if defined(TRIGGER_STAT_FLAG) || defined(MSG_TIME_STAT_FLAG)

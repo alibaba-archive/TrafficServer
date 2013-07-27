@@ -160,12 +160,24 @@ typedef struct socket_context {
   struct socket_context *next;  //for freelist
 } SocketContext;
 
+struct SocketStats {
+  int64_t send_msg_count;  //send msg count
+  int64_t send_bytes;
+  int64_t call_writev_count;
+  int64_t send_retry_count;
+
+  int64_t recv_msg_count;  //recv msg count
+  int64_t recv_bytes;
+  int64_t call_read_count;
+};
+
 struct worker_thread_context
 {
 	int epoll_fd;
 	int alloc_size;         //for epoll events
 	int thread_index;       //my thread index
   int __pad;              //pad field
+  SocketStats stats;
 	pthread_mutex_t lock;
 	struct epoll_event *events;  //for epoll_wait
 };

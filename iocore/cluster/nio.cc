@@ -25,6 +25,7 @@
 #endif
 #include "I_IOBuffer.h"
 #include "P_Cluster.h"
+#include "P_RecCore.h"
 #include "nio.h"
 
 int g_worker_thread_count = 0;
@@ -39,6 +40,18 @@ static void *work_thread_entrance(void* arg);
 
 message_deal_func g_msg_deal_func = NULL;
 machine_change_notify_func g_machine_change_notify = NULL;
+
+struct NIORecords {
+   RecRecord * send_msg_count;  //send msg count
+   RecRecord * send_bytes;
+   RecRecord * call_writev_count;
+   RecRecord * send_retry_count;
+   RecRecord * recv_msg_count;  //recv msg count
+   RecRecord * recv_bytes;
+   RecRecord * call_read_count;
+};
+
+static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 inline int get_iovec(IOBufferBlock *blocks, IOVec *iovec, int size) {
   int niov;
@@ -70,6 +83,62 @@ inline void consume(OutMessage *pMessage, int64_t l) {
   }
 }
 
+static void init_nio_stats()
+{
+  RecData data_default;
+  memset(&data_default, 0, sizeof(RecData));
+
+  nio_records.send_msg_count = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.send_msg_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.send_bytes = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.send_bytes", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.call_writev_count = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.call_writev_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.send_retry_count = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.send_retry_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.recv_msg_count = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.recv_msg_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.recv_bytes = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.recv_bytes", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.call_read_count = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.call_read_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+}
+
+void log_nio_stats()
+{
+	struct worker_thread_context *pThreadContext;
+	struct worker_thread_context *pContextEnd;
+  SocketStats sum = {0, 0, 0, 0, 0, 0, 0};
+
+	pContextEnd = g_worker_thread_contexts + g_work_threads;
+	for (pThreadContext=g_worker_thread_contexts; pThreadContext<pContextEnd;
+      pThreadContext++)
+	{
+    sum.send_msg_count += pThreadContext->stats.send_msg_count;
+    sum.send_bytes += pThreadContext->stats.send_bytes;
+    sum.call_writev_count += pThreadContext->stats.call_writev_count;
+    sum.send_retry_count += pThreadContext->stats.send_retry_count;
+    sum.recv_msg_count += pThreadContext->stats.recv_msg_count;
+    sum.recv_bytes += pThreadContext->stats.recv_bytes;
+    sum.call_read_count += pThreadContext->stats.call_read_count;
+  }
+
+  RecDataSetFromInk64(RECD_INT, &nio_records.send_msg_count->data,
+        sum.send_msg_count);
+  RecDataSetFromInk64(RECD_INT, &nio_records.send_bytes->data,
+        sum.send_bytes);
+  RecDataSetFromInk64(RECD_INT, &nio_records.call_writev_count->data,
+        sum.call_writev_count);
+  RecDataSetFromInk64(RECD_INT, &nio_records.send_retry_count->data,
+        sum.send_retry_count);
+  RecDataSetFromInk64(RECD_INT, &nio_records.recv_msg_count->data,
+        sum.recv_msg_count);
+  RecDataSetFromInk64(RECD_INT, &nio_records.recv_bytes->data,
+        sum.recv_bytes);
+  RecDataSetFromInk64(RECD_INT, &nio_records.call_read_count->data,
+        sum.call_read_count);
+}
+
 int nio_init()
 {
 	int result;
@@ -92,6 +161,7 @@ int nio_init()
 			__LINE__, bytes, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
 	}
+  memset(g_worker_thread_contexts, 0, bytes);
 
   total_connections = g_connections_per_machine * (MAX_MACHINE_COUNT - 1);
 	max_connections_per_thread = total_connections / g_work_threads;
@@ -156,6 +226,8 @@ int nio_init()
 			}
 		}
 	}
+
+  init_nio_stats();
 
 	//int2buff(MAGIC_NUMBER, magic_buff);
 	return 0;
@@ -561,6 +633,8 @@ static int deal_write_event(SocketContext * pSockContext)
     return check_and_clear_send_event(pSockContext);
 	}
 
+  pSockContext->thread_context->stats.send_retry_count += total_msg_count;
+  pSockContext->thread_context->stats.call_writev_count++;
 	write_bytes = writev(pSockContext->sock, write_vec, vec_count);
 	if (write_bytes == 0) {   //connection closed
 		Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
@@ -586,6 +660,8 @@ static int deal_write_event(SocketContext * pSockContext)
 			return result;
 		}
 	}
+
+  pSockContext->thread_context->stats.send_bytes += write_bytes;
 
 	if (write_bytes == total_bytes && last_msg_complete) {  //all done
     for (i=0; i<PRIORITY_COUNT; i++) {
@@ -651,6 +727,7 @@ static int deal_write_event(SocketContext * pSockContext)
       return result;
     }
   }
+  pSockContext->thread_context->stats.send_msg_count += total_done_count;
 
   check_queue_empty = (total_done_count == total_msg_count);
   for (i=0; i<PRIORITY_COUNT; i++) {
@@ -818,6 +895,7 @@ static int deal_read_event(SocketContext *pSockContext)
   int read_bytes;
   MsgHeader *pHeader;
 
+  pSockContext->thread_context->stats.call_read_count++;
   read_bytes = read(pSockContext->sock, pSockContext->reader.current,
       pSockContext->reader.buff_end - pSockContext->reader.current);
 /*
@@ -853,6 +931,7 @@ static int deal_read_event(SocketContext *pSockContext)
 		}
 	}
 
+  pSockContext->thread_context->stats.recv_bytes += read_bytes;
   pSockContext->reader.current += read_bytes;
   result = pSockContext->reader.buff_end - pSockContext->reader.current
     == 0 ? 0 : EAGAIN;
@@ -1012,6 +1091,7 @@ static int deal_read_event(SocketContext *pSockContext)
       append_to_blocks(&pSockContext->reader, current_true_body_bytes);
     }
 
+    pSockContext->thread_context->stats.recv_msg_count++;
     deal_message(pHeader, pSockContext, pSockContext->reader.blocks);
 
     pSockContext->reader.blocks = NULL;  //free memory pointer

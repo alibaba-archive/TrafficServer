@@ -27,6 +27,8 @@ int nio_add_to_epoll(SocketContext *pSockContext);
 int push_to_send_queue(SocketContext *pSockContext, OutMessage *pMessage,
     const MessagePriority priority);
 
+void log_nio_stats();
+
 #ifdef __cplusplus
 }
 #endif
