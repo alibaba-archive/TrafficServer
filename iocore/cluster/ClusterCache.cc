@@ -2029,15 +2029,20 @@ CacheContinuation::setupVCdataRead(int event, void *data)
 
     cache_vc = (CacheVC *) data;
     CacheHTTPInfo *info = NULL;
-
+    bool request_conditional = false;
     if (frag_type == CACHE_FRAG_TYPE_HTTP) {
       cache_vc->get_http_info(&info);
       cache_vc_info.copy_shallow(info);
       doc_size = cache_vc_info.object_size_get();
+      if (ic_request.valid() && (ic_request.presence(MIME_PRESENCE_IF_MODIFIED_SINCE |
+          MIME_PRESENCE_IF_NONE_MATCH |
+          MIME_PRESENCE_IF_UNMODIFIED_SINCE | MIME_PRESENCE_IF_MATCH | MIME_PRESENCE_RANGE)))
+        request_conditional = true;
     } else
       doc_size = cache_vc->get_object_size();
 
-    if (doc_size > 0 && doc_size < SIZE_OF_FRAGEMENT && !cache_vc->is_read_from_writer()) {
+    if (doc_size > 0 && doc_size < SIZE_OF_FRAGEMENT
+        && !cache_vc->is_read_from_writer() && !request_conditional) {
       SET_HANDLER((CacheContHandler) & CacheContinuation::VCSmallDataRead);
       mbuf = new_empty_MIOBuffer();
       reader = mbuf->alloc_reader();
