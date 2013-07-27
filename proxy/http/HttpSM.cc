@@ -2096,10 +2096,13 @@ HttpSM::process_hostdb_info(HostDBInfo * r)
           }
           if (i >= rr->n) {
             t_state.dns_info.srv_app.http_data.last_failure = earliest_failure;
-            hostDBProcessor.setby(t_state.current.server->name,
-                      strlen(t_state.current.server->name), &t_state.current.server->addr.sa,
-                      &t_state.dns_info.srv_app, t_state.dns_info.srv_hostname);
+          if (t_state.server_info.name) {
+            hostDBProcessor.setby(t_state.server_info.name,
+                strlen(t_state.server_info.name),
+                &t_state.current.server->addr.sa, &t_state.dns_info.srv_app,
+                t_state.dns_info.srv_hostname);
             DebugSM("http_srv", "set srv target %s as failed!", t_state.dns_info.srv_hostname);
+          }
           }
         }
       }
