@@ -2082,29 +2082,6 @@ HttpSM::process_hostdb_info(HostDBInfo * r)
         ret = rr->select_best_http(&t_state.client_info.addr.sa, now, (int) t_state.txn_conf->down_server_timeout);
         ink_debug_assert(r->md5_high == ret->md5_high && r->md5_low == ret->md5_low &&
                 r->md5_low_low == ret->md5_low_low);
-        if (t_state.dns_info.srv_lookup_sucess && !t_state.dns_info.single_srv) {
-          int i = 0;
-          uint32_t earliest_failure = INT32_MAX;
-          for (; i < rr->n; i++) {
-            if (rr->info[i].app.http_data.last_failure == 0
-                || (unsigned int) (now
-                    - (int) t_state.txn_conf->down_server_timeout)
-                    > rr->info[i].app.http_data.last_failure)
-              break;
-            if (rr->info[i].app.http_data.last_failure < earliest_failure)
-              earliest_failure = rr->info[i].app.http_data.last_failure;
-          }
-          if (i >= rr->n) {
-            t_state.dns_info.srv_app.http_data.last_failure = earliest_failure;
-          if (t_state.server_info.name) {
-            hostDBProcessor.setby(t_state.server_info.name,
-                strlen(t_state.server_info.name),
-                &t_state.current.server->addr.sa, &t_state.dns_info.srv_app,
-                t_state.dns_info.srv_hostname);
-            DebugSM("http_srv", "set srv target %s as failed!", t_state.dns_info.srv_hostname);
-          }
-          }
-        }
       }
     } else {
       ret = r;
