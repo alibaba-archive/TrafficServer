@@ -26,6 +26,7 @@
 #include "I_IOBuffer.h"
 #include "P_Cluster.h"
 #include "P_RecCore.h"
+#include "ink_config.h"
 #include "nio.h"
 
 int g_worker_thread_count = 0;
@@ -52,6 +53,7 @@ struct NIORecords {
 };
 
 static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+static int64_t nio_current_Bps = 0;  //BPS in bytes
 
 inline int get_iovec(IOBufferBlock *blocks, IOVec *iovec, int size) {
   int niov;
@@ -109,6 +111,8 @@ void log_nio_stats()
 	struct worker_thread_context *pThreadContext;
 	struct worker_thread_context *pContextEnd;
   SocketStats sum = {0, 0, 0, 0, 0, 0, 0};
+  static time_t last_calc_Bps_time = CURRENT_TIME();
+  static int64_t last_send_bytes = 0;
 
 	pContextEnd = g_worker_thread_contexts + g_work_threads;
 	for (pThreadContext=g_worker_thread_contexts; pThreadContext<pContextEnd;
@@ -137,6 +141,13 @@ void log_nio_stats()
         sum.recv_bytes);
   RecDataSetFromInk64(RECD_INT, &nio_records.call_read_count->data,
         sum.call_read_count);
+
+  int time_pass = CURRENT_TIME() - last_calc_Bps_time;
+  if (time_pass > 0) {
+    nio_current_Bps = (sum.send_bytes - last_send_bytes) / time_pass;
+    last_calc_Bps_time = CURRENT_TIME();
+    last_send_bytes = sum.send_bytes;
+  }
 }
 
 int nio_init()
@@ -1135,12 +1146,14 @@ static void nio_schedule(SocketContext *schedule_head)
       removed = false;
       if ((pSockContext->remain_events & EPOLLIN)) {
         if ((result=deal_read_event(pSockContext)) != 0) {
-          pSockContext->remain_events &= ~EPOLLIN;
-          if (pSockContext->remain_events == 0) {
-            removed = true;
-            REMOVE_FROM_CHAIN(schedule_head, previous, pSockContext);
+          if (result == EAGAIN) {
+            pSockContext->remain_events &= ~EPOLLIN;
+            if (pSockContext->remain_events == 0) {
+              removed = true;
+              REMOVE_FROM_CHAIN(schedule_head, previous, pSockContext);
+            }
           }
-          else if (result !=  EAGAIN) {  //socket already closed
+          else { //error
             pSockContext->remain_events = 0;
             removed = true;
             REMOVE_FROM_CHAIN(schedule_head, previous, pSockContext);
@@ -1151,12 +1164,14 @@ static void nio_schedule(SocketContext *schedule_head)
 
       if ((pSockContext->remain_events & EPOLLOUT)) {
         if ((result=deal_write_event(pSockContext)) != 0) {
-          pSockContext->remain_events &= ~EPOLLOUT;
-          if (pSockContext->remain_events == 0) {
-            removed = true;
-            REMOVE_FROM_CHAIN(schedule_head, previous, pSockContext);
+          if (result == EAGAIN) {
+            pSockContext->remain_events &= ~EPOLLOUT;
+            if (pSockContext->remain_events == 0) {
+              removed = true;
+              REMOVE_FROM_CHAIN(schedule_head, previous, pSockContext);
+            }
           }
-          else if (result !=  EAGAIN) {  //socket already closed
+          else { //error
             pSockContext->remain_events = 0;
             removed = true;
             REMOVE_FROM_CHAIN(schedule_head, previous, pSockContext);
@@ -1184,6 +1199,7 @@ static void deal_epoll_events(struct worker_thread_context *
 
   schedule_head = NULL;
   schedule_tail = NULL;
+
 	pEventEnd = pThreadContext->events + count;
 	for (pEvent=pThreadContext->events; pEvent<pEventEnd; pEvent++) {
 	  pSockContext = (SocketContext *)pEvent->data.ptr;
@@ -1206,9 +1222,7 @@ static void deal_epoll_events(struct worker_thread_context *
       continue;
     }
 
-    pSockContext->remain_events = (pEvent->events & EPOLLIN) |
-      (pEvent->events & EPOLLOUT);
-
+    pSockContext->remain_events = (pEvent->events & (EPOLLIN | EPOLLOUT));
     if (schedule_head == NULL) {
       schedule_head = pSockContext;
     }
@@ -1230,12 +1244,12 @@ static void *work_thread_entrance(void* arg)
 {
 	int result;
 	int count;
+  int usleep_time;
 	struct worker_thread_context *pThreadContext;
 
 	pThreadContext = (struct worker_thread_context *)arg;
 
-//#if defined(HAVE_SYS_PRCTL_H) && defined(PR_SET_NAME)
-#if defined(PR_SET_NAME)
+#if defined(HAVE_SYS_PRCTL_H) && defined(PR_SET_NAME)
   char name[32];
   sprintf(name, "[ET_CLUSTER %d]", (int)(pThreadContext -
         g_worker_thread_contexts) + 1);
@@ -1243,6 +1257,18 @@ static void *work_thread_entrance(void* arg)
 #endif
 
 	while (g_continue_flag) {
+    usleep_time = 100 * nio_current_Bps / (25 * 1024 * 1024);
+    if (usleep_time < 100) {
+      usleep_time = 100;
+    }
+    else if (usleep_time > 1000) {
+      usleep_time = 1000;
+    }
+    else {
+      usleep_time = ((usleep_time + 99) / 100) * 100;  //round to 100
+    }
+    usleep(usleep_time);
+
 		count = epoll_wait(pThreadContext->epoll_fd,
 			pThreadContext->events, pThreadContext->alloc_size, 1000);
 		if (count == 0) { //timeout

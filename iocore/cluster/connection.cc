@@ -21,8 +21,9 @@
 #include "nio.h"
 #include "message.h"
 #include "session.h"
-#include "connection.h"
 #include "P_Cluster.h"
+#include "ink_config.h"
+#include "connection.h"
 
 typedef enum {
   STATE_NOT_CONNECT = 0,
@@ -1350,8 +1351,7 @@ void *connect_worker_entrance(void *arg)
   time_t last_msg_stat_time;
 #endif
 
-//#if defined(HAVE_SYS_PRCTL_H) && defined(PR_SET_NAME)
-#if defined(PR_SET_NAME)
+#if defined(HAVE_SYS_PRCTL_H) && defined(PR_SET_NAME)
   prctl(PR_SET_NAME, "[ET_CLUSTER 0]", 0, 0, 0); 
 #endif
 

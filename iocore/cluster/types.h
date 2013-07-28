@@ -33,7 +33,7 @@
 //combine multi msg to call writev
 #define WRITEV_ARRAY_SIZE   256
 #define WRITEV_ITEM_ONCE    (WRITEV_ARRAY_SIZE / 2)
-#define WRITE_MAX_COMBINE_BYTES  (128 * 1024)
+#define WRITE_MAX_COMBINE_BYTES  (64 * 1024)
 
 #define CONNECT_TYPE_CLIENT  'C'  //connect by me, client
 #define CONNECT_TYPE_SERVER  'S'  //connect by peer, server
