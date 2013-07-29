@@ -1423,6 +1423,9 @@ int push_to_send_queue(SocketContext *pSockContext, OutMessage *pMessage,
       }
       pthread_mutex_unlock(&pSockContext->send_queues[priority].lock);
     }
+    else {
+      result = 0;
+    }
   }
   else {
     result = 0;
