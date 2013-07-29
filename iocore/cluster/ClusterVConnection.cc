@@ -36,6 +36,12 @@ int ClusterCacheVC::size_to_init = -1;
 
 #define CLUSTER_WRITE_MIN_SIZE (1 << 14)
 
+#define CLUSTER_CACHE_VC_CLOSE_SESSION \
+{ \
+  cluster_close_session(cs); \
+  session_closed = true; \
+}
+
 ByteBankDescriptor *
 ByteBankDescriptor::ByteBankDescriptor_alloc(IOBufferBlock * iob)
 {
@@ -670,7 +676,7 @@ ClusterCacheVC::handleRead(int event, void *data)
     return EVENT_CONT;
   }
   Lfailed:
-  cluster_close_session(cs);
+  CLUSTER_CACHE_VC_CLOSE_SESSION;
   return calluser(VC_EVENT_ERROR);
 }
 
@@ -730,14 +736,13 @@ ClusterCacheVC::openReadStart(int event, void *data)
   if (_action.cancelled) {
     if (!remote_closed)
       cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
-    cluster_close_session(cs);
     free_ClusterCacheVC(this);
     return EVENT_DONE;
   }
   if (event != CACHE_EVENT_OPEN_READ) {
     // prevent further trigger
     remote_closed = true;
-    cluster_close_session(cs);
+    CLUSTER_CACHE_VC_CLOSE_SESSION;
     _action.continuation->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, data);
     free_ClusterCacheVC(this);
     return EVENT_DONE;
@@ -757,7 +762,7 @@ ClusterCacheVC::openReadMain(int event, void *e)
   ink_assert(!in_progress);
   if (event == VC_EVENT_ERROR || event == VC_EVENT_EOS) {
     remote_closed = true;
-    cluster_close_session(cs);
+    CLUSTER_CACHE_VC_CLOSE_SESSION;
     return calluser(event);
   }
 
@@ -831,7 +836,6 @@ ClusterCacheVC::openWriteStart(int event, void *data)
   if (_action.cancelled) {
     if (!remote_closed)
       cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
-    cluster_close_session(cs);
     free_ClusterCacheVC(this);
     return EVENT_DONE;
   }
@@ -839,7 +843,7 @@ ClusterCacheVC::openWriteStart(int event, void *data)
   if (event != CACHE_EVENT_OPEN_WRITE) {
     // prevent further trigger
     remote_closed = true;
-    cluster_close_session(cs);
+    CLUSTER_CACHE_VC_CLOSE_SESSION;
     _action.continuation->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, data);
     free_ClusterCacheVC(this);
     return EVENT_DONE;
@@ -942,7 +946,7 @@ ClusterCacheVC::removeEvent(int event, void *data)
   ink_debug_assert(in_progress);
   in_progress = false;
   remote_closed = true;
-  cluster_close_session(cs);
+  CLUSTER_CACHE_VC_CLOSE_SESSION;
   if (!_action.cancelled)
     _action.continuation->handleEvent(event, data);
   free_ClusterCacheVC(this);

@@ -1268,6 +1268,7 @@ struct ClusterCacheVC: public CacheVConnection
 
   bool in_progress; //
   bool remote_closed;
+  bool session_closed;
 
   union
   {
@@ -1535,7 +1536,9 @@ free_ClusterCacheVC(ClusterCacheVC *cont)
     cont->trigger->cancel();
   ink_assert(!cont->in_progress);
 
-  cluster_close_session(cont->cs);
+  if (!cont->session_closed)
+    cluster_close_session(cont->cs);
+
   cont->vio.buffer.clear();
   cont->vio.mutex.clear();
 #ifdef HTTP_CACHE
