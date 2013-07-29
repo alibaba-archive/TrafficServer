@@ -126,7 +126,7 @@ int cluster_send_message(ClusterSession session, const int func_id,
         pMessage, priority);
   } while (0);
  
-  if (result != 0) {
+  if (result == EIO) {
     release_out_message(pSockContext, pMessage);
   }
 
@@ -196,7 +196,7 @@ int cluster_send_msg_internal(const ClusterSession *session,
         pMessage, priority);
   } while (0);
  
-  if (result != 0) {
+  if (result == EIO) {
     release_out_message(pSockContext, pMessage);
   }
 

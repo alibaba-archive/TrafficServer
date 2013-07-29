@@ -1191,6 +1191,7 @@ static void nio_schedule(SocketContext *schedule_head)
 static void deal_epoll_events(struct worker_thread_context *
 	pThreadContext, const int count)
 {
+  //int result;
 	struct epoll_event *pEvent;
 	struct epoll_event *pEventEnd;
   SocketContext *pSockContext;
@@ -1222,6 +1223,27 @@ static void deal_epoll_events(struct worker_thread_context *
       continue;
     }
 
+    /*
+    if (pEvent->events & EPOLLIN) {
+      while ((result=deal_read_event(pSockContext)) == 0) {
+      }
+
+      if (result != EAGAIN) {
+        close_socket(pSockContext);
+        continue;
+      }
+    }
+
+    if (pEvent->events & EPOLLOUT) {
+      while ((result=deal_write_event(pSockContext)) == 0) {
+      }
+      if (result != EAGAIN) {
+        close_socket(pSockContext);
+        continue;
+      }
+    }
+    */
+
     pSockContext->remain_events = (pEvent->events & (EPOLLIN | EPOLLOUT));
     if (schedule_head == NULL) {
       schedule_head = pSockContext;
@@ -1244,7 +1266,7 @@ static void *work_thread_entrance(void* arg)
 {
 	int result;
 	int count;
-  int usleep_time;
+  //int usleep_time;
 	struct worker_thread_context *pThreadContext;
 
 	pThreadContext = (struct worker_thread_context *)arg;
@@ -1257,6 +1279,7 @@ static void *work_thread_entrance(void* arg)
 #endif
 
 	while (g_continue_flag) {
+    /*
     usleep_time = 100 * nio_current_Bps / (25 * 1024 * 1024);
     if (usleep_time < 100) {
       usleep_time = 100;
@@ -1268,6 +1291,7 @@ static void *work_thread_entrance(void* arg)
       usleep_time = ((usleep_time + 99) / 100) * 100;  //round to 100
     }
     usleep(usleep_time);
+    */
 
 		count = epoll_wait(pThreadContext->epoll_fd,
 			pThreadContext->events, pThreadContext->alloc_size, 1000);
@@ -1347,6 +1371,7 @@ int push_to_send_queue(SocketContext *pSockContext, OutMessage *pMessage,
     const MessagePriority priority)
 {
   bool notify;
+  int result;
 
 	pthread_mutex_lock(&pSockContext->send_queues[priority].lock);
 	if (pSockContext->send_queues[priority].head == NULL) {
@@ -1360,15 +1385,50 @@ int push_to_send_queue(SocketContext *pSockContext, OutMessage *pMessage,
 	pSockContext->send_queues[priority].tail = pMessage;
 	pthread_mutex_unlock(&pSockContext->send_queues[priority].lock);
 
-  if (notify) {
-    pthread_mutex_lock(&pSockContext->lock);
-    if ((pSockContext->epoll_events & EPOLLOUT) == 0) {
-      notify_to_send(pSockContext);
-    }
-    pthread_mutex_unlock(&pSockContext->lock);
+  if (!notify) {
+    return 0;
   }
 
-  return 0;
-}
+  pthread_mutex_lock(&pSockContext->lock);
+  if ((pSockContext->epoll_events & EPOLLOUT) == 0) {
+    if (notify_to_send(pSockContext) != 0) {  //socket closed
+      OutMessage *previous;
+      OutMessage *current;
 
+      previous = NULL;
+      pthread_mutex_lock(&pSockContext->send_queues[priority].lock);
+      current = pSockContext->send_queues[priority].head;
+      while (current != NULL) {
+        if (current == pMessage) {
+          break;
+        }
+        previous = current;
+        current = current->next;
+      }
+
+      if (current != NULL) {  //found
+        if (previous == NULL) {
+          pSockContext->send_queues[priority].head = current->next;
+        }
+        else {
+          previous->next = current->next;
+        }
+        if (pSockContext->send_queues[priority].tail == current) {
+          pSockContext->send_queues[priority].tail = previous;
+        }
+        result = EIO;  //caller should release the message
+      }
+      else {
+        result = ENOENT;
+      }
+      pthread_mutex_unlock(&pSockContext->send_queues[priority].lock);
+    }
+  }
+  else {
+    result = 0;
+  }
+  pthread_mutex_unlock(&pSockContext->lock);
+
+  return result;
+}
 
