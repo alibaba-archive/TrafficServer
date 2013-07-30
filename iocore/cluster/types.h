@@ -31,7 +31,7 @@
 #define SESSION_LOCK_COUNT_PER_MACHINE    10949
 
 //combine multi msg to call writev
-#define WRITEV_ARRAY_SIZE   256
+#define WRITEV_ARRAY_SIZE   128
 #define WRITEV_ITEM_ONCE    (WRITEV_ARRAY_SIZE / 2)
 #define WRITE_MAX_COMBINE_BYTES  (64 * 1024)
 
@@ -143,20 +143,17 @@ typedef struct socket_context {
   struct ClusterMachine *machine;      //peer machine, point to global machine
 	struct worker_thread_context *thread_context;
   MessageQueue send_queues[PRIORITY_COUNT];  //queue for send
-  pthread_mutex_t lock;
 
   int queue_index;  //current deal queue index
   int connect_type;       //client or server
   time_t connected_time;  //connection established timestamp
-	uint32_t remain_events; //deal remain epoll event
-	uint32_t epoll_events;  //current epoll event for trigger
+
+  int64_t next_write_time;
 
 #ifdef USE_MULTI_ALLOCATOR
   Allocator *out_msg_allocator;  //for send
   Allocator *in_msg_allocator;   //for notify dealer
 #endif
-
-  struct socket_context *nio_next;  //for nio schedule (read and write)
   struct socket_context *next;  //for freelist
 } SocketContext;
 
@@ -169,6 +166,9 @@ struct SocketStats {
   int64_t recv_msg_count;  //recv msg count
   int64_t recv_bytes;
   int64_t call_read_count;
+  int64_t epoll_wait_count;
+  int64_t loop_usleep_count;
+  int64_t loop_usleep_time;
 };
 
 struct worker_thread_context
@@ -176,10 +176,11 @@ struct worker_thread_context
 	int epoll_fd;
 	int alloc_size;         //for epoll events
 	int thread_index;       //my thread index
-  int __pad;              //pad field
+  int active_sock_count;
   SocketStats stats;
 	pthread_mutex_t lock;
 	struct epoll_event *events;  //for epoll_wait
+  SocketContext **active_sockets;
 };
 
 #endif

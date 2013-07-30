@@ -647,10 +647,6 @@ static int alloc_socket_contexts(const int connections_per_machine,
   for (pSockContext=*pool; pSockContext<pSockContextEnd;
       pSockContext++)
   {
-    if ((result=init_pthread_lock(&pSockContext->lock)) != 0) {
-      return result;
-    }
-
     for (i=0; i<PRIORITY_COUNT; i++) {
       if ((result=init_pthread_lock(&pSockContext->send_queues[i].lock)) != 0) {
         return result;
@@ -1361,7 +1357,7 @@ void *connect_worker_entrance(void *arg)
 #endif
 
   while (g_continue_flag) {
-    if (CURRENT_TIME() - last_cluster_stat_time > 5) {
+    if (CURRENT_TIME() - last_cluster_stat_time > 1) {
       log_session_stat();
       log_nio_stats();
       last_cluster_stat_time = CURRENT_TIME();

@@ -22,6 +22,14 @@ extern int g_thread_stack_size;
 extern int g_socket_recv_bufsize;
 extern int g_socket_send_bufsize;
 
+//cluster flow control
+extern int64_t cluster_flow_ctrl_min_bps; //byte
+extern int64_t cluster_flow_ctrl_max_bps; //byte
+extern int cluster_send_min_wait_time; //us
+extern int cluster_send_max_wait_time; //us
+extern int cluster_min_loop_interval;  //us
+extern int cluster_max_loop_interval;  //us
+
 #ifdef __cplusplus
 }
 #endif

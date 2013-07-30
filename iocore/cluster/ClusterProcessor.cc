@@ -781,6 +781,13 @@ ClusterProcessor::init()
   IOCORE_ReadConfigInteger(cluster_packet_tos, "proxy.config.cluster.sock_packet_tos");
   IOCORE_EstablishStaticConfigInt32(RPC_only_CacheCluster, "proxy.config.cluster.rpc_cache_cluster");
 
+  IOCORE_EstablishStaticConfigInteger(cluster_flow_ctrl_min_bps, "proxy.config.cluster.flow_ctrl.min_bps");
+  IOCORE_EstablishStaticConfigInteger(cluster_flow_ctrl_max_bps, "proxy.config.cluster.flow_ctrl.max_bps");
+  IOCORE_EstablishStaticConfigInt32(cluster_send_min_wait_time, "proxy.config.cluster.flow_ctrl.min_send_wait_time");
+  IOCORE_EstablishStaticConfigInt32(cluster_send_max_wait_time, "proxy.config.cluster.flow_ctrl.max_send_wait_time");
+  IOCORE_EstablishStaticConfigInt32(cluster_min_loop_interval, "proxy.config.cluster.flow_ctrl.min_loop_interval");
+  IOCORE_EstablishStaticConfigInt32(cluster_max_loop_interval, "proxy.config.cluster.flow_ctrl.max_loop_interval");
+
   int cluster_type = 0;
   IOCORE_ReadConfigInteger(cluster_type, "proxy.local.cluster.type");
 
