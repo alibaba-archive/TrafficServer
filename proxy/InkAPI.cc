@@ -7699,6 +7699,9 @@ _conf_to_memberp(TSOverridableConfigKey conf,
   case TS_CONFIG_HTTP_CACHE_HTTP:
     ret = &overridablehttpConfig->cache_http;
     break;
+  case TS_CONFIG_HTTP_CACHE_FORCE_IN_RAM:
+    ret = &overridablehttpConfig->cache_force_in_ram;
+    break;
   case TS_CONFIG_HTTP_CACHE_CLUSTER_CACHE_LOCAL:
     ret = &overridablehttpConfig->cache_cluster_cache_local;
     break;

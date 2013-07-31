@@ -2119,6 +2119,8 @@ get_rule_type(TokenList * token_list, TSFileNameT file)
       if (strcmp(tok->name, "action") == 0) {
         if (strcmp(tok->value, "never-cache") == 0) {
           return TS_CACHE_NEVER;
+        } else if (strcmp(tok->value, "force-in-ram") == 0) {
+          return TS_CACHE_FORCE_IN_RAM;
         } else if (strcmp(tok->value, "ignore-no-cache") == 0) {
           return TS_CACHE_IGNORE_NO_CACHE;
         } else if (strcmp(tok->value, "cluster-cache-local") == 0) {

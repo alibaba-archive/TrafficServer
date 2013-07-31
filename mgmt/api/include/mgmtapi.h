@@ -391,6 +391,7 @@ extern "C"
   typedef enum
   {
     TS_CACHE_NEVER,            /* cache.config */
+    TS_CACHE_FORCE_IN_RAM,
     TS_CACHE_IGNORE_NO_CACHE,
     TS_CACHE_CLUSTER_CACHE_LOCAL,
     TS_CACHE_IGNORE_CLIENT_NO_CACHE,

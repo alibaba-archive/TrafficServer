@@ -400,6 +400,9 @@ print_cache_ele(TSCacheEle * ele)
   case TS_CACHE_NEVER:
     snprintf(buf + buf_pos, sizeof(buf) - buf_pos, "action=never-cache");
     break;
+  case TS_CACHE_FORCE_IN_RAM:
+    snprintf(buf + buf_pos, sizeof(buf) - buf_pos, "action=force-in-ram");
+    break;
   case TS_CACHE_IGNORE_NO_CACHE:
     snprintf(buf + buf_pos, sizeof(buf) - buf_pos, "action=ignore-no-cache");
     break;

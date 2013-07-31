@@ -177,6 +177,7 @@ update_cache_control_information_from_config(HttpTransact::State* s)
 {
   getCacheControl(&s->cache_control, &s->request_data, s->txn_conf);
 
+  s->cache_info.config.cache_force_in_ram = s->cache_control.force_in_ram;
   s->cache_info.directives.does_config_permit_lookup &= (s->cache_control.never_cache == false);
   s->cache_info.directives.does_config_permit_storing &= (s->cache_control.never_cache == false);
 

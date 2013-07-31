@@ -2323,7 +2323,7 @@ CacheVC::handleReadDone(int event, Event *e) {
         // (cache_config_ram_cache_cutoff == 0) : no cutoffs
         cutoff_check = ((!doc_len && (int64_t)doc->total_len < cache_config_ram_cache_cutoff)
                         || (doc_len && (int64_t)doc_len < cache_config_ram_cache_cutoff)
-                        || !cache_config_ram_cache_cutoff);
+                        || !cache_config_ram_cache_cutoff || params->cache_force_in_ram);
         if (cutoff_check && !f.doc_from_ram_cache) {
           if (!f.ram_fixup) {
             uint64_t o = dir_get_offset(&dir);

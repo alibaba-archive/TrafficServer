@@ -149,6 +149,9 @@ CacheObj::formatEleToRule()
   case TS_CACHE_NEVER:
     ink_strlcat(buf, "action=never-cache ", sizeof(buf));
     break;
+  case TS_CACHE_FORCE_IN_RAM:
+    ink_strlcat(buf, "action=force-in-ram ", sizeof(buf));
+    break;
   case TS_CACHE_IGNORE_NO_CACHE:
     ink_strlcat(buf, "action=ignore-no-cache ", sizeof(buf));
     break;

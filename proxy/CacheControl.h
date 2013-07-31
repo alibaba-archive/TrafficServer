@@ -51,6 +51,7 @@ enum CacheControlType
   CC_INVALID = 0,
   CC_REVALIDATE_AFTER,
   CC_NEVER_CACHE,
+  CC_FORCE_IN_RAM,
   CC_STANDARD_CACHE,
   CC_IGNORE_NO_CACHE,
   CC_CLUSTER_CACHE_LOCAL,
@@ -79,6 +80,7 @@ public:
   int pin_in_cache_for;
   int ttl_in_cache;
   bool never_cache;
+  bool force_in_ram;
   bool cluster_cache_local;
   bool ignore_client_no_cache;
   bool ignore_server_no_cache;
@@ -110,6 +112,7 @@ CacheControlResult::CacheControlResult()
     pin_in_cache_for(CC_UNSET_TIME),
     ttl_in_cache(CC_UNSET_TIME),
     never_cache(false),
+    force_in_ram(false),
     cluster_cache_local(false),
     ignore_client_no_cache(false),
     ignore_server_no_cache(false),

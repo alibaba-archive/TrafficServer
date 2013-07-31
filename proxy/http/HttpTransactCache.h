@@ -44,6 +44,7 @@ public:
   bool ignore_accept_language_mismatch;
   bool ignore_accept_encoding_mismatch;
   bool ignore_accept_charset_mismatch;
+  bool cache_force_in_ram;
   char *cache_vary_default_text;
   char *cache_vary_default_images;
   char *cache_vary_default_other;
@@ -59,6 +60,7 @@ public:
     ignore_accept_language_mismatch(false),
     ignore_accept_encoding_mismatch(false),
     ignore_accept_charset_mismatch(false),
+    cache_force_in_ram(false),
     cache_vary_default_text(NULL), cache_vary_default_images(NULL), cache_vary_default_other(NULL)
   { }
 

@@ -185,6 +185,10 @@ getCacheControl(CacheControlResult *result, HttpRequestData *rdata, OverridableH
   rdata->tag = tag;
   CacheControlTable->Match(rdata, result);
 
+  if (h_txn_conf->cache_force_in_ram) {
+    result->force_in_ram = true;
+  }
+
   if (h_txn_conf->cache_cluster_cache_local) {
     result->cluster_cache_local = true;
   }
@@ -228,8 +232,8 @@ getClusterCacheLocal(URL *url, char *hostname)
 void
 CacheControlResult::Print()
 {
-  printf("\t reval: %d, never-cache: %d, pin: %d, cluster-cache-c: %d ignore-c: %d ignore-s: %d\n",
-         revalidate_after, never_cache, pin_in_cache_for, cluster_cache_local, ignore_client_no_cache, ignore_server_no_cache);
+  printf("\t reval: %d, never-cache: %d, force-in-ram: %d, pin: %d, cluster-cache-c: %d ignore-c: %d ignore-s: %d\n",
+         revalidate_after, never_cache, force_in_ram, pin_in_cache_for, cluster_cache_local, ignore_client_no_cache, ignore_server_no_cache);
 }
 
 // void CacheControlRecord::Print()
@@ -253,6 +257,7 @@ CacheControlRecord::Print()
   case CC_IGNORE_CLIENT_NO_CACHE:
   case CC_IGNORE_SERVER_NO_CACHE:
   case CC_NEVER_CACHE:
+  case CC_FORCE_IN_RAM:
   case CC_STANDARD_CACHE:
   case CC_IGNORE_NO_CACHE:
  // case CC_CACHE_AUTH_CONTENT:
@@ -334,6 +339,9 @@ CacheControlRecord::Init(matcher_line * line_info)
     if (strcasecmp(label, "action") == 0) {
       if (strcasecmp(val, "never-cache") == 0) {
         directive = CC_NEVER_CACHE;
+        d_found = true;
+      } else if (strcasecmp(val, "force-in-ram") == 0) {
+        directive = CC_FORCE_IN_RAM;
         d_found = true;
       } else if (strcasecmp(val, "standard-cache") == 0) {
         directive = CC_STANDARD_CACHE;
@@ -433,6 +441,13 @@ CacheControlRecord::UpdateMatch(CacheControlResult * result, RD * rdata)
   case CC_NEVER_CACHE:
     if (this->CheckForMatch(h_rdata, result->never_line) == true) {
       result->never_cache = true;
+      result->never_line = this->line_num;
+      match = true;
+    }
+    break;
+  case CC_FORCE_IN_RAM:
+    if (this->CheckForMatch(h_rdata, result->never_line) == true) {
+      result->force_in_ram = true;
       result->never_line = this->line_num;
       match = true;
     }
