@@ -1136,12 +1136,12 @@ ClusterCacheVC::do_io_close(int alerrno)
 
       if (doc_len != vio.nbytes) {
         // for trunk
-        ink_debug_assert(total_len == vio.nbytes && length == 0);
+        ink_release_assert(total_len == vio.nbytes && length == 0);
         remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_CLOSE,
             &total_len, sizeof total_len, priority);
         goto Lfree;
       }
-      ink_debug_assert(data_sent == total_len);
+      ink_release_assert(data_sent == total_len);
     }
 
     if (closed < 0 && vio.op == VIO::WRITE)

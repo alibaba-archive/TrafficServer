@@ -2403,7 +2403,7 @@ CacheContinuation::VCdataWrite(int event, void *data)
       ink_assert(cc && cc->data_len > 0);
       int64_t nbytes = *(int64_t *)(cc->data->start());
       vio->nbytes = nbytes;
-      ink_debug_assert(total_length == nbytes);
+      ink_release_assert(total_length == nbytes);
     }
     case VC_EVENT_WRITE_COMPLETE:
     {
