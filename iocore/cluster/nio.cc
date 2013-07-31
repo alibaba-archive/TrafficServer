@@ -383,7 +383,8 @@ static int add_to_active_sockets(SocketContext *pSockContext)
 {
   pthread_mutex_lock(&pSockContext->thread_context->lock);
   pSockContext->thread_context->active_sockets[
-    pSockContext->thread_context->active_sock_count++] = pSockContext;
+    pSockContext->thread_context->active_sock_count] = pSockContext;
+  pSockContext->thread_context->active_sock_count++;
   pthread_mutex_unlock(&pSockContext->thread_context->lock);
   return 0;
 }
@@ -1226,16 +1227,13 @@ inline static void deal_epoll_events(struct worker_thread_context *
       continue;
     }
 
-    if (pEvent->events & EPOLLIN) {
-      while ((result=deal_read_event(pSockContext)) == 0) {
-      }
-
-      if (result != EAGAIN) {
-        close_socket(pSockContext);
-        continue;
-      }
+    while ((result=deal_read_event(pSockContext)) == 0) {
     }
-	}
+
+    if (result != EAGAIN) {
+      close_socket(pSockContext);
+    }
+  }
 
 	return;
 }
@@ -1272,6 +1270,8 @@ inline static void schedule_sock_write(struct worker_thread_context * pThreadCon
 
 static void *work_thread_entrance(void* arg)
 {
+#define MIN_USLEEP_TIME 100
+
 	int result;
 	int count;
   int remain_time;
@@ -1289,7 +1289,7 @@ static void *work_thread_entrance(void* arg)
 
   loop_start_time = CURRENT_NS();
 	while (g_continue_flag) {
-    if (io_loop_interval > 100) {
+    if (io_loop_interval > MIN_USLEEP_TIME) {
       loop_start_time = CURRENT_NS();
     }
     schedule_sock_write(pThreadContext);
@@ -1313,10 +1313,10 @@ static void *work_thread_entrance(void* arg)
       deal_epoll_events(pThreadContext, count);
     }
 
-    if (io_loop_interval > 100) {
-      remain_time = io_loop_interval - (CURRENT_NS() -
-          loop_start_time) / HRTIME_USECOND;
-      if (remain_time >= 100) {
+    if (io_loop_interval > MIN_USLEEP_TIME) {
+      remain_time = io_loop_interval - (int)((CURRENT_NS() -
+          loop_start_time) / HRTIME_USECOND);
+      if (remain_time >= MIN_USLEEP_TIME) {
         pThreadContext->stats.loop_usleep_count++;
         pThreadContext->stats.loop_usleep_time += remain_time;
         usleep(remain_time);
