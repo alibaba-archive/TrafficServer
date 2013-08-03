@@ -1391,11 +1391,10 @@ void *connect_worker_entrance(void *arg)
 		}
 		if (count < 0) {
       if (errno != EINTR) {
-        Error("file: "__FILE__", line: %d, " \
+        ink_fatal(1, "file: "__FILE__", line: %d, " \
             "call epoll_wait fail, " \
-            "errno: %d, error info: %s",
+            "errno: %d, error info: %s\n",
             __LINE__, errno, strerror(errno));
-        sleep(1);
       }
 			continue;
 		}

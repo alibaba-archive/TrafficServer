@@ -1240,31 +1240,47 @@ inline static void deal_epoll_events(struct worker_thread_context *
 
 inline static void schedule_sock_write(struct worker_thread_context * pThreadContext)
 {
+#define MAX_SOCK_CONTEXT_COUNT  16
   int result;
+  int fail_count;
   int64_t current_time;
   SocketContext **ppSockContext;
   SocketContext **ppContextEnd;
+  SocketContext *failSockContexts[MAX_SOCK_CONTEXT_COUNT];
 
+  fail_count = 0;
   current_time = CURRENT_NS();
   ppContextEnd = pThreadContext->active_sockets +
     pThreadContext->active_sock_count;
-  ppSockContext = pThreadContext->active_sockets;
-  while (ppSockContext < ppContextEnd) {
-    if (current_time > (*ppSockContext)->next_write_time) {
-      result=deal_write_event(*ppSockContext);
-      if (result == 0) {  //can send more data
-      }
-      else if (result == EAGAIN) {
-        (*ppSockContext)->next_write_time = current_time + write_wait_time;
-      }
-      else {  //error
-        close_socket(*ppSockContext);
-        ppContextEnd = pThreadContext->active_sockets +
-          pThreadContext->active_sock_count;
-        continue;
+  for (ppSockContext = pThreadContext->active_sockets;
+      ppSockContext < ppContextEnd; ppSockContext++)
+  {
+    if (current_time < (*ppSockContext)->next_write_time) {
+      continue;
+    }
+
+    result = deal_write_event(*ppSockContext);
+    if (result == 0) {  //can send more data
+    }
+    else if (result == EAGAIN) {
+      (*ppSockContext)->next_write_time = current_time + write_wait_time;
+    }
+    else {  //error
+      if (fail_count < MAX_SOCK_CONTEXT_COUNT) {
+        failSockContexts[fail_count++] = *ppSockContext;
       }
     }
-    ppSockContext++;
+  }
+
+  if (fail_count == 0) {
+    return;
+  }
+
+  ppContextEnd = failSockContexts + fail_count;
+  for (ppSockContext = failSockContexts; ppSockContext < ppContextEnd;
+      ppSockContext++)
+  {
+    close_socket(*ppSockContext);
   }
 }
 
@@ -1287,26 +1303,21 @@ static void *work_thread_entrance(void* arg)
   prctl(PR_SET_NAME, name, 0, 0, 0); 
 #endif
 
-  loop_start_time = CURRENT_NS();
 	while (g_continue_flag) {
-    if (io_loop_interval > MIN_USLEEP_TIME) {
-      loop_start_time = CURRENT_NS();
-    }
+    loop_start_time = CURRENT_NS();
     schedule_sock_write(pThreadContext);
 
     pThreadContext->stats.epoll_wait_count++;
 		count = epoll_wait(pThreadContext->epoll_fd,
 			pThreadContext->events, pThreadContext->alloc_size, 1);
-
 		if (count == 0) { //timeout
 		}
     else if (count < 0) {
       if (errno != EINTR) {
-        Error("file: "__FILE__", line: %d, " \
+        ink_fatal(1, "file: "__FILE__", line: %d, " \
             "call epoll_wait fail, " \
-            "errno: %d, error info: %s",
+            "errno: %d, error info: %s\n",
             __LINE__, errno, strerror(errno));
-        sleep(1);
       }
 		}
     else {
@@ -1316,7 +1327,7 @@ static void *work_thread_entrance(void* arg)
     if (io_loop_interval > MIN_USLEEP_TIME) {
       remain_time = io_loop_interval - (int)((CURRENT_NS() -
           loop_start_time) / HRTIME_USECOND);
-      if (remain_time >= MIN_USLEEP_TIME) {
+      if (remain_time >= MIN_USLEEP_TIME && remain_time <= io_loop_interval) {
         pThreadContext->stats.loop_usleep_count++;
         pThreadContext->stats.loop_usleep_time += remain_time;
         usleep(remain_time);
