@@ -114,8 +114,7 @@ LogObject::LogObject(LogFormat *format, const char *log_dir,
     m_logFile = NEW(new LogFile (m_filename, header, file_format,
                                  m_signature,
                                  Log::config->ascii_buffer_size,
-                                 Log::config->max_line_size,
-                                 Log::config->overspill_report_count));
+                                 Log::config->max_line_size));
 #endif // TS_MICRO
 
     LogBuffer *b = NEW (new LogBuffer (this, Log::config->log_buffer_size));
