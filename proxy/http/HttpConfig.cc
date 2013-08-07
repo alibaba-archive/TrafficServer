@@ -1210,7 +1210,8 @@ HttpConfig::startup()
                                     "proxy.config.http.transaction_no_activity_timeout_in");
   HttpEstablishStaticConfigLongLong(c.oride.transaction_no_activity_timeout_out,
                                     "proxy.config.http.transaction_no_activity_timeout_out");
-  HttpEstablishStaticConfigLongLong(c.transaction_active_timeout_in, "proxy.config.http.transaction_active_timeout_in");
+  HttpEstablishStaticConfigLongLong(c.transaction_header_active_timeout_in, "proxy.config.http.transaction_header_active_timeout_in");
+  HttpEstablishStaticConfigLongLong(c.transaction_request_active_timeout_in, "proxy.config.http.transaction_request_active_timeout_in");
   HttpEstablishStaticConfigLongLong(c.oride.transaction_active_timeout_out, "proxy.config.http.transaction_active_timeout_out");
   HttpEstablishStaticConfigLongLong(c.accept_no_activity_timeout, "proxy.config.http.accept_no_activity_timeout");
 
@@ -1487,7 +1488,8 @@ HttpConfig::reconfigure()
   params->oride.keep_alive_no_activity_timeout_out = m_master.oride.keep_alive_no_activity_timeout_out;
   params->oride.transaction_no_activity_timeout_in = m_master.oride.transaction_no_activity_timeout_in;
   params->oride.transaction_no_activity_timeout_out = m_master.oride.transaction_no_activity_timeout_out;
-  params->transaction_active_timeout_in = m_master.transaction_active_timeout_in;
+  params->oride.transaction_header_active_timeout_in = m_master.oride.transaction_header_active_timeout_in;
+  params->oride.transaction_request_active_timeout_in = m_master.oride.transaction_request_active_timeout_in;
   params->oride.transaction_active_timeout_out = m_master.oride.transaction_active_timeout_out;
   params->accept_no_activity_timeout = m_master.accept_no_activity_timeout;
   params->background_fill_active_timeout = m_master.background_fill_active_timeout;

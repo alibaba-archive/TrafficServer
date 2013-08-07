@@ -33,7 +33,8 @@ $recedit->set(conf => "proxy.config.url_remap.remap_required",  val => "0");
 $recedit->set(conf => "proxy.config.reverse_proxy.enabled",  val => "0");
 
 # Fine tuning, you might or might not want these
-$recedit->set(conf => "proxy.config.http.transaction_active_timeout_in", val => "1800");
+$recedit->set(conf => "proxy.config.http.transaction_header_active_timeout_in", val => "0");
+$recedit->set(conf => "proxy.config.http.transaction_request_active_timeout_in", val => "0");
 $recedit->set(conf => "proxy.config.dns.dedicated_thread", val => "1");
 $recedit->set(conf => "proxy.config.http.normalize_ae_gzip", val => "1");
 

@@ -424,6 +424,8 @@ struct OverridableHttpConfigParams {
        keep_alive_no_activity_timeout_in(0),
        keep_alive_no_activity_timeout_out(0),
        transaction_no_activity_timeout_in(0), transaction_no_activity_timeout_out(0),
+       transaction_header_active_timeout_in(0),
+       transaction_request_active_timeout_in(0),
        transaction_active_timeout_out(0),
        origin_max_connections(0),
        connect_attempts_max_retries(0), connect_attempts_max_retries_dead_server(0),
@@ -547,6 +549,8 @@ struct OverridableHttpConfigParams {
   MgmtInt keep_alive_no_activity_timeout_out;
   MgmtInt transaction_no_activity_timeout_in;
   MgmtInt transaction_no_activity_timeout_out;
+  MgmtInt transaction_header_active_timeout_in;
+  MgmtInt transaction_request_active_timeout_in;
   MgmtInt transaction_active_timeout_out;
   MgmtInt origin_max_connections;
 
@@ -660,7 +664,8 @@ public:
   MgmtByte session_auth_cache_keep_alive_enabled;
   MgmtInt origin_server_pipeline;
   MgmtInt user_agent_pipeline;
-  MgmtInt transaction_active_timeout_in;
+  MgmtInt transaction_header_active_timeout_in;
+  MgmtInt transaction_request_active_timeout_in;
   MgmtInt accept_no_activity_timeout;
   MgmtInt background_fill_active_timeout;
   MgmtFloat background_fill_threshold;
@@ -931,7 +936,8 @@ HttpConfigParams::HttpConfigParams()
     session_auth_cache_keep_alive_enabled(0),
     origin_server_pipeline(0),
     user_agent_pipeline(0),
-    transaction_active_timeout_in(0),
+    transaction_header_active_timeout_in(0),
+    transaction_request_active_timeout_in(0),
     accept_no_activity_timeout(0),
     background_fill_active_timeout(0),
     background_fill_threshold(0.0),

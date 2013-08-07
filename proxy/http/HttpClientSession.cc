@@ -156,8 +156,11 @@ HttpClientSession::new_transaction()
         con_id, HttpConfig::m_master.accept_no_activity_timeout);
   client_vc->set_inactivity_timeout(HRTIME_SECONDS(HttpConfig::m_master.accept_no_activity_timeout));
 
-  client_vc->set_active_timeout(HRTIME_SECONDS(HttpConfig::m_master.transaction_active_timeout_in));
-
+  if (HttpConfig::m_master.transaction_header_active_timeout_in)
+    client_vc->set_active_timeout(HRTIME_SECONDS(HttpConfig::m_master.transaction_header_active_timeout_in));
+  else if (HttpConfig::m_master.transaction_request_active_timeout_in)
+    client_vc->set_active_timeout(HRTIME_SECONDS(HttpConfig::m_master.transaction_request_active_timeout_in));
+    
   transact_count++;
   DebugSsn("http_cs", "[%" PRId64 "] Starting transaction %d using sm [%" PRId64 "]", con_id, transact_count, current_reader->sm_id);
 

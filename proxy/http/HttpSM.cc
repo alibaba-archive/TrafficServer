@@ -735,6 +735,7 @@ HttpSM::state_read_client_request_header(int event, void *data)
     milestones.ua_read_header_done = ink_get_hrtime();
   }
 
+  int method;
   switch (state) {
   case PARSE_ERROR:
     DebugSM("http", "[%" PRId64 "] error parsing client request header", sm_id);
@@ -742,6 +743,7 @@ HttpSM::state_read_client_request_header(int event, void *data)
     // Disable further I/O on the client
     ua_entry->read_vio->nbytes = ua_entry->read_vio->ndone;
 
+    ua_session->get_netvc()->cancel_active_timeout();
     call_transact_and_set_next_state(HttpTransact::BadRequest);
     break;
 
@@ -753,6 +755,7 @@ HttpSM::state_read_client_request_header(int event, void *data)
       // Disable further I/O on the client
       ua_entry->read_vio->nbytes = ua_entry->read_vio->ndone;
 
+      ua_session->get_netvc()->cancel_active_timeout();
       call_transact_and_set_next_state(HttpTransact::BadRequest);
       break;
     } else {
@@ -784,6 +787,18 @@ HttpSM::state_read_client_request_header(int event, void *data)
     if (HttpConfig::m_master.number_of_redirections)
       enable_redirection = HttpConfig::m_master.redirection_enabled;
 
+    method = t_state.hdr_info.client_request.method_get_wksidx();
+    if ((method != HTTP_WKSIDX_GET) &&
+        (method == HTTP_WKSIDX_POST || method == HTTP_WKSIDX_PUT ||
+         (t_state.hdr_info.extension_method && t_state.hdr_info.request_content_length > 0))) {
+      if (ua_session->get_netvc()->get_active_timeout() == HRTIME_SECONDS(HttpConfig::m_master.transaction_header_active_timeout_in)) {
+        if (HttpConfig::m_master.transaction_request_active_timeout_in
+             && (HRTIME_SECONDS(HttpConfig::m_master.transaction_request_active_timeout_in) > (milestones.ua_read_header_done - milestones.sm_start)))
+          ua_session->get_netvc()->set_active_timeout(HRTIME_SECONDS(HttpConfig::m_master.transaction_request_active_timeout_in) - (milestones.ua_read_header_done - milestones.sm_start));
+      }
+    } else {
+      ua_session->get_netvc()->cancel_active_timeout();
+    }
     call_transact_and_set_next_state(HttpTransact::ModifyRequest);
 
     break;
@@ -3353,6 +3368,7 @@ HttpSM::tunnel_handler_post_ua(int event, HttpTunnelProducer * p)
     p->handler_state = HTTP_SM_POST_SUCCESS;
     p->read_success = true;
     ua_entry->in_tunnel = false;
+    ua_session->get_netvc()->cancel_active_timeout();
 
     if (p->do_dechunking || p->do_chunked_passthru) {
       if (p->chunked_handler.truncation) {
