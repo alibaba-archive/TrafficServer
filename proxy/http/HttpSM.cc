@@ -6435,7 +6435,46 @@ HttpSM::update_stats()
       status = t_state.hdr_info.client_response.status_get();
     }
 
+    char cip[128];
+    char sip[128];
+
+    do {
+      if (ats_is_ip4(&t_state.client_info.addr.sa)) {
+        if (inet_ntop(AF_INET, &t_state.client_info.addr.sin.sin_addr, cip, sizeof(cip))) {
+          break;
+        }
+      } else if (ats_is_ip6(&t_state.client_info.addr.sa)) {
+        if (inet_ntop(AF_INET6, &t_state.client_info.addr.sin6.sin6_addr, cip, sizeof(cip))) {
+          break;
+        }
+      }
+
+      cip[0] = '-';
+      cip[1] = 0;
+
+    } while (0);
+
+    do {
+      if (t_state.current.server) {
+        if (ats_is_ip4(&t_state.current.server->addr.sa)) {
+          if (inet_ntop(AF_INET, &t_state.current.server->addr.sin.sin_addr, sip, sizeof(sip))) {
+            break;
+          }
+        } else if (ats_is_ip6(&t_state.client_info.addr.sa)) {
+          if (inet_ntop(AF_INET6, &t_state.current.server->addr.sin6.sin6_addr, sip, sizeof(sip))) {
+            break;
+          }
+        }
+      }
+
+      sip[0] = '-';
+      sip[1] = 0;
+
+    } while (0);
+
     Error("[%" PRId64 "] Slow Request: "
+          "client_ip: %s "
+          "server_ip: %s "
           "url: %s "
           "status: %d "
           "unique id: %s "
@@ -6456,6 +6495,8 @@ HttpSM::update_stats()
           "ua_close: %.3f "
           "sm_finish: %.3f",
           sm_id,
+          cip,
+          sip,
           url_string,
           status,
           unique_id_string,
