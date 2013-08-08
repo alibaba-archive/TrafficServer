@@ -100,7 +100,7 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
       url_hostname = url->host_get(&url_hlen);
 
       len += request->m_heap->marshal_length();
-      len += params->marshal_length();
+      len += sizeof(CacheLookupHttpConfig) + params->marshal_length();
       len += url_hlen;
 
       if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE)       // Bound marshalled data
@@ -118,6 +118,13 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
       }
       data += res;
       cur_len -= res;
+
+      if (cur_len < (int) sizeof(CacheLookupHttpConfig))
+        goto err_exit;
+      memcpy(data, params, sizeof(CacheLookupHttpConfig));
+      data += sizeof(CacheLookupHttpConfig);
+      cur_len -= sizeof(CacheLookupHttpConfig);
+
       if ((res = params->marshal(data, cur_len)) < 0)
         goto err_exit;
       data += res;

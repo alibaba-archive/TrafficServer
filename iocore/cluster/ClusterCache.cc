@@ -1761,6 +1761,11 @@ cache_op_ClusterFunction(ClusterSession cs, void *context, void *d)
       // Unmarshal CacheLookupHttpConfig
       c->ic_params = new(CacheLookupHttpConfigAllocator.alloc())
         CacheLookupHttpConfig();
+      memcpy(c->ic_params, p, sizeof(CacheLookupHttpConfig));
+      moi_len -= sizeof(CacheLookupHttpConfig);
+      p += sizeof(CacheLookupHttpConfig);
+
+      ink_assert(moi_len > 0);
       res = c->ic_params->unmarshal(&c->ic_arena, (const char *) p, moi_len);
       ink_assert(res > 0);
 
