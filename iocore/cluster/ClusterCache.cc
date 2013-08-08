@@ -2408,11 +2408,15 @@ CacheContinuation::VCdataWrite(int event, void *data)
       ink_assert(cc && cc->data_len > 0);
       int64_t nbytes = *(int64_t *)(cc->data->start());
       vio->nbytes = nbytes;
-      ink_release_assert(total_length == nbytes);
+      if (vio->nbytes != vio->ndone) {
+        vio->reenable();
+        return EVENT_CONT;
+      }
     }
     case VC_EVENT_WRITE_COMPLETE:
     {
       ink_assert(!expect_next);
+      ink_assert(vio->nbytes == vio->ndone);
       cache_vc->do_io_close();
       cache_vc = NULL;
       break;
@@ -2825,6 +2829,7 @@ cache_op_result_ClusterFunction(ClusterSession cs, void *context, void *d)
     case CACHE_EVENT_UPDATE_FAILED:
     case CACHE_EVENT_DEREF_FAILED:
       {
+        cvc->remote_closed = true;
         op_result_error = msg->reason;
         break;
       }
