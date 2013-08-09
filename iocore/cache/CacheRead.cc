@@ -101,7 +101,7 @@ Cache::open_read(Continuation * cont, CacheKey * key, CacheHTTPHdr * request,
     return ACTION_RESULT_DONE;
   }
   ink_assert(caches[type] == this);
-
+  ink_atomic_increment64(&cacheStatPrinter.cache_read, 1);
   Vol *vol = key_to_vol(key, hostname, host_len);
   Dir result, *last_collision = NULL;
   ProxyMutex *mutex = cont->mutex;
@@ -292,6 +292,7 @@ CacheVC::openReadFromWriter(int event, Event * e)
     // and hence fail the read request.
     start_time = ink_get_hrtime();
     f.read_from_writer_called = 1;
+    ink_atomic_increment64(&cacheStatPrinter.cache_read_rww, 1);
   }
   cancel_trigger();
   intptr_t err = ECACHE_DOC_BUSY;
@@ -319,6 +320,8 @@ CacheVC::openReadFromWriter(int event, Event * e)
     if (ret < 0) {
       MUTEX_RELEASE(lock);
       SET_HANDLER(&CacheVC::openReadFromWriterFailure);
+      ink_atomic_increment64(&cacheStatPrinter.cache_read_rww_avg_time, ink_get_hrtime() - start_time);
+      ink_atomic_increment64(&cacheStatPrinter.cache_read_avg_time, ink_get_hrtime() - start_time);
       return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<Event *> (ret));
     } else if (ret == EVENT_RETURN) {
       MUTEX_RELEASE(lock);
@@ -357,6 +360,8 @@ CacheVC::openReadFromWriter(int event, Event * e)
   if (!write_vc->closed && !write_vc->fragment) {
     if (!cache_config_read_while_writer || frag_type != CACHE_FRAG_TYPE_HTTP) {
       MUTEX_RELEASE(lock);
+      ink_atomic_increment64(&cacheStatPrinter.cache_read_rww_avg_time, ink_get_hrtime() - start_time);
+      ink_atomic_increment64(&cacheStatPrinter.cache_read_avg_time, ink_get_hrtime() - start_time);
       return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, (Event *) - err);
     }
     DDebug("cache_read_agg",
@@ -418,6 +423,8 @@ CacheVC::openReadFromWriter(int event, Event * e)
         dir_clean(&earliest_dir);
         SET_HANDLER(&CacheVC::openReadFromWriterMain);
         CACHE_INCREMENT_DYN_STAT(cache_read_busy_success_stat);
+        ink_atomic_increment64(&cacheStatPrinter.cache_read_rww_avg_time, ink_get_hrtime() - start_time);
+        ink_atomic_increment64(&cacheStatPrinter.cache_read_avg_time, ink_get_hrtime() - start_time);
         return callcont(CACHE_EVENT_OPEN_READ);
       }
       // want to snarf the new headers from the writer
@@ -460,6 +467,8 @@ CacheVC::openReadFromWriter(int event, Event * e)
   MUTEX_RELEASE(writer_lock);
   SET_HANDLER(&CacheVC::openReadFromWriterMain);
   CACHE_INCREMENT_DYN_STAT(cache_read_busy_success_stat);
+  ink_atomic_increment64(&cacheStatPrinter.cache_read_avg_time, ink_get_hrtime() - start_time);
+  ink_atomic_increment64(&cacheStatPrinter.cache_read_rww_avg_time, ink_get_hrtime() - start_time);
   return callcont(CACHE_EVENT_OPEN_READ);
 #endif //READ_WHILE_WRITER
 }
@@ -927,6 +936,7 @@ Lread:
       vol->close_write(this);
   }
   CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
+  ink_atomic_increment64(&cacheStatPrinter.cache_read_avg_time, ink_get_hrtime() - start_time);
   _action.continuation->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, (void *) -ECACHE_NO_DOC);
   return free_CacheVC(this);
 Lcallreturn:
@@ -934,6 +944,12 @@ Lcallreturn:
 Lsuccess:
   if (write_vc)
     CACHE_INCREMENT_DYN_STAT(cache_read_busy_success_stat);
+  if (!f.read_from_writer_called) {
+    ink_atomic_increment64(&cacheStatPrinter.cache_read_success, 1);
+    ink_atomic_increment64(&cacheStatPrinter.cache_read_success_avg_time, ink_get_hrtime() - start_time);
+  } else
+    ink_atomic_increment64(&cacheStatPrinter.cache_read_rww_avg_time, ink_get_hrtime() - start_time);
+  ink_atomic_increment64(&cacheStatPrinter.cache_read_avg_time, ink_get_hrtime() - start_time);
   SET_HANDLER(&CacheVC::openReadMain);
   return callcont(CACHE_EVENT_OPEN_READ);
 }
@@ -1186,6 +1202,9 @@ CacheVC::openReadStartHead(int event, Event * e)
     }
   }
 Ldone:
+  ink_atomic_increment64(&cacheStatPrinter.cache_read_avg_time, ink_get_hrtime() - start_time);
+  if (f.read_from_writer_called)
+    ink_atomic_increment64(&cacheStatPrinter.cache_read_rww_avg_time, ink_get_hrtime() - start_time);
   if (!f.lookup) {
     CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
     _action.continuation->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, (void *) -err);
@@ -1198,6 +1217,12 @@ Lcallreturn:
   return handleEvent(AIO_EVENT_DONE, 0); // hopefully a tail call
 Lsuccess:
   SET_HANDLER(&CacheVC::openReadMain);
+  if (!f.read_from_writer_called) {
+    ink_atomic_increment64(&cacheStatPrinter.cache_read_success, 1);
+    ink_atomic_increment64(&cacheStatPrinter.cache_read_success_avg_time, ink_get_hrtime() - start_time);
+  } else
+    ink_atomic_increment64(&cacheStatPrinter.cache_read_rww_avg_time, ink_get_hrtime() - start_time);
+  ink_atomic_increment64(&cacheStatPrinter.cache_read_avg_time, ink_get_hrtime() - start_time);
   return callcont(CACHE_EVENT_OPEN_READ);
 Lookup:
   CACHE_INCREMENT_DYN_STAT(cache_lookup_success_stat);

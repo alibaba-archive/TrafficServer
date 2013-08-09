@@ -82,6 +82,8 @@ int cache_config_mutex_retry_delay = 2;
 int enable_cache_empty_http_doc = 0;
 #endif
 
+CacheStatPrinter cacheStatPrinter;
+
 #ifdef SSD_CACHE
 int migrate_threshold = 2;
 int64_t transistor_range_threshold = (1 << 30); // 1G;
@@ -166,6 +168,37 @@ struct VolInitInfo
     free(vol_h_f);
   }
 };
+
+int
+CacheStatPrinter::mainEvent(int event, void *e) {
+  int64_t read_avg = 0;
+  int64_t read_succ_avg = 0;
+  int64_t read_rww_avg = 0;
+
+  if (cache_read != 0)
+    read_avg = (cache_read_avg_time / cache_read) / 1000;
+  if (cache_read_success != 0)
+    read_succ_avg = (cache_read_success_avg_time / cache_read_success) / 1000;
+  if (cache_read_rww != 0)
+    read_rww_avg = (cache_read_rww_avg_time / cache_read_rww) / 1000;
+
+  Debug("CacheStatPrinter", "++++++++ CacheStatPrinter: cache_read = %"PRId64"\n"
+      " ++++ cache_read_avg_time = %"PRId64"+++++\n"
+      " ++++ cache_read_success = %"PRId64"+++++\n"
+      " ++++ cache_read_success_avg_time = %"PRId64"+++++\n"
+      " ++++ cache_read_rww = %"PRId64"+++++\n"
+      " ++++ cache_read_rww_avg_time = %"PRId64"+++++\n",
+      cache_read, read_avg, cache_read_success, read_succ_avg, cache_read_rww, read_rww_avg);
+
+  ink_atomic_swap64(&cacheStatPrinter.cache_read, 0);
+  ink_atomic_swap64(&cacheStatPrinter.cache_read_avg_time, 0);
+  ink_atomic_swap64(&cacheStatPrinter.cache_read_success, 0);
+  ink_atomic_swap64(&cacheStatPrinter.cache_read_success_avg_time, 0);
+  ink_atomic_swap64(&cacheStatPrinter.cache_read_rww, 0);
+  ink_atomic_swap64(&cacheStatPrinter.cache_read_rww_avg_time, 0);
+
+  return EVENT_CONT;
+}
 
 void cplist_init();
 static void cplist_update();
@@ -1209,6 +1242,8 @@ CacheProcessor::cacheInitialized()
     CacheProcessor::initialized = CACHE_INIT_FAILED;
     Note("cache disabled");
   }
+
+  eventProcessor.schedule_every(&cacheStatPrinter, HRTIME_SECONDS(5));
 }
 
 void

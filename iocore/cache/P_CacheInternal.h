@@ -111,6 +111,32 @@ struct EvacuationBlock;
   } while (0)
 
 
+#define CACHE_STATE_PRINT 1
+
+#ifdef CACHE_STATE_PRINT
+struct CacheStatPrinter : public Continuation
+{
+  int64_t cache_read;
+  int64_t cache_read_avg_time;
+  int64_t cache_read_success;
+  int64_t cache_read_success_avg_time;
+  int64_t cache_read_rww;
+  int64_t cache_read_rww_avg_time;
+
+  CacheStatPrinter() : Continuation(new_ProxyMutex()),
+      cache_read(0), cache_read_avg_time(0), cache_read_success(0),
+      cache_read_success_avg_time(0), cache_read_rww(0), cache_read_rww_avg_time(0)
+  {
+    SET_HANDLER(&CacheStatPrinter::mainEvent);
+  }
+
+  int mainEvent(int event, void *e);
+};
+
+extern CacheStatPrinter cacheStatPrinter;
+
+#endif
+
   // cache stats definitions
 enum
 {
