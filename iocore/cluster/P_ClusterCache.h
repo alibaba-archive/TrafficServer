@@ -62,12 +62,12 @@
 // - provides callbacks to other processors when the cluster configuration
 //   changes
 //
-#define CLUSTER_MAJOR_VERSION               3
-#define CLUSTER_MINOR_VERSION               2
+#define CLUSTER_MAJOR_VERSION               4
+#define CLUSTER_MINOR_VERSION               0
 
 // Lowest supported major/minor cluster version
 #define MIN_CLUSTER_MAJOR_VERSION	    CLUSTER_MAJOR_VERSION
-#define MIN_CLUSTER_MINOR_VERSION  	    CLUSTER_MINOR_VERSION
+#define MIN_CLUSTER_MINOR_VERSION	    CLUSTER_MINOR_VERSION
 
 
 #define DEFAULT_CLUSTER_PORT_NUMBER         0

@@ -266,7 +266,7 @@ static int deal_hello_message(SocketContext *pSockContext, char *data)
    * Otherwise, minor number is zero.
    **/
   for (major=pHelloMessage->major; major>=pHelloMessage->min_major; --major) {
-    if ((major >= CLUSTER_MINOR_VERSION) && (major <= CLUSTER_MAJOR_VERSION)) {
+    if ((major >= MIN_CLUSTER_MAJOR_VERSION) && (major <= CLUSTER_MAJOR_VERSION)) {
       proto_major = major;
     }
   }
@@ -274,7 +274,6 @@ static int deal_hello_message(SocketContext *pSockContext, char *data)
     /* Compute minor version */
     if (proto_major == (int)pHelloMessage->major) {
       proto_minor = pHelloMessage->minor;
-
       if (proto_minor != CLUSTER_MINOR_VERSION) {
         Warning("file: "__FILE__", line: %d, " \
             "Different clustering minor versions (%d,%d) for " \
