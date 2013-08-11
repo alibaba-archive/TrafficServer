@@ -103,7 +103,6 @@ LogFile::LogFile(const char *name, const char *header, LogFileFormat format,
   m_bytes_written = 0;
   m_size_bytes = 0;
   m_ascii_buffer_size = (ascii_buffer_size < max_line_size ? max_line_size : ascii_buffer_size);
-  m_ascii_buffer = NEW(new char[m_ascii_buffer_size]);
 
   Debug("log-file", "exiting LogFile constructor, m_name=%s, this=%p", m_name, this);
 }
@@ -127,8 +126,7 @@ LogFile::LogFile (const LogFile& copy)
     m_end_time (0L),
     m_bytes_written (0)
 {
-    ink_debug_assert(m_ascii_buffer_size >= m_max_line_size);
-    m_ascii_buffer = NEW (new char[m_ascii_buffer_size]);
+    ink_release_assert(m_ascii_buffer_size >= m_max_line_size);
 
     Debug("log-file", "exiting LogFile copy constructor, m_name=%s, this=%p",
           m_name, this);
@@ -145,8 +143,6 @@ LogFile::~LogFile()
   ats_free(m_name);
   ats_free(m_header);
   delete m_meta_info;
-  delete[]m_ascii_buffer;
-  m_ascii_buffer = 0;
   Debug("log-file", "exiting LogFile destructor, this=%p", this);
 }
 
@@ -472,22 +468,24 @@ LogFile::roll(long interval_start, long interval_end)
 }
 
 /*-------------------------------------------------------------------------
-  LogFile::write_and_delete
+  LogFile::preproc_and_try_delete
 
-  Write the given LogBuffer data onto this file and
-  free the buffer memory according _need_delete_ parameter.
+  preprocess the given buffer data before write to target file
+  and try to delete it when its reference become zero.
+
   -------------------------------------------------------------------------*/
-int
-LogFile::write_and_try_delete(LogBuffer * lb, bool need_delete)
+void
+LogFile::preproc_and_try_delete(LogBuffer * lb)
 {
-  int bytes = 0;
-  int result = -1;
   LogBufferHeader *buffer_header;
 
   if (lb == NULL) {
     Note("Cannot write LogBuffer to LogFile %s; LogBuffer is NULL", m_name);
-    return -1;
+    return;
   }
+
+  ink_atomic_increment(&lb->m_references, 1);
+
   if ((buffer_header = lb->header()) == NULL) {
     Note("Cannot write LogBuffer to LogFile %s; LogBufferHeader is NULL",
         m_name);
@@ -496,16 +494,17 @@ LogFile::write_and_try_delete(LogBuffer * lb, bool need_delete)
   if (buffer_header->entry_count == 0) {
     // no bytes to write
     Note("LogBuffer with 0 entries for LogFile %s, nothing to write", m_name);
-    result = 0;
     goto done;
   }
 
-  // make sure we're open & ready to write
-
-  check_fd();
-  if (!is_open()) {
-    goto done;
-  }
+  //
+  // If the start time for this file has yet to be established, then grab
+  // the low_timestamp from the given LogBuffer.  Then, we always set the
+  // end time to the high_timestamp, so it's always up to date.
+  //
+  if (!m_start_time)
+    m_start_time = buffer_header->low_timestamp;
+  m_end_time = buffer_header->high_timestamp;
 
   if (m_file_format == BINARY_LOG) {
     //
@@ -516,45 +515,28 @@ LogFile::write_and_try_delete(LogBuffer * lb, bool need_delete)
     // don't change between buffers), it's not worth trying to separate
     // out the buffer-dependent data from the buffer-independent data.
     //
-    while (static_cast<uint32_t>(bytes) < buffer_header->byte_count) {
-      int cnt = ::write(m_fd, buffer_header, buffer_header->byte_count);
-      if (cnt < 0) {
-        Error("An error was encountered writing to %s: [tried %d, wrote %d, '%s']",
-              m_name, buffer_header->byte_count, bytes, strerror(errno));
-        break;
-      }
-      bytes += cnt;
-    }
+    LogFlushData *flush_data = new LogFlushData(this, lb);
+
+    ink_atomiclist_push(Log::flush_data_list, flush_data);
+
+    ink_cond_signal(Log::flush_cond);
+
+    //
+    // LogBuffer will be deleted in flush thread
+    //
+    return;
   }
   else if (m_file_format == ASCII_LOG || m_file_format == ASCII_PIPE) {
-    bytes = write_ascii_logbuffer3(buffer_header);
-#if defined(LOG_BUFFER_TRACKING)
-    Debug("log-buftrak", "[%d]LogFile::write - ascii write complete",
-        buffer_header->id);
-#endif // defined(LOG_BUFFER_TRACKING)
+    write_ascii_logbuffer3(buffer_header);
   }
   else {
     Note("Cannot write LogBuffer to LogFile %s; invalid file format: %d",
-        m_name, m_file_format);
-    goto done;
+         m_name, m_file_format);
   }
 
-  //
-  // If the start time for this file has yet to be established, then grab
-  // the low_timestamp from the given LogBuffer.  Then, we always set the
-  // end time to the high_timestamp, so it's always up to date.
-  //
-
-  if (!m_start_time)
-    m_start_time = buffer_header->low_timestamp;
-  m_end_time = buffer_header->high_timestamp;
-  m_bytes_written += bytes;
-  result = bytes;
-
 done:
-  if (need_delete)
-    delete lb;
-  return result;
+  LogBuffer::destroy(lb);
+  return;
 }
 
 /*-------------------------------------------------------------------------
@@ -636,7 +618,6 @@ LogFile::write_ascii_logbuffer3(LogBufferHeader * buffer_header, char *alt_forma
 {
   Debug("log-file", "entering LogFile::write_ascii_logbuffer3 for %s " "(this=%p)", m_name, this);
   ink_debug_assert(buffer_header != NULL);
-  ink_debug_assert(m_fd >= 0);
 
   LogBufferIterator iter(buffer_header);
   LogEntryHeader *entry_header;
@@ -646,6 +627,7 @@ LogFile::write_ascii_logbuffer3(LogBufferHeader * buffer_header, char *alt_forma
   LogFormatType format_type;
   char *fieldlist_str;
   char *printf_str;
+  char *ascii_buffer;
 
   switch (buffer_header->version) {
   case LOG_SEGMENT_VERSION:
@@ -663,7 +645,10 @@ LogFile::write_ascii_logbuffer3(LogBufferHeader * buffer_header, char *alt_forma
   while ((entry_header = iter.next())) {
     fmt_buf_bytes = 0;
 
-    ink_release_assert(m_ascii_buffer_size >= m_max_line_size);
+    if (m_file_format == ASCII_PIPE)
+      ascii_buffer = (char *)malloc(m_max_line_size);
+    else
+      ascii_buffer = (char *)malloc(m_ascii_buffer_size);
 
     // fill the buffer with as many records as possible
     //
@@ -674,7 +659,7 @@ LogFile::write_ascii_logbuffer3(LogBufferHeader * buffer_header, char *alt_forma
       }
 
       int bytes = LogBuffer::to_ascii(entry_header, format_type,
-                                      &m_ascii_buffer[fmt_buf_bytes],
+                                      &ascii_buffer[fmt_buf_bytes],
                                       m_max_line_size - 1,
                                       fieldlist_str, printf_str,
                                       buffer_header->version,
@@ -682,7 +667,7 @@ LogFile::write_ascii_logbuffer3(LogBufferHeader * buffer_header, char *alt_forma
 
       if (bytes > 0) {
         fmt_buf_bytes += bytes;
-        m_ascii_buffer[fmt_buf_bytes] = '\n';
+        ascii_buffer[fmt_buf_bytes] = '\n';
         ++fmt_buf_bytes;
       } else {
         Error("Failed to convert LogBuffer to ascii, have dropped (%"PRIu32") bytes.",
@@ -699,29 +684,14 @@ LogFile::write_ascii_logbuffer3(LogBufferHeader * buffer_header, char *alt_forma
         break;
     } while ((entry_header = iter.next()));
 
-    int bytes_written = 0;
-
-    // try to write *all* the buffer out to the file or pipe
+    // send the buffer to flush thread
     //
-    while (bytes_written < fmt_buf_bytes) {
-      if (Log::config->logging_space_exhausted) {
-        Warning("logging space exhausted, have dropped (%d) bytes.",
-                (fmt_buf_bytes - bytes_written));
-        break;
-      }
+    LogFlushData *flush_data = new LogFlushData(this, ascii_buffer, fmt_buf_bytes);
+    ink_atomiclist_push(Log::flush_data_list, flush_data);
 
-      int cnt = ::write(m_fd, &m_ascii_buffer[bytes_written],
-                        (fmt_buf_bytes - bytes_written));
-      if (cnt < 0) {
-        Error("An error was encountered in writing to %s: %s.",
-              ((m_name) ? m_name : "logfile"), strerror(errno));
-        break;
-      }
+    ink_cond_signal(Log::flush_cond);
 
-      bytes_written += cnt;
-    }
-
-    total_bytes += bytes_written;
+    total_bytes += fmt_buf_bytes;
   }
 
   return total_bytes;
