@@ -176,13 +176,13 @@ CacheStatPrinter::mainEvent(int event, void *e) {
   int64_t read_rww_avg = 0;
 
   if (cache_read != 0)
-    read_avg = (cache_read_avg_time / cache_read) / 1000;
+    read_avg = (cache_read_avg_time / cache_read) / 1000000;
   if (cache_read_success != 0)
-    read_succ_avg = (cache_read_success_avg_time / cache_read_success) / 1000;
+    read_succ_avg = (cache_read_success_avg_time / cache_read_success) / 1000000;
   if (cache_read_rww != 0)
-    read_rww_avg = (cache_read_rww_avg_time / cache_read_rww) / 1000;
+    read_rww_avg = (cache_read_rww_avg_time / cache_read_rww) / 1000000;
 
-  Debug("CacheStatPrinter", "++++++++ CacheStatPrinter: cache_read = %"PRId64"\n"
+  Note("++++++++ CacheStatPrinter: cache_read = %"PRId64"\n"
       " ++++ cache_read_avg_time = %"PRId64"+++++\n"
       " ++++ cache_read_success = %"PRId64"+++++\n"
       " ++++ cache_read_success_avg_time = %"PRId64"+++++\n"
