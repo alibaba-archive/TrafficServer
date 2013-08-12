@@ -73,8 +73,7 @@ public:
       host_hash_computed(false), con_id(0), transact_count(0),
       state(HSS_INIT), to_parent_proxy(false), server_trans_stat(0),
       private_session(false), share_session(0),
-      enable_origin_connection_limiting(false),
-      connection_count(NULL), read_buffer(NULL),
+      enable_origin_connection_limiting(false), read_buffer(NULL),
       server_vc(NULL), magic(HTTP_SS_MAGIC_DEAD), buf_reader(NULL)
     {
       hostname = NULL;
@@ -163,9 +162,7 @@ public:
   LINK(HttpServerSession, hash_link);
 
   // Keep track of connection limiting and a pointer to the
-  // singleton that keeps track of the connection counts.
   bool enable_origin_connection_limiting;
-  ConnectionCount *connection_count;
 
   // The ServerSession owns the following buffer which use
   //   for parsing the headers.  The server session needs to

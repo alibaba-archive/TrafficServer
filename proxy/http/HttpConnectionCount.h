@@ -90,8 +90,9 @@ public:
    * @param hostname the host
    * @param host_len the hostname length
    * @param delta can be set to negative to decrement
+   * @return connection count after increment
    */
-  void incrementCount(const char *hostname, const int host_len, const int delta);
+  int incrementCount(const char *hostname, const int host_len, const int delta);
 
   /**
    * return total count of host

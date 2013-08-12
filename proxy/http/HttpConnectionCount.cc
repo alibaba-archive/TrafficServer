@@ -56,10 +56,11 @@ int ConnectionCount::getCount(const char *hostname, const int host_len)
   return count;
 }
 
-void ConnectionCount::incrementCount(const char *hostname, const int host_len, const int delta)
+int ConnectionCount::incrementCount(const char *hostname, const int host_len, const int delta)
 {
   HostHashBucket *pBucket;
   HostEntry *found;
+  int count;
 
   pBucket = _hostTable + time33Hash(hostname, host_len) % IP_HASH_TABLE_SIZE;
   ink_mutex_acquire(&pBucket->_mutex);
@@ -92,7 +93,10 @@ void ConnectionCount::incrementCount(const char *hostname, const int host_len, c
     }
     ink_atomic_increment64(&_hostCount, 1);
   }
+  count = found->_count;
   ink_mutex_release(&pBucket->_mutex);
+
+  return count;
 }
 
 void ConnectionCount::hostTableStat(int &hostCount, int &min, int &max, double &avg)

@@ -79,15 +79,12 @@ HttpServerSession::new_connection(NetVConnection *new_vc)
   HTTP_INCREMENT_DYN_STAT(http_total_server_connections_stat);
   // Check to see if we are limiting the number of connections
   // per host
-  if (enable_origin_connection_limiting == true) {
-    if (connection_count == NULL)
-      connection_count = ConnectionCount::getInstance();
-    connection_count->incrementCount(hostname, host_len, 1);
+  if (enable_origin_connection_limiting) {
     char addrbuf[INET6_ADDRSTRLEN];
-    Debug("http_ss", "[%" PRId64 "] new connection, host: %.*s, ip: %s, count: %u", 
+    int count = ConnectionCount::getInstance()->incrementCount(hostname, host_len, 1);
+    Debug("http_ss", "[%" PRId64 "] new connection, host: %.*s, ip: %s, count: %d", 
         con_id, host_len, hostname,
-        ats_ip_ntop(&server_ip.sa, addrbuf, sizeof(addrbuf)),
-        connection_count->getCount(hostname, host_len));
+        ats_ip_ntop(&server_ip.sa, addrbuf, sizeof(addrbuf)), count);
   }
 #ifdef LAZY_BUF_ALLOC
   read_buffer = new_empty_MIOBuffer(HTTP_SERVER_RESP_HDR_BUFFER_INDEX);
@@ -134,17 +131,16 @@ HttpServerSession::do_io_close(int alerrno)
 
   // Check to see if we are limiting the number of connections
   // per host
-  if (enable_origin_connection_limiting == true) {
-    if (connection_count->getCount(hostname, host_len) > 0) {
-      connection_count->incrementCount(hostname, host_len, -1);
+  if (enable_origin_connection_limiting) {
+    int count = ConnectionCount::getInstance()->incrementCount(hostname, host_len, -1);
+    if (count >= 0 ) {
       char addrbuf[INET6_ADDRSTRLEN];
-      Debug("http_ss", "[%" PRId64 "] connection closed, host: %.*s, ip: %s, count: %u",
+      Debug("http_ss", "[%" PRId64 "] connection closed, host: %.*s, ip: %s, count: %d",
             con_id,  host_len, hostname,
-            ats_ip_ntop(&server_ip.sa, addrbuf, sizeof(addrbuf)), 
-            connection_count->getCount(hostname, host_len));
+            ats_ip_ntop(&server_ip.sa, addrbuf, sizeof(addrbuf)), count);
     } else {
-      Error("[%" PRId64 "] number of connections should be greater then zero: %u, host: %.*s",
-            con_id, connection_count->getCount(hostname, host_len),  host_len, hostname);
+      Error("[%" PRId64 "] number of connections: %d should be greater then zero, host: %.*s",
+            con_id, count,  host_len, hostname);
     }
   }
 

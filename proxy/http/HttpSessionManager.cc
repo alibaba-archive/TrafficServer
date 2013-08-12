@@ -107,7 +107,7 @@ SessionBucket::session_handler(int event, void *data)
       if ((event == VC_EVENT_INACTIVITY_TIMEOUT || event == VC_EVENT_ACTIVE_TIMEOUT) &&
           s->state == HSS_KA_SHARED &&
           s->enable_origin_connection_limiting) {
-        bool connection_count_below_min = s->connection_count->getCount(s->hostname, s->host_len) <=
+        bool connection_count_below_min = ConnectionCount::getInstance()->getCount(s->hostname, s->host_len) <=
           http_config_params->origin_min_keep_alive_connections;
 
         if (connection_count_below_min) {
