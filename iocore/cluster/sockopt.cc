@@ -1177,17 +1177,12 @@ int tcpsendfile_ex(int sock, const char *filename, const int64_t file_offset, \
 int tcpsetserveropt(int fd, const int timeout)
 {
 	int flags;
-	int result;
 
 	struct linger linger;
 	struct timeval waittime;
 
-	linger.l_onoff = 1;
-#ifdef OS_FREEBSD
-	linger.l_linger = timeout * 100;
-#else
-	linger.l_linger = timeout;
-#endif
+	linger.l_onoff = 0;
+	linger.l_linger = 0;
 	if (setsockopt(fd, SOL_SOCKET, SO_LINGER, \
                 &linger, (socklen_t)sizeof(struct linger)) < 0)
 	{
@@ -1199,7 +1194,6 @@ int tcpsetserveropt(int fd, const int timeout)
 
 	waittime.tv_sec = timeout;
 	waittime.tv_usec = 0;
-
 	if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO,
                &waittime, (socklen_t)sizeof(struct timeval)) < 0)
 	{
@@ -1216,35 +1210,6 @@ int tcpsetserveropt(int fd, const int timeout)
 			__LINE__, errno, STRERROR(errno));
 	}
 
-	/*
-	{
-	int bytes;
-	int size;
-
-	bytes = 0;
-	size = sizeof(int);
-	if (getsockopt(fd, SOL_SOCKET, SO_SNDBUF,
-		&bytes, (socklen_t *)&size) < 0)
-	{
-		Error("file: "__FILE__", line: %d, " \
-			"getsockopt failed, errno: %d, error info: %s", \
-			__LINE__, errno, STRERROR(errno));
-		return errno != 0 ? errno : ENOMEM;
-	}
-	printf("send buff size: %d\n", bytes);
-
-	if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF,
-		&bytes, (socklen_t *)&size) < 0)
-	{
-		Error("file: "__FILE__", line: %d, " \
-			"getsockopt failed, errno: %d, error info: %s", \
-			__LINE__, errno, STRERROR(errno));
-		return errno != 0 ? errno : ENOMEM;
-	}
-	printf("recv buff size: %d\n", bytes);
-	}
-	*/
-
 	flags = 1;
 	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, \
 		(char *)&flags, sizeof(flags)) < 0)
@@ -1253,11 +1218,6 @@ int tcpsetserveropt(int fd, const int timeout)
 			"setsockopt failed, errno: %d, error info: %s", \
 			__LINE__, errno, STRERROR(errno));
 		return errno != 0 ? errno : EINVAL;
-	}
-
-	if ((result=tcpsetkeepalive(fd, 2 * timeout + 1)) != 0)
-	{
-		return result;
 	}
 
 	return 0;
@@ -1406,12 +1366,6 @@ int tcpsetnonblockopt(int fd)
 int tcpsetnodelay(int fd, const int timeout)
 {
 	int flags;
-	int result;
-
-	if ((result=tcpsetkeepalive(fd, 2 * timeout + 1)) != 0)
-	{
-		return result;
-	}
 
 	flags = 1;
 	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, \

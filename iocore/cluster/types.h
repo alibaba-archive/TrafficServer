@@ -148,7 +148,10 @@ typedef struct socket_context {
   int connect_type;       //client or server
   time_t connected_time;  //connection established timestamp
 
-  int64_t next_write_time;
+  int ping_fail_count;    //ping fail counter
+  int64_t next_ping_time; //next time to send ping message
+  int64_t next_write_time; //next time to send data
+  int64_t ping_start_time;
 
 #ifdef USE_MULTI_ALLOCATOR
   Allocator *out_msg_allocator;  //for send
@@ -169,6 +172,10 @@ struct SocketStats {
   int64_t epoll_wait_count;
   int64_t loop_usleep_count;
   int64_t loop_usleep_time;
+
+  int64_t ping_total_count;
+  int64_t ping_success_count;
+  int64_t ping_time_used;
 };
 
 struct worker_thread_context

@@ -55,6 +55,10 @@ struct NIORecords {
    RecRecord * loop_usleep_count;
    RecRecord * loop_usleep_time;
    RecRecord * io_loop_interval;
+
+   RecRecord * ping_total_count;
+   RecRecord * ping_success_count;
+   RecRecord * ping_time_used;
 };
 
 static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL,
@@ -121,13 +125,20 @@ static void init_nio_stats()
       "proxy.process.cluster.io.write_wait_time", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.io_loop_interval = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.io.loop_interval", RECD_INT, data_default, RECP_NON_PERSISTENT);
+
+  nio_records.ping_total_count = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.ping_total_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.ping_success_count = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.ping_success_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.ping_time_used = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.ping_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
 }
 
 void log_nio_stats()
 {
 	struct worker_thread_context *pThreadContext;
 	struct worker_thread_context *pContextEnd;
-  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   static time_t last_calc_Bps_time = CURRENT_TIME();
   static int64_t last_send_bytes = 0;
 
@@ -145,6 +156,9 @@ void log_nio_stats()
     sum.epoll_wait_count += pThreadContext->stats.epoll_wait_count;
     sum.loop_usleep_count += pThreadContext->stats.loop_usleep_count;
     sum.loop_usleep_time += pThreadContext->stats.loop_usleep_time;
+    sum.ping_total_count += pThreadContext->stats.ping_total_count;
+    sum.ping_success_count += pThreadContext->stats.ping_success_count;
+    sum.ping_time_used += pThreadContext->stats.ping_time_used;
   }
 
   RecDataSetFromInk64(RECD_INT, &nio_records.send_msg_count->data,
@@ -167,6 +181,12 @@ void log_nio_stats()
         sum.loop_usleep_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.loop_usleep_time->data,
         sum.loop_usleep_time);
+  RecDataSetFromInk64(RECD_INT, &nio_records.ping_total_count->data,
+        sum.ping_total_count);
+  RecDataSetFromInk64(RECD_INT, &nio_records.ping_success_count->data,
+        sum.ping_success_count);
+  RecDataSetFromInk64(RECD_INT, &nio_records.ping_time_used->data,
+        sum.ping_time_used);
 
   int time_pass = CURRENT_TIME() - last_calc_Bps_time;
   if (time_pass > 0) {
@@ -442,7 +462,10 @@ int nio_add_to_epoll(SocketContext *pSockContext)
     pSockContext->send_queues[i].tail = NULL;
   }
   pSockContext->queue_index = 0;
+  pSockContext->ping_start_time = 0;
+  pSockContext->ping_fail_count = 0;
   pSockContext->next_write_time = CURRENT_NS() + write_wait_time;
+  pSockContext->next_ping_time = CURRENT_NS() + cluster_ping_send_interval;
 
   INIT_READER(pSockContext->reader, READ_BUFFER_SIZE);
   pSockContext->reader.recv_body_bytes = 0;
@@ -538,6 +561,18 @@ static int close_socket(SocketContext * pSockContext)
   }
   
 	return 0;
+}
+
+inline static int send_ping_message(SocketContext *pSockContext)
+{
+  ClusterSession session;
+
+  //ping message do NOT care session id
+  session.fields.ip = g_my_machine_ip;
+  session.fields.timestamp = CURRENT_TIME();
+  session.fields.seq = 0;   //just use 0
+  return cluster_send_msg_internal(&session,
+      pSockContext, FUNC_ID_CLUSTER_PING_REQUEST, NULL, 0, PRIORITY_HIGH);
 }
 
 static int deal_write_event(SocketContext * pSockContext)
@@ -732,8 +767,8 @@ static int deal_write_event(SocketContext * pSockContext)
 	write_bytes = writev(pSockContext->sock, write_vec, vec_count);
 	if (write_bytes == 0) {   //connection closed
 		Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
-			"write fail, connection closed",
-			__LINE__);
+			"write to %s fail, connection closed",
+			__LINE__, pSockContext->machine->hostname);
 		return ECONNRESET;
 	}
 	else if (write_bytes < 0) {
@@ -742,15 +777,17 @@ static int deal_write_event(SocketContext * pSockContext)
 		}
     else if (errno == EINTR) {  //should try again
 			Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__ ", line: %d, "
-				"write fail, errno: %d, error info: %s", \
-				__LINE__, errno, strerror(errno));
+				"write to %s fail, errno: %d, error info: %s",
+				__LINE__, pSockContext->machine->hostname,
+        errno, strerror(errno));
       return 0;
     }
 		else {
 			result = errno != 0 ? errno : EIO;
       Error("file: "__FILE__", line: %d, "
-				"write fail, errno: %d, error info: %s", \
-				__LINE__, result, strerror(result));
+				"write to %s fail, errno: %d, error info: %s",
+				__LINE__, pSockContext->machine->hostname,
+        result, strerror(result));
 			return result;
 		}
 	}
@@ -904,6 +941,36 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
       pHeader->func_id, data_len, count + 1);
   */
 
+  //deal internal ping message first
+  if (pHeader->func_id == FUNC_ID_CLUSTER_PING_REQUEST) {
+      return cluster_send_msg_internal(&pHeader->session_id, pSockContext,
+          FUNC_ID_CLUSTER_PING_RESPONSE, NULL, 0, PRIORITY_HIGH);
+  }
+  else if (pHeader->func_id == FUNC_ID_CLUSTER_PING_RESPONSE) {
+    if (pSockContext->ping_start_time > 0) {
+      int64_t time_used = CURRENT_NS() - pSockContext->ping_start_time;
+      pSockContext->thread_context->stats.ping_success_count++;
+      pSockContext->thread_context->stats.ping_time_used += time_used;
+      if (time_used > cluster_ping_latency_threshold) {
+        Warning("cluster server %s, sock: #%d ping response time: %d ms > threshold: %d ms",
+            pSockContext->machine->hostname, pSockContext->sock,
+            (int)(time_used / HRTIME_MSECOND),
+            (int)(cluster_ping_latency_threshold / HRTIME_MSECOND));
+      }
+      else if (pSockContext->ping_fail_count > 0) {
+        pSockContext->ping_fail_count = 0;  //reset fail count
+      }
+      pSockContext->ping_start_time = 0;  //reset start time
+    }
+    else {
+      Warning("unexpect cluster server %s ping response, sock: #%d, time used: %d s",
+          pSockContext->machine->hostname, pSockContext->sock,
+          (int)(CURRENT_TIME() - pHeader->session_id.fields.timestamp));
+    }
+
+    return 0;
+  }
+
   result = get_response_session(pHeader, &pMachineSessions,
       &pSessionEntry, pSockContext, &call_func, &user_data);
   if (result != 0) {
@@ -994,8 +1061,9 @@ static int deal_read_event(SocketContext *pSockContext)
 */
 	if (read_bytes == 0) {
      Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-          "==type: %c, read fail, connection #%d closed", __LINE__,
-          pSockContext->connect_type, pSockContext->sock);
+          "type: %c, read from %s fail, connection #%d closed", __LINE__,
+          pSockContext->connect_type, pSockContext->machine->hostname,
+          pSockContext->sock);
       return ECONNRESET;
 	}
 	else if (read_bytes < 0) {
@@ -1004,15 +1072,17 @@ static int deal_read_event(SocketContext *pSockContext)
 		}
     else if (errno == EINTR) {  //should try again
 			Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-				"read fail, errno: %d, error info: %s", \
-				__LINE__, errno, strerror(errno));
+				"read from %s fail, errno: %d, error info: %s",
+				__LINE__, pSockContext->machine->hostname,
+        errno, strerror(errno));
       return 0;
     }
 		else {
 			result = errno != 0 ? errno : EIO;
 			Error("file: " __FILE__ ", line: %d, "
-				"read fail, errno: %d, error info: %s", \
-				__LINE__, result, strerror(result));
+				"read from %s fail, errno: %d, error info: %s",
+				__LINE__, pSockContext->machine->hostname,
+        result, strerror(result));
 			return result;
 		}
 	}
@@ -1240,7 +1310,7 @@ inline static void deal_epoll_events(struct worker_thread_context *
 
 inline static void schedule_sock_write(struct worker_thread_context * pThreadContext)
 {
-#define MAX_SOCK_CONTEXT_COUNT  16
+#define MAX_SOCK_CONTEXT_COUNT 32
   int result;
   int fail_count;
   int64_t current_time;
@@ -1257,6 +1327,37 @@ inline static void schedule_sock_write(struct worker_thread_context * pThreadCon
   {
     if (current_time < (*ppSockContext)->next_write_time) {
       continue;
+    }
+
+    if ((*ppSockContext)->ping_start_time > 0) { //ping message already sent
+      if (current_time - (*ppSockContext)->ping_start_time > cluster_ping_latency_threshold) {
+        (*ppSockContext)->ping_start_time = 0;  //reset start time when done
+        (*ppSockContext)->ping_fail_count++;
+        if ((*ppSockContext)->ping_fail_count > cluster_ping_retries) {
+          if (fail_count < MAX_SOCK_CONTEXT_COUNT) {
+            Error("ping cluster server %s timeout more than %d times, close socket #%d",
+                (*ppSockContext)->machine->hostname, cluster_ping_retries,
+                (*ppSockContext)->sock);
+            failSockContexts[fail_count++] = *ppSockContext;
+          }
+          continue;
+        }
+        else {
+          Warning("ping cluster server %s timeout, sock: #%d, fail count: %d",
+              (*ppSockContext)->machine->hostname, (*ppSockContext)->sock,
+              (*ppSockContext)->ping_fail_count);
+        }
+      }
+    }
+    else {
+      if (cluster_ping_send_interval > 0 && current_time >=
+          (*ppSockContext)->next_ping_time)
+      {
+        (*ppSockContext)->thread_context->stats.ping_total_count++;
+        (*ppSockContext)->ping_start_time = current_time;
+        (*ppSockContext)->next_ping_time = current_time + cluster_ping_send_interval;
+        send_ping_message(*ppSockContext);
+      }
     }
 
     result = deal_write_event(*ppSockContext);

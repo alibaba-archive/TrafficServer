@@ -29,6 +29,9 @@ extern int cluster_send_min_wait_time; //us
 extern int cluster_send_max_wait_time; //us
 extern int cluster_min_loop_interval;  //us
 extern int cluster_max_loop_interval;  //us
+extern int64_t cluster_ping_send_interval;
+extern int64_t cluster_ping_latency_threshold;
+extern int cluster_ping_retries;
 
 #ifdef __cplusplus
 }

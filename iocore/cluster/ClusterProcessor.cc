@@ -478,6 +478,22 @@ struct ClusterCacheVCPrinter: public Continuation
 };
 #endif
 
+static int
+cluster_ping_config_cb(const char *name, RecDataT data_type, RecData data, void *cookie)
+{
+  NOWARN_UNUSED(data_type);
+  NOWARN_UNUSED(cookie);
+
+  if (strcmp(name, "proxy.config.cluster.ping_send_interval_msecs") == 0) {
+    cluster_ping_send_interval = data.rec_int * HRTIME_MSECOND;
+  }
+  else if (strcmp(name, "proxy.config.cluster.ping_latency_threshold_msecs") == 0) {
+    cluster_ping_latency_threshold =  data.rec_int * HRTIME_MSECOND;
+  }
+
+  return 0;
+}
+
 int
 ClusterProcessor::init()
 {
@@ -822,6 +838,15 @@ ClusterProcessor::init()
   int result;
 
   if (cluster_type == 1) {
+    IOCORE_ReadConfigInteger(cluster_ping_send_interval, "proxy.config.cluster.ping_send_interval_msecs");
+    IOCORE_ReadConfigInteger(cluster_ping_latency_threshold, "proxy.config.cluster.ping_latency_threshold_msecs");
+    cluster_ping_send_interval *= HRTIME_MSECOND;
+    cluster_ping_latency_threshold *= HRTIME_MSECOND;
+
+    REC_RegisterConfigUpdateFunc("proxy.config.cluster.ping_send_interval_msecs", cluster_ping_config_cb, NULL);
+    REC_RegisterConfigUpdateFunc("proxy.config.cluster.ping_latency_threshold_msecs", cluster_ping_config_cb, NULL);
+    IOCORE_EstablishStaticConfigInt32(cluster_ping_retries, "proxy.config.cluster.ping_retries");
+
     bool found;
     IpEndpoint cluster_ip;    // ip addr of the cluster interface
     char *intrName;               // Name of the interface we are to use

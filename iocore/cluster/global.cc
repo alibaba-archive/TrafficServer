@@ -24,4 +24,7 @@ int cluster_send_min_wait_time = 1000; //us
 int cluster_send_max_wait_time = 5000; //us
 int cluster_min_loop_interval = 0;     //us
 int cluster_max_loop_interval = 1000;  //us
+int64_t cluster_ping_send_interval= 0;
+int64_t cluster_ping_latency_threshold = 0;
+int cluster_ping_retries = 3;
 
