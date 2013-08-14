@@ -115,6 +115,8 @@ int CacheProcessor::clear = 0;
 int CacheProcessor::fix = 0;
 int CacheProcessor::start_internal_flags = 0;
 int CacheProcessor::auto_clear_flag = 0;
+int32_t num_max_readers_from_writer = 0;
+
 CacheProcessor cacheProcessor;
 Vol **gvol = NULL;
 volatile int gnvol = 0;
@@ -3223,6 +3225,9 @@ ink_cache_init(ModuleVersion v)
   cache_config_read_while_writer = validate_rww(cache_config_read_while_writer);
   IOCORE_RegisterConfigUpdateFunc("proxy.config.cache.enable_read_while_writer", update_cache_config, NULL);
   Debug("cache_init", "proxy.config.cache.enable_read_while_writer = %d", cache_config_read_while_writer);
+
+  IOCORE_EstablishStaticConfigInt32(num_max_readers_from_writer, "proxy.config.cache.max_readers_while_writer");
+  Debug("cache_init", "proxy.config.cache.max_readers_while_writer = %d", num_max_readers_from_writer);
 
   register_cache_stats(cache_rsb, "proxy.process.cache");
 

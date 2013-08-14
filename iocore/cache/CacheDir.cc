@@ -49,6 +49,7 @@ CACHE_INCREMENT_DYN_STAT(cache_directory_collision_count_stat); \
 // Globals
 
 ClassAllocator<OpenDirEntry> openDirEntryAllocator("openDirEntry");
+
 Dir empty_dir;
 
 // OpenDir
@@ -94,6 +95,7 @@ OpenDir::open_write(CacheVC *cont, int allow_if_writers, int max_writers)
   od->move_resident_alt = 0;
   od->reading_vec = 0;
   od->writing_vec = 0;
+  od->num_readers = 0;
   dir_clear(&od->first_dir);
   cont->od = od;
   cont->write_vector = &od->vector;
@@ -154,8 +156,10 @@ OpenDir::open_read(INK_MD5 *key)
   unsigned int h = key->word(0);
   int b = h % OPEN_DIR_BUCKETS;
   for (OpenDirEntry *d = bucket[b].head; d; d = d->link.next)
-    if (d->writers.head->first_key == *key)
+    if (d->writers.head->first_key == *key) {
+      ++d->num_readers;
       return d;
+    }
   return NULL;
 }
 

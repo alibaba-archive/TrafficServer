@@ -547,6 +547,8 @@ struct DummyClusterAIOCallback: Continuation
 extern ClassAllocator<CacheVC> cacheVConnectionAllocator;
 extern CacheKey zero_key;
 extern CacheSync *cacheDirSync;
+extern int32_t num_max_readers_from_writer;
+
 // Function Prototypes
 #ifdef HTTP_CACHE
 int cache_write(CacheVC *, CacheHTTPInfoVector *);

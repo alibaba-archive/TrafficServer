@@ -251,6 +251,7 @@ struct OpenDirEntry
                                 // inserted, otherwise this dir is overwritten
   uint16_t num_writers;           // num of current writers
   uint16_t max_writers;           // max number of simultaneous writers allowed
+  int32_t num_readers;
   bool dont_update_directory;   // if set, the first_dir is not updated.
   bool move_resident_alt;       // if set, single_doc_dir is inserted.
   volatile bool reading_vec;    // somebody is currently reading the vector
