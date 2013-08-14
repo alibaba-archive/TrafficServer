@@ -1203,10 +1203,18 @@ static int deal_read_event(SocketContext *pSockContext)
         return result;
       }
 
+      if (recv_body_bytes % ALIGN_BYTES != 0) { //must be aligned
+        Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
+            "recv_body_bytes: %d (%X) should be aligned with %d", __LINE__,
+            recv_body_bytes, recv_body_bytes, ALIGN_BYTES);
+        ink_release_assert(pSockContext->reader.current < pSockContext->reader.buff_end);
+        return result;
+      }
+
       if (current_true_body_bytes > 0) { //should alloc new buffer
         append_to_blocks(&pSockContext->reader, current_true_body_bytes);
-        pSockContext->reader.recv_body_bytes = recv_body_bytes;
       }
+      pSockContext->reader.recv_body_bytes = recv_body_bytes;
 
       if (bFirstBlock) {
         if (current_true_body_bytes > 0) {  //should keep the msg_header

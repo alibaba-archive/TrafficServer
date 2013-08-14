@@ -41,7 +41,7 @@
 #define DATA_TYPE_BUFFER     'B'  //char buffer
 #define DATA_TYPE_OBJECT     'O'  //IOBufferBlock pointer
 
-#define ALIGN_BYTES  16
+#define ALIGN_BYTES  8
 #define BYTE_ALIGN(x,l)  (((x) + ((l) - 1)) & ~((l) - 1))
 #define BYTE_ALIGN16(x)  BYTE_ALIGN(x, ALIGN_BYTES)
 
