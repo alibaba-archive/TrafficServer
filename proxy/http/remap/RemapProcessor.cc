@@ -167,11 +167,11 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
     return false;
   }
 
-  if (s->http_config_param->client_max_connections) {
+  if (s->http_config_param->max_active_client_connections) {
     int64_t sval = 0;
 
-    HTTP_READ_GLOBAL_DYN_SUM(http_current_client_connections_stat, sval);
-    if ((sval > s->http_config_param->client_max_connections) && !s->txn_conf->allow_anyway) {
+    HTTP_READ_GLOBAL_DYN_SUM(http_current_active_client_connections_stat, sval);
+    if ((sval > s->http_config_param->max_active_client_connections) && !s->txn_conf->allow_anyway) {
       s->client_connection_enabled = false;
       s->server_busy = true;
       return false;

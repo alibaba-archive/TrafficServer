@@ -624,7 +624,7 @@ public:
   IpAddr inbound_ip4, inbound_ip6;
   IpAddr outbound_ip4, outbound_ip6;
 
-  MgmtInt client_max_connections;
+  MgmtInt max_active_client_connections;
   MgmtInt server_max_connections;
   MgmtInt origin_min_keep_alive_connections; // TODO: This one really ought to be overridable, but difficult right now.
 
@@ -911,7 +911,7 @@ inline
 HttpConfigParams::HttpConfigParams()
   : proxy_hostname(0),
     proxy_hostname_len(0),
-    client_max_connections(0),
+    max_active_client_connections(0),
     server_max_connections(0),
     origin_min_keep_alive_connections(0),
     parent_proxy_routing_enable(0),

@@ -848,7 +848,7 @@ HttpTransact::EndRemapRequest(State* s)
   DebugTxn("http_trans","EndRemapRequest host is %.*s", host_len,host);
 
   /////////////////////////////////////////////////////////////////////////////////////////
-  // if http_current_client_connections_stat > client_max_connections return server busy //
+  // if http_current_active_client_connections_stat > max_active_client_connections return server busy //
   /////////////////////////////////////////////////////////////////////////////////////////
 
   if (s->server_busy) {
