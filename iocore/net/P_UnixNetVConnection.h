@@ -312,25 +312,13 @@ TS_INLINE void
 UnixNetVConnection::set_active_timeout(ink_hrtime timeout)
 {
   active_timeout_in = timeout;
-  if (active_timeout)
+  if (active_timeout) {
     active_timeout->cancel_action(this);
-  if (active_timeout_in) {
-    if (read.enabled) {
-      ink_debug_assert(read.vio.mutex->thread_holding == this_ethread() && thread);
-      if (read.vio.mutex->thread_holding == thread)
-        active_timeout = thread->schedule_in_local(this, active_timeout_in);
-      else
-        active_timeout = thread->schedule_in(this, active_timeout_in);
-    } else if (write.enabled) {
-      ink_debug_assert(write.vio.mutex->thread_holding == this_ethread() && thread);
-      if (write.vio.mutex->thread_holding == thread)
-        active_timeout = thread->schedule_in_local(this, active_timeout_in);
-      else
-        active_timeout = thread->schedule_in(this, active_timeout_in);
-    } else
-      active_timeout = 0;
-  } else
-    active_timeout = 0;
+    active_timeout = NULL;
+  }
+
+  if (active_timeout_in)
+    active_timeout = thread->schedule_in(this, active_timeout_in);
 }
 
 TS_INLINE void
