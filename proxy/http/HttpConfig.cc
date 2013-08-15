@@ -1118,6 +1118,14 @@ register_stat_callbacks()
                      RECD_COUNTER, RECP_NULL,
                      (int) http_total_x_redirect_stat, RecRawStatSyncCount);
 
+  RecRegisterRawStat(http_rsb, RECT_PROCESS,
+                     "proxy.process.http.decide_os_count",
+                     RECD_COUNTER, RECP_NULL, (int) http_server_first_response_time_stat, RecRawStatSyncCount);
+  RecRegisterRawStat(http_rsb, RECT_PROCESS,
+                     "proxy.process.http.server.first_response_time",
+                     RECD_FLOAT, RECP_NULL,
+                     (int) http_server_first_response_time_stat, RecRawStatSyncIntMsecsToFloatSeconds);
+
 }
 
 

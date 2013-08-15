@@ -986,6 +986,8 @@ public:
     ink_time_t response_received_time;  // internal
     ink_time_t plugin_set_expire_time;
 
+    ink_time_t decide_os_time;
+
     char via_string[MAX_VIA_INDICES + 1];
 
     int64_t state_machine_id;
@@ -1116,6 +1118,7 @@ public:
         request_sent_time(UNDEFINED_TIME),
         response_received_time(UNDEFINED_TIME),
         plugin_set_expire_time(UNDEFINED_TIME),
+        decide_os_time(UNDEFINED_TIME),
         state_machine_id(0),
         first_stats(),
         current_stats(NULL),

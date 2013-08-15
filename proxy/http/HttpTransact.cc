@@ -2850,6 +2850,7 @@ HttpTransact::handle_cache_write_lock(State* s)
   case CACHE_WL_SUCCESS:
     // We were able to get the lock for the URL vector in the cache
     SET_UNPREPARE_CACHE_ACTION(s->cache_info);
+    s->decide_os_time = ink_get_hrtime();
     break;
   case CACHE_WL_FAIL:
     // No write lock, ignore the cache and proxy only;
@@ -3814,7 +3815,8 @@ void
 HttpTransact::handle_server_connection_not_open(State* s)
 {
   bool serve_from_cache = false;
-
+  if (s->decide_os_time)
+    HTTP_SUM_TRANS_STAT(http_server_first_response_time_stat, (ink_get_hrtime() - s->decide_os_time) / HRTIME_MSECOND);
   DebugTxn("http_trans", "[handle_server_connection_not_open] (hscno)");
   DebugTxn("http_seq", "[HttpTransact::handle_server_connection_not_open] ");
   ink_debug_assert(s->current.state != CONNECTION_ALIVE);
@@ -3899,7 +3901,8 @@ HttpTransact::handle_forward_server_connection_open(State* s)
   DebugTxn("http_trans", "[handle_forward_server_connection_open] (hfsco)");
   DebugTxn("http_seq", "[HttpTransact::handle_server_connection_open] ");
   ink_release_assert(s->current.state == CONNECTION_ALIVE);
-
+  if (s->decide_os_time)
+    HTTP_SUM_TRANS_STAT(http_server_first_response_time_stat, (ink_get_hrtime() - s->decide_os_time) / HRTIME_MSECOND);
   if (s->hdr_info.server_response.version_get() == HTTPVersion(0, 9)) {
     DebugTxn("http_trans", "[hfsco] server sent 0.9 response, reading...");
     build_response(s, &s->hdr_info.client_response, s->client_info.http_version, HTTP_STATUS_OK, "Connection Established");

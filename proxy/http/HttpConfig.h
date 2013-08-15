@@ -289,6 +289,8 @@ enum
   http_client_write_time_stat,
   http_server_read_time_stat,
 
+  http_server_first_response_time_stat,
+
   http_icp_transaction_time_stat,
   http_icp_raw_transaction_time_stat,
   http_parent_proxy_transaction_time_stat,
