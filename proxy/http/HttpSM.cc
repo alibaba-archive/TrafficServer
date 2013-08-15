@@ -788,13 +788,16 @@ HttpSM::state_read_client_request_header(int event, void *data)
       enable_redirection = HttpConfig::m_master.redirection_enabled;
 
     method = t_state.hdr_info.client_request.method_get_wksidx();
-    if ((method != HTTP_WKSIDX_GET) &&
-        (method == HTTP_WKSIDX_POST || method == HTTP_WKSIDX_PUT ||
-         (t_state.hdr_info.extension_method && t_state.hdr_info.request_content_length > 0))) {
+    if ((method == HTTP_WKSIDX_POST || method == HTTP_WKSIDX_PUT || (t_state.hdr_info.extension_method && t_state.hdr_info.request_content_length > 0))) {
+      // is setted HttpConfig::m_master.transaction_header_active_timeout_in, so should reset active_timeout_in
       if (ua_session->get_netvc()->get_active_timeout() == HRTIME_SECONDS(HttpConfig::m_master.transaction_header_active_timeout_in)) {
-        if (HttpConfig::m_master.transaction_request_active_timeout_in
-             && (HRTIME_SECONDS(HttpConfig::m_master.transaction_request_active_timeout_in) > (milestones.ua_read_header_done - milestones.sm_start)))
-          ua_session->get_netvc()->set_active_timeout(HRTIME_SECONDS(HttpConfig::m_master.transaction_request_active_timeout_in) - (milestones.ua_read_header_done - milestones.sm_start));
+        if (HttpConfig::m_master.transaction_request_active_timeout_in) {
+          if (HRTIME_SECONDS(HttpConfig::m_master.transaction_request_active_timeout_in) > (milestones.ua_read_header_done - milestones.sm_start)) {
+            ua_session->get_netvc()->set_active_timeout(HRTIME_SECONDS(HttpConfig::m_master.transaction_request_active_timeout_in) - (milestones.ua_read_header_done - milestones.sm_start));
+          }
+        } else {
+          ua_session->get_netvc()->cancel_active_timeout();
+        }
       }
     } else {
       ua_session->get_netvc()->cancel_active_timeout();
@@ -3344,6 +3347,7 @@ HttpSM::tunnel_handler_post_ua(int event, HttpTunnelProducer * p)
   case VC_EVENT_ACTIVE_TIMEOUT:
     //  Did not complete post tunnling.  Abort the
     //   server and close the ua
+    ua_session->get_netvc()->cancel_active_timeout();
     p->handler_state = HTTP_SM_POST_UA_FAIL;
     tunnel.chain_abort_all(p);
     p->read_vio = NULL;

@@ -1220,6 +1220,8 @@ HttpConfig::startup()
                                     "proxy.config.http.transaction_no_activity_timeout_out");
   HttpEstablishStaticConfigLongLong(c.transaction_header_active_timeout_in, "proxy.config.http.transaction_header_active_timeout_in");
   HttpEstablishStaticConfigLongLong(c.transaction_request_active_timeout_in, "proxy.config.http.transaction_request_active_timeout_in");
+  if (c.transaction_header_active_timeout_in >= c.transaction_request_active_timeout_in)
+    c.transaction_request_active_timeout_in = 0;
   HttpEstablishStaticConfigLongLong(c.oride.transaction_active_timeout_out, "proxy.config.http.transaction_active_timeout_out");
   HttpEstablishStaticConfigLongLong(c.accept_no_activity_timeout, "proxy.config.http.accept_no_activity_timeout");
 
