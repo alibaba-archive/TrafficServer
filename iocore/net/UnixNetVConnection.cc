@@ -786,7 +786,7 @@ UnixNetVConnection::UnixNetVConnection()
 #endif
     active_timeout(NULL), nh(NULL),
     id(0), flags(0), recursion(0), submit_time(0), oob_ptr(0),
-    from_accept_thread(false), is_accept(false)
+    from_accept_thread(false)
 {
   memset(&local_addr, 0, sizeof local_addr);
   memset(&server_addr, 0, sizeof server_addr);
@@ -1130,10 +1130,6 @@ void
 UnixNetVConnection::free(EThread *t)
 {
   NET_SUM_GLOBAL_DYN_STAT(net_connections_currently_open_stat, -1);
-  if (is_accept) {
-    NET_SUM_GLOBAL_DYN_STAT(net_accept_connections_currently_open_stat, -1);
-    is_accept = false;
-  }
   // clear variables for reuse
   this->mutex.clear();
   action_.mutex.clear();

@@ -233,7 +233,6 @@ public:
   ink_hrtime submit_time;
   OOB_callback *oob_ptr;
   bool from_accept_thread;
-  bool is_accept;
 
   int startEvent(int event, Event *e);
   int acceptEvent(int event, Event *e);

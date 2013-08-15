@@ -123,9 +123,6 @@ net_accept(NetAccept * na, void *ep, bool blockable)
     vc->action_ = *na->action_;
     vc->set_is_transparent(na->server.f_inbound_transparent);
     vc->closed  = 0;
-    NET_SUM_GLOBAL_DYN_STAT(net_accept_connections_currently_open_stat, 1);
-    vc->is_accept = true;
-    check_net_accept(vc);
     SET_CONTINUATION_HANDLER(vc, (NetVConnHandler) & UnixNetVConnection::acceptEvent);
 
     if (e->ethread->is_event_type(na->etype))
@@ -321,9 +318,6 @@ NetAccept::do_blocking_accept(EThread * t)
     vc->set_is_transparent(server.f_inbound_transparent);
     vc->mutex = new_ProxyMutex();
     vc->action_ = *action_;
-    NET_SUM_GLOBAL_DYN_STAT(net_accept_connections_currently_open_stat, 1);
-    vc->is_accept = true;
-    check_net_accept(vc);
     SET_CONTINUATION_HANDLER(vc, (NetVConnHandler) & UnixNetVConnection::acceptEvent);
     //eventProcessor.schedule_imm(vc, getEtype());
     eventProcessor.schedule_imm_signal(vc, getEtype());
@@ -469,9 +463,6 @@ NetAccept::acceptFastEvent(int event, void *ep)
     vc->con.fd = fd;
 
     NET_SUM_GLOBAL_DYN_STAT(net_connections_currently_open_stat, 1);
-    NET_SUM_GLOBAL_DYN_STAT(net_accept_connections_currently_open_stat, 1);
-    vc->is_accept = true;
-    check_net_accept(vc);
     vc->id = net_next_connection_number();
 
     vc->submit_time = ink_get_hrtime();

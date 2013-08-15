@@ -40,10 +40,6 @@ configure_net(void)
   IOCORE_RegisterConfigUpdateFunc("proxy.config.net.connections_throttle", change_net_connections_throttle, NULL);
   IOCORE_ReadConfigInteger(fds_throttle, "proxy.config.net.connections_throttle");
   IOCORE_ReadConfigInteger(throttle_enabled,"proxy.config.net.throttle_enabled");
-  IOCORE_RegisterConfigUpdateFunc("proxy.config.net.max_accept", change_net_max_accept, NULL);
-  IOCORE_ReadConfigInteger(fds_accept, "proxy.config.net.max_accept");
-  IOCORE_RegisterConfigUpdateFunc("proxy.config.net.max_active_client", change_net_max_accept, NULL);
-  IOCORE_ReadConfigInteger(active_client, "proxy.config.net.max_active_client");
 }
 
 
@@ -68,11 +64,6 @@ register_net_stats()
                      "proxy.process.net.connections_currently_open",
                      RECD_INT, RECP_NON_PERSISTENT, (int) net_connections_currently_open_stat, RecRawStatSyncSum);
   NET_CLEAR_DYN_STAT(net_connections_currently_open_stat);
-
-  RecRegisterRawStat(net_rsb, RECT_PROCESS,
-                     "proxy.process.net.accept_connections_currently_open",
-                     RECD_INT, RECP_NON_PERSISTENT, (int) net_accept_connections_currently_open_stat, RecRawStatSyncSum);
-  NET_CLEAR_DYN_STAT(net_accept_connections_currently_open_stat);
 
   RecRegisterRawStat(net_rsb, RECT_PROCESS,
                      "proxy.process.net.accepts_currently_open",

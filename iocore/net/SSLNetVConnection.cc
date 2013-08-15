@@ -448,10 +448,6 @@ SSLNetVConnection::SSLNetVConnection():
 void
 SSLNetVConnection::free(EThread * t) {
   NET_SUM_GLOBAL_DYN_STAT(net_connections_currently_open_stat, -1);
-  if (is_accept) {
-    NET_SUM_GLOBAL_DYN_STAT(net_accept_connections_currently_open_stat, -1);
-    is_accept = false;
-  }
   got_remote_addr = 0;
   got_local_addr = 0;
   read.vio.mutex.clear();

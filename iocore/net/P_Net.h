@@ -43,7 +43,6 @@ enum Net_Stats
   net_read_bytes_stat,
   net_write_bytes_stat,
   net_connections_currently_open_stat,
-  net_accept_connections_currently_open_stat,
   net_accepts_currently_open_stat,
   net_calls_to_readfromnet_stat,
   net_calls_to_readfromnet_afterpoll_stat,
