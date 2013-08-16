@@ -28,3 +28,5 @@ int64_t cluster_ping_send_interval= 0;
 int64_t cluster_ping_latency_threshold = 0;
 int cluster_ping_retries = 3;
 
+volatile int64_t cluster_current_time = 0;
+

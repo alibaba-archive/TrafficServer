@@ -33,6 +33,8 @@ extern int64_t cluster_ping_send_interval;
 extern int64_t cluster_ping_latency_threshold;
 extern int cluster_ping_retries;
 
+extern volatile int64_t cluster_current_time;
+
 #ifdef __cplusplus
 }
 #endif

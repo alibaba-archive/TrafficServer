@@ -1356,6 +1356,13 @@ void *connect_worker_entrance(void *arg)
 #endif
 
   while (g_continue_flag) {
+#ifdef USE_CLUSTER_TIME
+    timeval tv;
+    gettimeofday(&tv, NULL);
+    cluster_current_time = tv.tv_sec * HRTIME_SECOND +
+      tv.tv_usec * HRTIME_USECOND;
+#endif
+
     if (CURRENT_TIME() - last_cluster_stat_time > 1) {
       log_session_stat();
       log_nio_stats();
