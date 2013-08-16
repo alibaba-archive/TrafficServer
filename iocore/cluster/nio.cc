@@ -59,10 +59,14 @@ struct NIORecords {
    RecRecord * ping_total_count;
    RecRecord * ping_success_count;
    RecRecord * ping_time_used;
+
+   RecRecord * send_delayed_time;
+   RecRecord * push_msg_count; //push to send queue msg count
+   RecRecord * push_msg_bytes; //push to send queue msg bytes
 };
 
 static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL,
-  NULL, NULL, NULL, NULL, NULL, NULL};
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 static int write_wait_time = 1 * HRTIME_MSECOND;   //write wait time calc by cluster IO
 static int io_loop_interval = 0;  //us
 
@@ -132,13 +136,20 @@ static void init_nio_stats()
       "proxy.process.cluster.ping_success_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.ping_time_used = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.ping_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
+
+  nio_records.send_delayed_time = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.send_delayed_time", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.push_msg_count = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.push_msg_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.push_msg_bytes = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.push_msg_bytes", RECD_INT, data_default, RECP_NON_PERSISTENT);
 }
 
 void log_nio_stats()
 {
 	struct worker_thread_context *pThreadContext;
 	struct worker_thread_context *pContextEnd;
-  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   static time_t last_calc_Bps_time = CURRENT_TIME();
   static int64_t last_send_bytes = 0;
 
@@ -159,6 +170,9 @@ void log_nio_stats()
     sum.ping_total_count += pThreadContext->stats.ping_total_count;
     sum.ping_success_count += pThreadContext->stats.ping_success_count;
     sum.ping_time_used += pThreadContext->stats.ping_time_used;
+    sum.send_delayed_time += pThreadContext->stats.send_delayed_time;
+    sum.push_msg_count += pThreadContext->stats.push_msg_count;
+    sum.push_msg_bytes += pThreadContext->stats.push_msg_bytes;
   }
 
   RecDataSetFromInk64(RECD_INT, &nio_records.send_msg_count->data,
@@ -187,6 +201,12 @@ void log_nio_stats()
         sum.ping_success_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.ping_time_used->data,
         sum.ping_time_used);
+  RecDataSetFromInk64(RECD_INT, &nio_records.send_delayed_time->data,
+        sum.send_delayed_time);
+  RecDataSetFromInk64(RECD_INT, &nio_records.push_msg_count->data,
+        sum.push_msg_count);
+  RecDataSetFromInk64(RECD_INT, &nio_records.push_msg_bytes->data,
+        sum.push_msg_bytes);
 
   int time_pass = CURRENT_TIME() - last_calc_Bps_time;
   if (time_pass > 0) {
@@ -571,8 +591,9 @@ inline static int send_ping_message(SocketContext *pSockContext)
   session.fields.ip = g_my_machine_ip;
   session.fields.timestamp = CURRENT_TIME();
   session.fields.seq = 0;   //just use 0
-  return cluster_send_msg_internal(&session,
-      pSockContext, FUNC_ID_CLUSTER_PING_REQUEST, NULL, 0, PRIORITY_HIGH);
+  return cluster_send_msg_internal_ex(&session,
+      pSockContext, FUNC_ID_CLUSTER_PING_REQUEST, NULL, 0, PRIORITY_HIGH,
+      insert_into_send_queue_head);
 }
 
 static int deal_write_event(SocketContext * pSockContext)
@@ -919,6 +940,8 @@ static int deal_write_event(SocketContext * pSockContext)
           msgs[i].pDoneMsgs[k]->bytes_sent);
       */
 
+      pSockContext->thread_context->stats.send_delayed_time +=
+        CURRENT_NS() - msg->in_queue_time;
       release_out_message(pSockContext, msg);
     }
   }
@@ -934,6 +957,7 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
   MachineSessions *pMachineSessions;
   SessionEntry *pSessionEntry;
   void *user_data;
+  int64_t time_used;
 
  /*
   Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
@@ -943,12 +967,19 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
 
   //deal internal ping message first
   if (pHeader->func_id == FUNC_ID_CLUSTER_PING_REQUEST) {
-      return cluster_send_msg_internal(&pHeader->session_id, pSockContext,
-          FUNC_ID_CLUSTER_PING_RESPONSE, NULL, 0, PRIORITY_HIGH);
+      time_used = CURRENT_TIME() - pHeader->session_id.fields.timestamp;
+      if (time_used > 1) {
+        Warning("cluster recv client %s ping, sock: #%d, time pass: %d s",
+            pSockContext->machine->hostname, pSockContext->sock,
+            (int)time_used);
+      }
+      return cluster_send_msg_internal_ex(&pHeader->session_id,
+          pSockContext, FUNC_ID_CLUSTER_PING_RESPONSE, NULL, 0,
+          PRIORITY_HIGH, insert_into_send_queue_head);
   }
   else if (pHeader->func_id == FUNC_ID_CLUSTER_PING_RESPONSE) {
     if (pSockContext->ping_start_time > 0) {
-      int64_t time_used = CURRENT_NS() - pSockContext->ping_start_time;
+      time_used = CURRENT_NS() - pSockContext->ping_start_time;
       pSockContext->thread_context->stats.ping_success_count++;
       pSockContext->thread_context->stats.ping_time_used += time_used;
       if (time_used > cluster_ping_latency_threshold) {
@@ -976,8 +1007,9 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
   if (result != 0) {
     /*
     if (pHeader->session_id.fields.ip != g_my_machine_ip) {  //request by other
-      cluster_send_msg_internal(&pHeader->session_id, pSockContext,
-          FUNC_ID_CONNECTION_CLOSED_NOTIFY, NULL, 0, PRIORITY_HIGH);
+      cluster_send_msg_internal_ex(&pHeader->session_id, pSockContext,
+          FUNC_ID_CONNECTION_CLOSED_NOTIFY, NULL, 0, PRIORITY_HIGH,
+          push_to_send_queue);
     }
     */
 
@@ -1475,6 +1507,39 @@ int push_to_send_queue(SocketContext *pSockContext, OutMessage *pMessage,
 	}
 	pSockContext->send_queues[priority].tail = pMessage;
 	pthread_mutex_unlock(&pSockContext->send_queues[priority].lock);
+
+  __sync_fetch_and_add(&pSockContext->thread_context->stats.push_msg_count, 1);
+  __sync_fetch_and_add(&pSockContext->thread_context->stats.push_msg_bytes,
+      MSG_HEADER_LENGTH + pMessage->header.aligned_data_len);
+  return 0;
+}
+
+int insert_into_send_queue_head(SocketContext *pSockContext, OutMessage *pMessage,
+    const MessagePriority priority)
+{
+	pthread_mutex_lock(&pSockContext->send_queues[priority].lock);
+	if (pSockContext->send_queues[priority].head == NULL) {
+		pSockContext->send_queues[priority].head = pMessage;
+    pSockContext->send_queues[priority].tail = pMessage;
+	}
+	else {
+    if (pSockContext->send_queues[priority].head->bytes_sent == 0) { //head message not send yet
+      pMessage->next = pSockContext->send_queues[priority].head;
+      pSockContext->send_queues[priority].head = pMessage;
+    }
+    else {
+      pMessage->next = pSockContext->send_queues[priority].head->next;
+      pSockContext->send_queues[priority].head->next = pMessage;
+      if (pMessage->next == NULL) {
+        pSockContext->send_queues[priority].tail = pMessage;
+      }
+    }
+	}
+	pthread_mutex_unlock(&pSockContext->send_queues[priority].lock);
+
+  __sync_fetch_and_add(&pSockContext->thread_context->stats.push_msg_count, 1);
+  __sync_fetch_and_add(&pSockContext->thread_context->stats.push_msg_bytes,
+      MSG_HEADER_LENGTH + pMessage->header.aligned_data_len);
 
   return 0;
 }
