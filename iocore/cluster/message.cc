@@ -96,6 +96,7 @@ int cluster_send_message(ClusterSession session, const int func_id,
     pMessage->header.session_id = session;
     pMessage->header.msg_seq = __sync_add_and_fetch(
         &pSessionEntry->current_msg_seq, 1);
+    pMessage->in_queue_time = CURRENT_NS();
     pMessage->bytes_sent = 0;
     pMessage->blocks.m_ptr = NULL;
     pMessage->next = NULL;
@@ -126,16 +127,17 @@ int cluster_send_message(ClusterSession session, const int func_id,
         pMessage, priority);
   } while (0);
  
-  if (result == EIO) {
+  if (result != 0) {
     release_out_message(pSockContext, pMessage);
   }
 
   return result;
 }
 
-int cluster_send_msg_internal(const ClusterSession *session,
+int cluster_send_msg_internal_ex(const ClusterSession *session,
     SocketContext *pSockContext, const int func_id,
-	void *data, const int data_len, const MessagePriority priority)
+	void *data, const int data_len, const MessagePriority priority,
+  push_to_send_queue_func push_to_queue_func)
 {
   OutMessage *pMessage;
   int result;
@@ -164,6 +166,7 @@ int cluster_send_msg_internal(const ClusterSession *session,
     pMessage->header.func_id = func_id;
     pMessage->header.session_id = *session;
     pMessage->header.msg_seq = 11111;
+    pMessage->in_queue_time = CURRENT_NS();
     pMessage->bytes_sent = 0;
     pMessage->blocks.m_ptr = NULL;
     pMessage->next = NULL;
@@ -192,11 +195,10 @@ int cluster_send_msg_internal(const ClusterSession *session,
 
     pMessage->header.aligned_data_len = BYTE_ALIGN16(
         pMessage->header.data_len);
-    result = push_to_send_queue(pSockContext,
-        pMessage, priority);
+    result = push_to_queue_func(pSockContext, pMessage, priority);
   } while (0);
  
-  if (result == EIO) {
+  if (result != 0) {
     release_out_message(pSockContext, pMessage);
   }
 

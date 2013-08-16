@@ -25,9 +25,13 @@ extern "C" {
   extern Allocator g_out_message_allocator;
 #endif
 
-int cluster_send_msg_internal(const ClusterSession *session,
+typedef int (*push_to_send_queue_func)(SocketContext *pSockContext, OutMessage *pMessage,
+    const MessagePriority priority);
+
+int cluster_send_msg_internal_ex(const ClusterSession *session,
     SocketContext *pSockContext, const int func_id,
-	void *data, const int data_len, const MessagePriority priority);
+	void *data, const int data_len, const MessagePriority priority,
+  push_to_send_queue_func push_to_queue_func);
 
 inline void release_out_message(SocketContext *pSockContext,
     OutMessage *msg)

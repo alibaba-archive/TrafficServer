@@ -117,6 +117,7 @@ typedef struct out_msg_entry {
 	struct out_msg_entry *next; //for send queue
 	int bytes_sent;    //important: including msg header
   int data_type;     //buffer or object
+  int64_t in_queue_time; //the time when push to send queue
 } OutMessage;
 
 typedef struct read_manager {
@@ -165,6 +166,10 @@ struct SocketStats {
   int64_t send_bytes;
   int64_t call_writev_count;
   int64_t send_retry_count;
+  int64_t send_delayed_time;
+
+  volatile int64_t push_msg_count; //push to send queue msg count
+  volatile int64_t push_msg_bytes; //push to send queue msg bytes
 
   int64_t recv_msg_count;  //recv msg count
   int64_t recv_bytes;
