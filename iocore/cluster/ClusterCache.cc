@@ -2289,16 +2289,9 @@ CacheContinuation::VCdataWrite(int event, void *data)
   switch (event) {
     case CLUSTER_CACHE_DATA_WRITE_BEGIN:
     {
-      ink_assert(data && expect_next);
+      ink_assert(data && expect_next && !writer_aborted);
       expect_next = false;
       ClusterCont *cc = (ClusterCont *) data;
-
-      if (writer_aborted) {
-        // tell the remote side not send anymore
-        ink_debug_assert(!"why the writer will be aborted because of no event");
-        cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
-        break;
-      }
 
       // copy
       Ptr<IOBufferData> buf = cc->copy_data();
@@ -2328,7 +2321,6 @@ CacheContinuation::VCdataWrite(int event, void *data)
           break;
         }
       }
-
 
       mbuf = new_empty_MIOBuffer();
       reader = mbuf->alloc_reader();
@@ -2435,7 +2427,7 @@ CacheContinuation::VCdataWrite(int event, void *data)
       cache_vc->do_io_close(EHTTP_ERROR);
       cache_vc = NULL;
       vio = NULL;
-      ink_debug_assert(!"why the write is in error!");
+      Warning("the writer is in aborted!");
       // delay free
       if (expect_next)
         return EVENT_CONT;
@@ -2446,9 +2438,6 @@ CacheContinuation::VCdataWrite(int event, void *data)
     {
       ink_assert(expect_next);
       expect_next = false;
-      cache_vc->do_io_close(EHTTP_ERROR);
-      cache_vc = NULL;
-      vio = NULL;
       break;
     }
     default:
