@@ -111,10 +111,6 @@ Cache::open_read(Continuation * cont, CacheKey * key, CacheHTTPHdr * request,
   {
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock || (od = vol->open_read(key)) || dir_probe(key, vol, &result, &last_collision)) {
-
-      if (od && od->num_readers >= num_max_readers_from_writer)
-        goto Lbusy;
-
       c = new_CacheVC(cont);
       c->first_key = c->key = c->earliest_key = *key;
       c->vol = vol;
@@ -145,10 +141,6 @@ Cache::open_read(Continuation * cont, CacheKey * key, CacheHTTPHdr * request,
       default: return &c->_action;
     }
   }
-Lbusy:
-  CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
-  cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, (void *) -ECACHE_DOC_BUSY);
-  return ACTION_RESULT_DONE;
 Lmiss:
   CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
   cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, (void *) -ECACHE_NO_DOC);
@@ -1176,7 +1168,7 @@ CacheVC::openReadStartHead(int event, Event * e)
     // being written to the cache.
     OpenDirEntry *cod = vol->open_read(&key);
     if (cod && !f.read_from_writer_called) {
-      if (f.lookup || cod->num_readers >= num_max_readers_from_writer) {
+      if (f.lookup) {
         err = ECACHE_DOC_BUSY;
         goto Ldone;
       }
