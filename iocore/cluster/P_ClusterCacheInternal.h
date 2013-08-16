@@ -427,7 +427,10 @@ free_CacheCont(CacheContinuation *c) {
     c->pending_action = NULL;
   }
   if (c->cache_vc) {
-    c->cache_vc->do_io(VIO::CLOSE);
+    if (c->cache_vc->vio.op == VIO::READ)
+      c->cache_vc->do_io(VIO::CLOSE);
+    else
+      c->cache_vc->do_io(VIO::ABORT);
     c->cache_vc = NULL;
   }
   if (c->mbuf) {
