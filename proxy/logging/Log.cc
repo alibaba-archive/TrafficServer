@@ -77,15 +77,12 @@ size_t Log::numInactiveObjects;
 size_t Log::maxInactiveObjects;
 
 // Flush thread stuff
-ink_mutex *Log::preproc_mutex;
-ink_cond *Log::preproc_cond;
-ink_mutex *Log::flush_mutex;
-ink_cond *Log::flush_cond;
+EventNotify *Log::preproc_notify;
+EventNotify *Log::flush_notify;
 InkAtomicList *Log::flush_data_list;
 
 // Collate thread stuff
-ink_mutex Log::collate_mutex;
-ink_cond Log::collate_cond;
+EventNotify Log::collate_notify;
 ink_thread Log::collate_thread;
 int Log::collation_accept_file_descriptor;
 int Log::collation_preproc_threads;
@@ -190,10 +187,10 @@ struct PeriodicWakeup : Continuation
   {
       NOWARN_UNUSED (event); NOWARN_UNUSED (e);
       for (int i = 0; i < m_preproc_threads; i++) {
-        ink_cond_signal (&Log::preproc_cond[i]);
+        Log::preproc_notify[i].signal();
       }
       for (int i = 0; i < m_flush_threads; i++) {
-        ink_cond_signal (&Log::flush_cond[i]);
+        Log::flush_notify[i].signal();
       }
       return EVENT_CONT;
   }
@@ -1076,17 +1073,13 @@ Log::create_threads()
   if (!(init_status & THREADS_CREATED)) {
 
     char desc[64];
-    preproc_mutex = new ink_mutex[collation_preproc_threads];
-    preproc_cond = new ink_cond[collation_preproc_threads];
+    preproc_notify = new EventNotify[collation_preproc_threads];
 
     // start the preproc threads
     //
     // no need for the conditional var since it will be relying on
     // on the event system.
     for (int i = 0; i < collation_preproc_threads; i++) {
-      sprintf(desc, "Logging preproc thread mutex[%d]", i);
-      ink_mutex_init(&preproc_mutex[i], desc);
-      ink_cond_init(&preproc_cond[i]);
       Continuation *preproc_cont = NEW(new LoggingPreprocContinuation(i));
       sprintf(desc, "[LOG_PREPROC %d]", i);
       eventProcessor.spawn_thread(preproc_cont, desc);
@@ -1096,13 +1089,9 @@ Log::create_threads()
     // TODO: Enable multiple flush threads, such as
     //       one flush thread per file.
     //
-    flush_mutex = new ink_mutex;
-    flush_cond = new ink_cond;
+    flush_notify = new EventNotify;
     flush_data_list = new InkAtomicList;
 
-    sprintf(desc, "Logging flush thread mutex");
-    ink_mutex_init(flush_mutex, desc);
-    ink_cond_init(flush_cond);
     sprintf(desc, "Logging flush buffer list");
     ink_atomiclist_init(flush_data_list, desc, 0);
     Continuation *flush_cont = NEW(new LoggingFlushContinuation(0));
@@ -1121,8 +1110,6 @@ Log::create_threads()
     // much overhead associated with keeping an ink_thread blocked on a
     // condition variable.
     //
-    ink_mutex_init(&collate_mutex, "Collate thread mutex");
-    ink_cond_init(&collate_cond);
     Continuation *collate_continuation = NEW(new LoggingCollateContinuation);
     Event *collate_event = eventProcessor.spawn_thread(collate_continuation);
     collate_thread = collate_event->ethread->tid;
@@ -1249,7 +1236,7 @@ Log::preproc_thread_main(void *args)
 
   Debug("log-preproc", "log preproc thread is alive ...");
 
-  ink_mutex_acquire(&preproc_mutex[idx]);
+  Log::preproc_notify[idx].lock();
 
   while (true) {
     buffers_preproced = config->log_object_manager.preproc_buffers(idx);
@@ -1267,11 +1254,11 @@ Log::preproc_thread_main(void *args)
     // check the queue and find there is nothing to do, then wait
     // again.
     //
-    ink_cond_wait (&preproc_cond[idx], &preproc_mutex[idx]);
+    Log::preproc_notify[idx].wait();
   }
 
   /* NOTREACHED */
-  ink_mutex_release(&preproc_mutex[idx]);
+  Log::preproc_notify[idx].unlock();
   return NULL;
 }
 
@@ -1287,7 +1274,7 @@ Log::flush_thread_main(void *args)
   int len, bytes_written, total_bytes;
   SLL<LogFlushData, LogFlushData::Link_link> link, invert_link;
 
-  ink_mutex_acquire(flush_mutex);
+  Log::flush_notify->lock();
 
   while (true) {
     fdata = (LogFlushData *) ink_atomiclist_popall(flush_data_list);
@@ -1373,11 +1360,11 @@ Log::flush_thread_main(void *args)
     // check the queue and find there is nothing to do, then wait
     // again.
     //
-    ink_cond_wait(flush_cond, flush_mutex);
+    Log::flush_notify->wait();
   }
 
   /* NOTREACHED */
-  ink_mutex_release(flush_mutex);
+  Log::flush_notify->unlock();
   return NULL;
 }
 
@@ -1403,7 +1390,7 @@ Log::collate_thread_main(void *args)
 
   Debug("log-thread", "Log collation thread is alive ...");
 
-  ink_mutex_acquire(&collate_mutex);
+  Log::collate_notify.lock();
 
   while (true) {
     ink_assert(Log::config != NULL);
@@ -1413,7 +1400,7 @@ Log::collate_thread_main(void *args)
     // wake-ups.
     //
     while (!Log::config->am_collation_host()) {
-      ink_cond_wait(&collate_cond, &collate_mutex);
+      Log::collate_notify.wait();
     }
 
     // Ok, at this point we know we're a log collation host, so get to
@@ -1432,7 +1419,7 @@ Log::collate_thread_main(void *args)
       //
       // go to sleep ...
       //
-      ink_cond_wait(&collate_cond, &collate_mutex);
+      Log::collate_notify.wait();
       continue;
     }
 
@@ -1495,7 +1482,7 @@ Log::collate_thread_main(void *args)
   }
 
   /* NOTREACHED */
-  ink_mutex_release(&collate_mutex);
+  Log::collate_notify.unlock();
   return NULL;
 }
 
