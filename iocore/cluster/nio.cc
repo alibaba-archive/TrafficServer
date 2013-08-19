@@ -42,20 +42,34 @@ message_deal_func g_msg_deal_func = NULL;
 machine_change_notify_func g_machine_change_notify = NULL;
 
 struct NIORecords {
-   RecRecord * call_writev_count;
-   RecRecord * send_retry_count;
-   RecRecord * call_read_count;
+  RecRecord * call_writev_count;
+  RecRecord * send_retry_count;
+  RecRecord * call_read_count;
 
-   RecRecord * write_wait_time;
-   RecRecord * epoll_wait_count;
-   RecRecord * loop_usleep_count;
-   RecRecord * loop_usleep_time;
-   RecRecord * io_loop_interval;
+  RecRecord * write_wait_time;
+  RecRecord * epoll_wait_count;
+  RecRecord * epoll_wait_time_used;
+  RecRecord * loop_usleep_count;
+  RecRecord * loop_usleep_time;
+  RecRecord * io_loop_interval;
+
+  RecRecord * max_write_loop_time_used;
+  RecRecord * max_read_loop_time_used;
+  RecRecord * max_epoll_time_used;
+  RecRecord * max_usleep_time_used;
+  RecRecord * max_callback_time_used;
 };
 
-static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL,
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 static int write_wait_time = 1 * HRTIME_MSECOND;   //write wait time calc by cluster IO
 static int io_loop_interval = 0;  //us
+
+static volatile int64_t max_write_loop_time_used = 0;
+static volatile int64_t max_read_loop_time_used = 0;
+static volatile int64_t max_epoll_time_used = 0;
+static volatile int64_t max_usleep_time_used = 0;
+static volatile int64_t max_callback_time_used = 0;
 
 inline int get_iovec(IOBufferBlock *blocks, IOVec *iovec, int size) {
   int niov;
@@ -105,6 +119,8 @@ static void init_nio_stats()
       "proxy.process.cluster.io.call_read_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.epoll_wait_count = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.io.epoll_wait_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.epoll_wait_time_used = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.epoll_wait_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.loop_usleep_count = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.io.loop_usleep_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.loop_usleep_time = RecRegisterStat(RECT_PROCESS,
@@ -120,6 +136,17 @@ static void init_nio_stats()
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.send_delayed_time", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.push_msg_count", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.push_msg_bytes", 0, RECP_NON_PERSISTENT);
+
+  nio_records.max_write_loop_time_used = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.max_write_loop_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.max_read_loop_time_used = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.max_read_loop_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.max_epoll_time_used = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.max_epoll_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.max_usleep_time_used = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.max_usleep_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.max_callback_time_used = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.max_callback_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
 }
 
 void log_nio_stats()
@@ -127,7 +154,7 @@ void log_nio_stats()
   RecData data;
 	struct worker_thread_context *pThreadContext;
 	struct worker_thread_context *pContextEnd;
-  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   static time_t last_calc_Bps_time = CURRENT_TIME();
   static int64_t last_send_bytes = 0;
 
@@ -143,6 +170,7 @@ void log_nio_stats()
     sum.recv_bytes += pThreadContext->stats.recv_bytes;
     sum.call_read_count += pThreadContext->stats.call_read_count;
     sum.epoll_wait_count += pThreadContext->stats.epoll_wait_count;
+    sum.epoll_wait_time_used += pThreadContext->stats.epoll_wait_time_used;
     sum.loop_usleep_count += pThreadContext->stats.loop_usleep_count;
     sum.loop_usleep_time += pThreadContext->stats.loop_usleep_time;
     sum.ping_total_count += pThreadContext->stats.ping_total_count;
@@ -182,10 +210,23 @@ void log_nio_stats()
         sum.call_read_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.epoll_wait_count->data,
         sum.epoll_wait_count);
+  RecDataSetFromInk64(RECD_INT, &nio_records.epoll_wait_time_used->data,
+        sum.epoll_wait_time_used);
   RecDataSetFromInk64(RECD_INT, &nio_records.loop_usleep_count->data,
         sum.loop_usleep_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.loop_usleep_time->data,
         sum.loop_usleep_time);
+
+  RecDataSetFromInk64(RECD_INT, &nio_records.max_write_loop_time_used->data,
+        max_write_loop_time_used);
+  RecDataSetFromInk64(RECD_INT, &nio_records.max_read_loop_time_used->data,
+        max_read_loop_time_used);
+  RecDataSetFromInk64(RECD_INT, &nio_records.max_epoll_time_used->data,
+        max_epoll_time_used);
+  RecDataSetFromInk64(RECD_INT, &nio_records.max_usleep_time_used->data,
+        max_usleep_time_used);
+  RecDataSetFromInk64(RECD_INT, &nio_records.max_callback_time_used->data,
+        max_callback_time_used);
 
   int time_pass = CURRENT_TIME() - last_calc_Bps_time;
   if (time_pass > 0) {
@@ -1015,8 +1056,13 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
 #endif
  
   if (call_func) {
+    int64_t deal_start_time = CURRENT_NS();
     g_msg_deal_func(pHeader->session_id, user_data,
         pHeader->func_id, blocks, pHeader->data_len);
+    int64_t time_used = CURRENT_NS() - deal_start_time;
+    if (time_used > max_callback_time_used) {
+      max_callback_time_used = time_used;
+    }
   }
   else {
     push_in_message(pHeader->session_id, pMachineSessions, pSessionEntry,
@@ -1408,6 +1454,25 @@ inline static void schedule_sock_write(struct worker_thread_context * pThreadCon
   }
 }
 
+inline static int64_t get_current_time()
+{
+  timeval tv;
+  gettimeofday(&tv, NULL);
+  return tv.tv_sec * HRTIME_SECOND +
+    tv.tv_usec * HRTIME_USECOND;
+}
+
+#define GET_MAX_TIME_USED(v) \
+  do { \
+    deal_end_time = get_current_time(); \
+    time_used = deal_end_time - deal_start_time; \
+    if (time_used > v) { \
+      v = time_used; \
+    } \
+    deal_start_time = deal_end_time; \
+  } while (0)
+
+
 static void *work_thread_entrance(void* arg)
 {
 #define MIN_USLEEP_TIME 100
@@ -1416,6 +1481,9 @@ static void *work_thread_entrance(void* arg)
 	int count;
   int remain_time;
   int64_t loop_start_time;
+  int64_t deal_start_time;
+  int64_t deal_end_time;
+  int64_t time_used;
 	struct worker_thread_context *pThreadContext;
 
 	pThreadContext = (struct worker_thread_context *)arg;
@@ -1428,12 +1496,20 @@ static void *work_thread_entrance(void* arg)
 #endif
 
 	while (g_continue_flag) {
-    loop_start_time = CURRENT_NS();
+    //loop_start_time = CURRENT_NS();
+    loop_start_time = get_current_time();
+    deal_start_time = loop_start_time;
     schedule_sock_write(pThreadContext);
+
+    GET_MAX_TIME_USED(max_write_loop_time_used);
 
     pThreadContext->stats.epoll_wait_count++;
 		count = epoll_wait(pThreadContext->epoll_fd,
 			pThreadContext->events, pThreadContext->alloc_size, 1);
+
+    pThreadContext->stats.epoll_wait_time_used += get_current_time() - deal_start_time;
+    GET_MAX_TIME_USED(max_epoll_time_used);
+
 		if (count == 0) { //timeout
 		}
     else if (count < 0) {
@@ -1446,6 +1522,7 @@ static void *work_thread_entrance(void* arg)
 		}
     else {
       deal_epoll_events(pThreadContext, count);
+      GET_MAX_TIME_USED(max_read_loop_time_used);
     }
 
     if (io_loop_interval > MIN_USLEEP_TIME) {
@@ -1455,6 +1532,7 @@ static void *work_thread_entrance(void* arg)
         pThreadContext->stats.loop_usleep_count++;
         pThreadContext->stats.loop_usleep_time += remain_time;
         usleep(remain_time);
+        GET_MAX_TIME_USED(max_usleep_time_used);
       }
     }
 	}

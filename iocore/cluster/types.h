@@ -175,6 +175,7 @@ struct SocketStats {
   int64_t recv_bytes;
   int64_t call_read_count;
   int64_t epoll_wait_count;
+  int64_t epoll_wait_time_used;
   int64_t loop_usleep_count;
   int64_t loop_usleep_time;
 
