@@ -1429,10 +1429,10 @@ inline static void schedule_sock_write(struct worker_thread_context * pThreadCon
       }
     }
 
-    result = deal_write_event(*ppSockContext);
-    if (result == 0) {  //can send more data
+    while ((result=deal_write_event(*ppSockContext)) == 0) {
     }
-    else if (result == EAGAIN) {
+
+    if (result == EAGAIN) {
       (*ppSockContext)->next_write_time = current_time + write_wait_time;
     }
     else {  //error
