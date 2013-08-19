@@ -1177,9 +1177,7 @@ int tcpsendfile_ex(int sock, const char *filename, const int64_t file_offset, \
 int tcpsetserveropt(int fd, const int timeout)
 {
 	int flags;
-
 	struct linger linger;
-	struct timeval waittime;
 
 	linger.l_onoff = 0;
 	linger.l_linger = 0;
@@ -1192,23 +1190,26 @@ int tcpsetserveropt(int fd, const int timeout)
 		return errno != 0 ? errno : ENOMEM;
 	}
 
-	waittime.tv_sec = timeout;
-	waittime.tv_usec = 0;
-	if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO,
-               &waittime, (socklen_t)sizeof(struct timeval)) < 0)
-	{
-		Warning("file: "__FILE__", line: %d, " \
-			"setsockopt failed, errno: %d, error info: %s", \
-			__LINE__, errno, STRERROR(errno));
-	}
+  if (timeout > 0) {
+    struct timeval waittime;
+    waittime.tv_sec = timeout;
+    waittime.tv_usec = 0;
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO,
+          &waittime, (socklen_t)sizeof(struct timeval)) < 0)
+    {
+      Warning("file: "__FILE__", line: %d, " \
+          "setsockopt failed, errno: %d, error info: %s", \
+          __LINE__, errno, STRERROR(errno));
+    }
 
-	if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,
-               &waittime, (socklen_t)sizeof(struct timeval)) < 0)
-	{
-		Warning("file: "__FILE__", line: %d, " \
-			"setsockopt failed, errno: %d, error info: %s", \
-			__LINE__, errno, STRERROR(errno));
-	}
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,
+          &waittime, (socklen_t)sizeof(struct timeval)) < 0)
+    {
+      Warning("file: "__FILE__", line: %d, " \
+          "setsockopt failed, errno: %d, error info: %s", \
+          __LINE__, errno, STRERROR(errno));
+    }
+  }
 
 	flags = 1;
 	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, \
@@ -1363,7 +1364,7 @@ int tcpsetnonblockopt(int fd)
 	return 0;
 }
 
-int tcpsetnodelay(int fd, const int timeout)
+int tcpsetnodelay(int fd)
 {
 	int flags;
 

@@ -811,7 +811,7 @@ static int do_connect(ConnectContext *pConnectContext, const bool needLock)
     close_connection(pSockContext);
     return result;
   }
-  tcpsetnodelay(pSockContext->sock, g_network_timeout);
+  tcpsetnodelay(pSockContext->sock);
 
   addr.sin_family = PF_INET;
   addr.sin_port = htons(pSockContext->machine->cluster_port);
@@ -998,7 +998,7 @@ int connection_manager_init(const unsigned int my_ip, const int port)
 		return errno != 0 ? errno : EIO;
 	}
 
-	if ((result=tcpsetserveropt(server_sock, g_network_timeout)) != 0)
+	if ((result=tcpsetserveropt(server_sock, 0)) != 0)
 	{
 		return result;
 	}
@@ -1207,7 +1207,7 @@ static int deal_income_connection(const int incomesock)
   if ((result=set_nonblock(incomesock)) != 0) {
     return result;
   }
-  tcpsetnodelay(incomesock, g_network_timeout);
+  tcpsetnodelay(incomesock);
 
   ip = getPeerIpaddr(incomesock, client_ip, sizeof(client_ip));
   machine = get_machine(ip, g_server_port);

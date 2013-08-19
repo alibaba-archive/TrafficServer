@@ -162,7 +162,7 @@ int tcpsetnonblockopt(int fd);
  *          timeout: read & write timeout
  *  return: error no, 0 success, != 0 fail
 */
-int tcpsetnodelay(int fd, const int timeout);
+int tcpsetnodelay(int fd);
 
 /** set socket keep-alive
  *  parameters:

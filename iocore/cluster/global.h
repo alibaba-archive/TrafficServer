@@ -16,7 +16,6 @@ extern int g_accept_threads;
 extern int g_work_threads;
 extern int g_connections_per_machine;   //must be an even number
 extern int g_connect_timeout;
-extern int g_network_timeout;
 extern int g_server_port;
 extern int g_thread_stack_size;
 extern int g_socket_recv_bufsize;
