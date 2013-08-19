@@ -7,20 +7,13 @@ class IOBufferData;
 class IOBufferBlock;
 
 #define CLUSTER_DEBUG_TAG "cluster_io"
-#define USE_CLUSTER_TIME  1
 
 #define new_RecvBuffer(len) \
   new_IOBufferData(iobuffer_size_to_index(len, MAX_BUFFER_SIZE_INDEX))
 
-#ifdef USE_CLUSTER_TIME
-#define CURRENT_TIME() (cluster_current_time / HRTIME_SECOND)
-#define CURRENT_MS() (cluster_current_time / HRTIME_MSECOND)
-#define CURRENT_NS() (cluster_current_time / HRTIME_NSECOND)
-#else
 #define CURRENT_TIME() (ink_get_hrtime() / HRTIME_SECOND)
 #define CURRENT_MS() (ink_get_hrtime() / HRTIME_MSECOND)
 #define CURRENT_NS() (ink_get_hrtime() / HRTIME_NSECOND)
-#endif
 
 #define MINI_MESSAGE_SIZE     64  //use internal buffer to store the mini message
 

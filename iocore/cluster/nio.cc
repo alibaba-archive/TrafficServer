@@ -222,16 +222,6 @@ void log_nio_stats()
   }
 }
 
-inline static void get_current_time()
-{
-#ifdef USE_CLUSTER_TIME
-    timeval tv;
-    gettimeofday(&tv, NULL);
-    cluster_current_time = tv.tv_sec * HRTIME_SECOND +
-      tv.tv_usec * HRTIME_USECOND;
-#endif
-}
-
 int nio_init()
 {
 	int result;
@@ -241,8 +231,6 @@ int nio_init()
 	struct worker_thread_context *pThreadContext;
 	struct worker_thread_context *pContextEnd;
 	pthread_t tid;
-
-  get_current_time();
 
 	if ((result=init_pthread_lock(&worker_thread_lock)) != 0) {
 		return result;
@@ -1440,7 +1428,6 @@ static void *work_thread_entrance(void* arg)
 #endif
 
 	while (g_continue_flag) {
-    get_current_time();
     loop_start_time = CURRENT_NS();
     schedule_sock_write(pThreadContext);
 
@@ -1462,7 +1449,6 @@ static void *work_thread_entrance(void* arg)
     }
 
     if (io_loop_interval > MIN_USLEEP_TIME) {
-      get_current_time();
       remain_time = io_loop_interval - (int)((CURRENT_NS() -
           loop_start_time) / HRTIME_USECOND);
       if (remain_time >= MIN_USLEEP_TIME && remain_time <= io_loop_interval) {
