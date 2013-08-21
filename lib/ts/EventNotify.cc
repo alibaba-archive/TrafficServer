@@ -104,6 +104,14 @@ EventNotify::timedwait(ink_timestruc *abstime)
   timeout = (abstime->tv_sec - curtime.tv_sec) * 1000 
           + (abstime->tv_nsec / 1000  - curtime.tv_usec) / 1000;
 
+  //
+  // When timeout < 0, epoll_wait() will wait indefinitely, but
+  // pthread_cond_timedwait() will return ETIMEDOUT immediately.
+  // We should keep compatible with pthread_cond_timedwait() here.
+  //
+  if (timeout < 0)
+    return ETIMEDOUT;
+
   do {
     nr_fd = epoll_wait(m_epoll_fd, &ev, 1, timeout);
   } while (nr_fd == -1 && errno == EINTR);
