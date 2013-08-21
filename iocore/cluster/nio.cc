@@ -52,23 +52,31 @@ struct NIORecords {
   RecRecord * loop_usleep_time;
   RecRecord * io_loop_interval;
 
+#ifdef DEBUG
   RecRecord * max_write_loop_time_used;
   RecRecord * max_read_loop_time_used;
   RecRecord * max_epoll_time_used;
   RecRecord * max_usleep_time_used;
   RecRecord * max_callback_time_used;
+#endif
 };
 
-static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL,
-  NULL, NULL, NULL, NULL, NULL, NULL};
+static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL
+#ifdef DEBUG
+  , NULL, NULL, NULL, NULL, NULL
+#endif
+};
+
 static int write_wait_time = 1 * HRTIME_MSECOND;   //write wait time calc by cluster IO
 static int io_loop_interval = 0;  //us
 
+#ifdef DEBUG
 static volatile int64_t max_write_loop_time_used = 0;
 static volatile int64_t max_read_loop_time_used = 0;
 static volatile int64_t max_epoll_time_used = 0;
 static volatile int64_t max_usleep_time_used = 0;
 static volatile int64_t max_callback_time_used = 0;
+#endif
 
 inline int get_iovec(IOBufferBlock *blocks, IOVec *iovec, int size) {
   int niov;
@@ -135,6 +143,7 @@ static void init_nio_stats()
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.push_msg_count", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.push_msg_bytes", 0, RECP_NON_PERSISTENT);
 
+#ifdef DEBUG
   nio_records.max_write_loop_time_used = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.io.max_write_loop_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.max_read_loop_time_used = RecRegisterStat(RECT_PROCESS,
@@ -145,6 +154,7 @@ static void init_nio_stats()
       "proxy.process.cluster.io.max_usleep_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.max_callback_time_used = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.io.max_callback_time_used", RECD_INT, data_default, RECP_NON_PERSISTENT);
+#endif
 }
 
 void log_nio_stats()
@@ -215,6 +225,7 @@ void log_nio_stats()
   RecDataSetFromInk64(RECD_INT, &nio_records.loop_usleep_time->data,
         sum.loop_usleep_time);
 
+#ifdef DEBUG
   RecDataSetFromInk64(RECD_INT, &nio_records.max_write_loop_time_used->data,
         max_write_loop_time_used);
   RecDataSetFromInk64(RECD_INT, &nio_records.max_read_loop_time_used->data,
@@ -225,6 +236,7 @@ void log_nio_stats()
         max_usleep_time_used);
   RecDataSetFromInk64(RECD_INT, &nio_records.max_callback_time_used->data,
         max_callback_time_used);
+#endif
 
   int time_pass = CURRENT_TIME() - last_calc_Bps_time;
   if (time_pass > 0) {
@@ -1055,13 +1067,19 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
 #endif
  
   if (call_func) {
+#ifdef DEBUG
     int64_t deal_start_time = CURRENT_NS();
+#endif
+
     g_msg_deal_func(pHeader->session_id, user_data,
         pHeader->func_id, blocks, pHeader->data_len);
+
+#ifdef DEBUG
     int64_t time_used = CURRENT_NS() - deal_start_time;
     if (time_used > max_callback_time_used) {
       max_callback_time_used = time_used;
     }
+#endif
   }
   else {
     push_in_message(pHeader->session_id, pMachineSessions, pSessionEntry,
@@ -1482,8 +1500,10 @@ static void *work_thread_entrance(void* arg)
   int remain_time;
   int64_t loop_start_time;
   int64_t deal_start_time;
+#ifdef DEBUG
   int64_t deal_end_time;
   int64_t time_used;
+#endif
 	struct worker_thread_context *pThreadContext;
 
 	pThreadContext = (struct worker_thread_context *)arg;
@@ -1496,19 +1516,28 @@ static void *work_thread_entrance(void* arg)
 #endif
 
 	while (g_continue_flag) {
-    //loop_start_time = CURRENT_NS();
     loop_start_time = get_current_time();
+#ifdef DEBUG
     deal_start_time = loop_start_time;
+#endif
+
     schedule_sock_write(pThreadContext);
 
+#ifdef DEBUG
     GET_MAX_TIME_USED(max_write_loop_time_used);
+#endif
 
+#ifndef DEBUG
+    deal_start_time = CURRENT_NS();
+#endif
     pThreadContext->stats.epoll_wait_count++;
 		count = epoll_wait(pThreadContext->epoll_fd,
 			pThreadContext->events, pThreadContext->alloc_size, 1);
 
-    pThreadContext->stats.epoll_wait_time_used += get_current_time() - deal_start_time;
+    pThreadContext->stats.epoll_wait_time_used += CURRENT_NS() - deal_start_time;
+#ifdef DEBUG
     GET_MAX_TIME_USED(max_epoll_time_used);
+#endif
 
 		if (count == 0) { //timeout
 		}
@@ -1522,7 +1551,10 @@ static void *work_thread_entrance(void* arg)
 		}
     else {
       deal_epoll_events(pThreadContext, count);
+
+#ifdef DEBUG
       GET_MAX_TIME_USED(max_read_loop_time_used);
+#endif
     }
 
     if (io_loop_interval > MIN_USLEEP_TIME) {
@@ -1532,7 +1564,10 @@ static void *work_thread_entrance(void* arg)
         pThreadContext->stats.loop_usleep_count++;
         pThreadContext->stats.loop_usleep_time += remain_time;
         usleep(remain_time);
+
+#ifdef DEBUG
         GET_MAX_TIME_USED(max_usleep_time_used);
+#endif
       }
     }
 	}
