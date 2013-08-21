@@ -24,6 +24,7 @@
 #define TS_INLINE inline
 #endif
 #include "I_IOBuffer.h"
+#include "I_EventSystem.h"
 #include "P_Cluster.h"
 #include "P_RecCore.h"
 #include "ink_config.h"
@@ -42,9 +43,7 @@ message_deal_func g_msg_deal_func = NULL;
 machine_change_notify_func g_machine_change_notify = NULL;
 
 struct NIORecords {
-  RecRecord * call_writev_count;
   RecRecord * send_retry_count;
-  RecRecord * call_read_count;
 
   RecRecord * write_wait_time;
   RecRecord * epoll_wait_count;
@@ -61,7 +60,7 @@ struct NIORecords {
 };
 
 static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL,
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+  NULL, NULL, NULL, NULL, NULL, NULL};
 static int write_wait_time = 1 * HRTIME_MSECOND;   //write wait time calc by cluster IO
 static int io_loop_interval = 0;  //us
 
@@ -111,12 +110,11 @@ static void init_nio_stats()
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.recv_msg_count", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.recv_bytes", 0, RECP_NON_PERSISTENT);
 
-  nio_records.call_writev_count = RecRegisterStat(RECT_PROCESS,
-      "proxy.process.cluster.io.call_writev_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.call_writev_count", 0, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.call_read_count", 0, RECP_NON_PERSISTENT);
+
   nio_records.send_retry_count = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.io.send_retry_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
-  nio_records.call_read_count = RecRegisterStat(RECT_PROCESS,
-      "proxy.process.cluster.io.call_read_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.epoll_wait_count = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.io.epoll_wait_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.epoll_wait_time_used = RecRegisterStat(RECT_PROCESS,
@@ -201,13 +199,13 @@ void log_nio_stats()
   RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.push_msg_count", RECD_INT, &data, NULL); 
   data.rec_int = sum.push_msg_bytes;
   RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.push_msg_bytes", RECD_INT, &data, NULL); 
+  data.rec_int = sum.call_writev_count;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.call_writev_count", RECD_INT, &data, NULL); 
+  data.rec_int = sum.call_read_count;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.call_read_count", RECD_INT, &data, NULL); 
 
-  RecDataSetFromInk64(RECD_INT, &nio_records.call_writev_count->data,
-        sum.call_writev_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.send_retry_count->data,
         sum.send_retry_count);
-  RecDataSetFromInk64(RECD_INT, &nio_records.call_read_count->data,
-        sum.call_read_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.epoll_wait_count->data,
         sum.epoll_wait_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.epoll_wait_time_used->data,
@@ -834,7 +832,7 @@ static int deal_write_event(SocketContext * pSockContext)
 	}
 
   pSockContext->thread_context->stats.send_bytes += write_bytes;
-  if (write_bytes == total_bytes) {
+  if (write_bytes == total_bytes && fetch_done) {  //send done and have more message to send
     result = 0;
   }
   else {
@@ -1007,13 +1005,10 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
       pSockContext->thread_context->stats.ping_success_count++;
       pSockContext->thread_context->stats.ping_time_used += time_used;
       if (time_used > cluster_ping_latency_threshold) {
-        Warning("cluster server %s, sock: #%d ping response time: %d ms > threshold: %d ms",
+        Warning("cluster server %s, sock: #%d ping response time: %d us > threshold: %d us",
             pSockContext->machine->hostname, pSockContext->sock,
-            (int)(time_used / HRTIME_MSECOND),
-            (int)(cluster_ping_latency_threshold / HRTIME_MSECOND));
-      }
-      else if (pSockContext->ping_fail_count > 0) {
-        pSockContext->ping_fail_count = 0;  //reset fail count
+            (int)(time_used / HRTIME_USECOND),
+            (int)(cluster_ping_latency_threshold / HRTIME_USECOND));
       }
       pSockContext->ping_start_time = 0;  //reset start time
     }
@@ -1021,6 +1016,10 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
       Warning("unexpect cluster server %s ping response, sock: #%d, time used: %d s",
           pSockContext->machine->hostname, pSockContext->sock,
           (int)(CURRENT_TIME() - pHeader->session_id.fields.timestamp));
+    }
+
+    if (pSockContext->ping_fail_count > 0) {
+      pSockContext->ping_fail_count = 0;  //reset fail count
     }
 
     return 0;
@@ -1458,8 +1457,9 @@ inline static int64_t get_current_time()
 {
   timeval tv;
   gettimeofday(&tv, NULL);
-  return tv.tv_sec * HRTIME_SECOND +
+  Thread::cur_time = tv.tv_sec * HRTIME_SECOND +
     tv.tv_usec * HRTIME_USECOND;
+  return Thread::cur_time;
 }
 
 #define GET_MAX_TIME_USED(v) \
