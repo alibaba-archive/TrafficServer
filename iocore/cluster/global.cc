@@ -17,8 +17,8 @@ int g_socket_recv_bufsize = 1 * 1024 * 1024;
 int g_socket_send_bufsize = 1 * 1024 * 1024;
 
 //cluster flow control
-int64_t cluster_flow_ctrl_min_bps = 0; //byte
-int64_t cluster_flow_ctrl_max_bps = 0; //byte
+int64_t cluster_flow_ctrl_min_bps = 0; //bit
+int64_t cluster_flow_ctrl_max_bps = 0; //bit
 int cluster_send_min_wait_time = 1000; //us
 int cluster_send_max_wait_time = 5000; //us
 int cluster_min_loop_interval = 0;     //us

@@ -45,7 +45,7 @@ machine_change_notify_func g_machine_change_notify = NULL;
 struct NIORecords {
   RecRecord * send_retry_count;
 
-  RecRecord * write_wait_time;
+  RecRecord * send_wait_time;
   RecRecord * epoll_wait_count;
   RecRecord * epoll_wait_time_used;
   RecRecord * loop_usleep_count;
@@ -67,7 +67,7 @@ static NIORecords nio_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL
 #endif
 };
 
-static int write_wait_time = 1 * HRTIME_MSECOND;   //write wait time calc by cluster IO
+static int send_wait_time = 1 * HRTIME_MSECOND;   //write wait time calc by cluster IO
 static int io_loop_interval = 0;  //us
 
 #ifdef DEBUG
@@ -114,7 +114,9 @@ static void init_nio_stats()
   memset(&data_default, 0, sizeof(RecData));
 
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.send_msg_count", 0, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.drop_msg_count", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.send_bytes", 0, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.drop_bytes", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.recv_msg_count", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.recv_bytes", 0, RECP_NON_PERSISTENT);
 
@@ -131,8 +133,8 @@ static void init_nio_stats()
       "proxy.process.cluster.io.loop_usleep_count", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.loop_usleep_time = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.io.loop_usleep_time", RECD_INT, data_default, RECP_NON_PERSISTENT);
-  nio_records.write_wait_time = RecRegisterStat(RECT_PROCESS,
-      "proxy.process.cluster.io.write_wait_time", RECD_INT, data_default, RECP_NON_PERSISTENT);
+  nio_records.send_wait_time = RecRegisterStat(RECT_PROCESS,
+      "proxy.process.cluster.io.send_wait_time", RECD_INT, data_default, RECP_NON_PERSISTENT);
   nio_records.io_loop_interval = RecRegisterStat(RECT_PROCESS,
       "proxy.process.cluster.io.loop_interval", RECD_INT, data_default, RECP_NON_PERSISTENT);
 
@@ -162,8 +164,8 @@ void log_nio_stats()
   RecData data;
 	struct worker_thread_context *pThreadContext;
 	struct worker_thread_context *pContextEnd;
-  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  static time_t last_calc_Bps_time = CURRENT_TIME();
+  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  static time_t last_calc_bps_time = CURRENT_TIME();
   static int64_t last_send_bytes = 0;
 
 	pContextEnd = g_worker_thread_contexts + g_work_threads;
@@ -171,7 +173,9 @@ void log_nio_stats()
       pThreadContext++)
 	{
     sum.send_msg_count += pThreadContext->stats.send_msg_count;
+    sum.drop_msg_count += pThreadContext->stats.drop_msg_count;
     sum.send_bytes += pThreadContext->stats.send_bytes;
+    sum.drop_bytes += pThreadContext->stats.drop_bytes;
     sum.call_writev_count += pThreadContext->stats.call_writev_count;
     sum.send_retry_count += pThreadContext->stats.send_retry_count;
     sum.recv_msg_count += pThreadContext->stats.recv_msg_count;
@@ -190,29 +194,33 @@ void log_nio_stats()
   }
 
   data.rec_int = sum.send_msg_count;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.send_msg_count", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.send_msg_count", RECD_INT, &data, NULL);
+  data.rec_int = sum.drop_msg_count;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.drop_msg_count", RECD_INT, &data, NULL);
   data.rec_int = sum.send_bytes;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.send_bytes", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.send_bytes", RECD_INT, &data, NULL);
+  data.rec_int = sum.drop_bytes;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.drop_bytes", RECD_INT, &data, NULL);
   data.rec_int = sum.recv_msg_count;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.recv_msg_count", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.recv_msg_count", RECD_INT, &data, NULL);
   data.rec_int = sum.recv_bytes;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.recv_bytes", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.recv_bytes", RECD_INT, &data, NULL);
   data.rec_int = sum.ping_total_count;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.ping_total_count", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.ping_total_count", RECD_INT, &data, NULL);
   data.rec_int = sum.ping_success_count;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.ping_success_count", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.ping_success_count", RECD_INT, &data, NULL);
   data.rec_int = sum.ping_time_used;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.ping_time_used", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.ping_time_used", RECD_INT, &data, NULL);
   data.rec_int = sum.send_delayed_time;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.send_delayed_time", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.send_delayed_time", RECD_INT, &data, NULL);
   data.rec_int = sum.push_msg_count;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.push_msg_count", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.push_msg_count", RECD_INT, &data, NULL);
   data.rec_int = sum.push_msg_bytes;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.push_msg_bytes", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.push_msg_bytes", RECD_INT, &data, NULL);
   data.rec_int = sum.call_writev_count;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.call_writev_count", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.call_writev_count", RECD_INT, &data, NULL);
   data.rec_int = sum.call_read_count;
-  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.call_read_count", RECD_INT, &data, NULL); 
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.call_read_count", RECD_INT, &data, NULL);
 
   RecDataSetFromInk64(RECD_INT, &nio_records.send_retry_count->data,
         sum.send_retry_count);
@@ -238,35 +246,35 @@ void log_nio_stats()
         max_callback_time_used);
 #endif
 
-  int time_pass = CURRENT_TIME() - last_calc_Bps_time;
+  int time_pass = CURRENT_TIME() - last_calc_bps_time;
   if (time_pass > 0) {
     double io_busy_ratio;
-    int64_t nio_current_Bps = (sum.send_bytes - last_send_bytes) / time_pass;
-    last_calc_Bps_time = CURRENT_TIME();
+    int64_t nio_current_bps = 8 * (sum.send_bytes - last_send_bytes) / time_pass;
+    last_calc_bps_time = CURRENT_TIME();
     last_send_bytes = sum.send_bytes;
 
     if (cluster_flow_ctrl_max_bps <= 0) {
-      write_wait_time = cluster_send_min_wait_time * HRTIME_USECOND;
+      send_wait_time = cluster_send_min_wait_time * HRTIME_USECOND;
       io_loop_interval = cluster_min_loop_interval;
     }
     else {
-      if (nio_current_Bps < cluster_flow_ctrl_min_bps) {
-        write_wait_time = cluster_send_min_wait_time * HRTIME_USECOND;
+      if (nio_current_bps < cluster_flow_ctrl_min_bps) {
+        send_wait_time = cluster_send_min_wait_time * HRTIME_USECOND;
         io_loop_interval = cluster_min_loop_interval;
       }
       else {
-        io_busy_ratio = (double)nio_current_Bps / (double)cluster_flow_ctrl_max_bps;
+        io_busy_ratio = (double)nio_current_bps / (double)cluster_flow_ctrl_max_bps;
         if (io_busy_ratio > 1.0) {
           io_busy_ratio = 1.0;
         }
-        write_wait_time = (int)((cluster_send_min_wait_time +
+        send_wait_time = (int)((cluster_send_min_wait_time +
               (cluster_send_max_wait_time - cluster_send_min_wait_time) *
               io_busy_ratio)) * HRTIME_USECOND;
         io_loop_interval = cluster_min_loop_interval + (int)((
               cluster_max_loop_interval - cluster_min_loop_interval) * io_busy_ratio);
       }
-      RecDataSetFromInk64(RECD_INT, &nio_records.write_wait_time->data,
-          write_wait_time / HRTIME_USECOND);
+      RecDataSetFromInk64(RECD_INT, &nio_records.send_wait_time->data,
+          send_wait_time / HRTIME_USECOND);
       RecDataSetFromInk64(RECD_INT, &nio_records.io_loop_interval->data,
           io_loop_interval);
     }
@@ -514,7 +522,7 @@ int nio_add_to_epoll(SocketContext *pSockContext)
   pSockContext->queue_index = 0;
   pSockContext->ping_start_time = 0;
   pSockContext->ping_fail_count = 0;
-  pSockContext->next_write_time = CURRENT_NS() + write_wait_time;
+  pSockContext->next_write_time = CURRENT_NS() + send_wait_time;
   pSockContext->next_ping_time = CURRENT_NS() + cluster_ping_send_interval;
 
   INIT_READER(pSockContext->reader, READ_BUFFER_SIZE);
@@ -557,16 +565,19 @@ static void clear_send_queue(SocketContext * pSockContext)
 {
   int i;
   int count;
+  int64_t drop_bytes;
 	OutMessage *msg;
   MessageQueue *send_queue;
 
   count = 0;
+  drop_bytes = 0;
   for (i=0; i<PRIORITY_COUNT; i++) {
     send_queue = pSockContext->send_queues + i;
     pthread_mutex_lock(&send_queue->lock);
     while (send_queue->head != NULL) {
       msg = send_queue->head;
       send_queue->head = send_queue->head->next;
+      drop_bytes += MSG_HEADER_LENGTH + msg->header.aligned_data_len;
       release_out_message(pSockContext, msg);
       count++;
     }
@@ -578,6 +589,8 @@ static void clear_send_queue(SocketContext * pSockContext)
         "release %s:%d #%d message count: %d",
         __LINE__, pSockContext->machine->hostname,
         pSockContext->machine->cluster_port, pSockContext->sock, count);
+    pSockContext->thread_context->stats.drop_msg_count += count;
+    pSockContext->thread_context->stats.drop_bytes += drop_bytes;
   }
 }
 
@@ -1450,7 +1463,7 @@ inline static void schedule_sock_write(struct worker_thread_context * pThreadCon
     }
 
     if (result == EAGAIN) {
-      (*ppSockContext)->next_write_time = current_time + write_wait_time;
+      (*ppSockContext)->next_write_time = current_time + send_wait_time;
     }
     else {  //error
       if (fail_count < MAX_SOCK_CONTEXT_COUNT) {

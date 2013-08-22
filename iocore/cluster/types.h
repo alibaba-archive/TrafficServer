@@ -163,7 +163,9 @@ typedef struct socket_context {
 
 struct SocketStats {
   int64_t send_msg_count;  //send msg count
+  int64_t drop_msg_count;  //droped msg count when close socket
   int64_t send_bytes;
+  int64_t drop_bytes;
   int64_t call_writev_count;
   int64_t send_retry_count;
   int64_t send_delayed_time;
