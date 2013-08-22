@@ -43,6 +43,7 @@ extern "C"
   tsapi TSCacheHttpInfo TSCacheHttpInfoCreate();
   tsapi TSReturnCode TSCacheBelongToMe(TSCacheKey key, int *belong_to_me);
   tsapi TSReturnCode TSIsCacheClustering(int *is_cache_clustering);
+  tsapi TSReturnCode TSDefaultClusterConfigEnabled(int *default_cluster_config_enabled);
   tsapi TSReturnCode TSCacheOwnerLeftTimeGet(unsigned int owner_ip, TSHRTime *left_time);
   tsapi void TSCacheHttpInfoReqGet(TSCacheHttpInfo infop, TSMBuffer *bufp, TSMLoc *obj);
   tsapi void TSCacheHttpInfoRespGet(TSCacheHttpInfo infop, TSMBuffer *bufp, TSMLoc *obj);

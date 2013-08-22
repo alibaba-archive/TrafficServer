@@ -46,6 +46,7 @@
 #include "P_HostDB.h"
 #include "StatSystem.h"
 #include "P_Cache.h"
+#include "P_ClusterCache.h"
 #include "I_RecCore.h"
 #include "I_RecSignals.h"
 #include "ProxyConfig.h"
@@ -6627,6 +6628,28 @@ TSCacheOwnerLeftTimeGet(unsigned int owner_ip, TSHRTime *left_time)
 
   return TS_SUCCESS;
 }
+
+/*
+ * To check whether the default cluster config is enabled.
+ * If yes, default_cluster_config_enabled will be set to 1,
+ * otherwise set to 0.
+ */
+TSReturnCode
+TSDefaultClusterConfigEnabled(int *default_cluster_config_enabled)
+{
+  int enabled = 0;
+
+  sdk_assert(sdk_sanity_check_null_ptr((void*)default_cluster_config_enabled) == TS_SUCCESS);
+
+#ifndef INK_NO_CLUSTER
+  enabled = (clusterProcessor.this_cluster->default_configuration != NULL);
+#endif
+
+  *default_cluster_config_enabled = enabled;
+
+  return TS_SUCCESS;
+}
+
 
 /* Cache VConnections */
 TSAction
