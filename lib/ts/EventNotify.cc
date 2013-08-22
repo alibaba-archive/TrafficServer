@@ -35,7 +35,7 @@
 #include <sys/epoll.h>
 #endif
 
-EventNotify::EventNotify(const char *name): m_name(name)
+EventNotify::EventNotify()
 {
 #ifdef TS_HAS_EVENTFD
   int ret;
@@ -59,7 +59,7 @@ EventNotify::EventNotify(const char *name): m_name(name)
   ink_release_assert(ret != -1);
 #else
   ink_cond_init(&m_cond);
-  ink_mutex_init(&m_mutex, m_name);
+  ink_mutex_init(&m_mutex, NULL);
 #endif
 }
 
@@ -90,19 +90,12 @@ EventNotify::wait(void)
 }
 
 int
-EventNotify::timedwait(ink_timestruc *abstime)
+EventNotify::timedwait(int timeout) // milliseconds
 {
 #ifdef TS_HAS_EVENTFD
-  int timeout;
   ssize_t nr, nr_fd = 0;
   uint64_t value = 0;
-  struct timeval curtime;
   struct epoll_event ev;
-
-  // Convert absolute time to relative time
-  gettimeofday(&curtime, NULL);
-  timeout = (abstime->tv_sec - curtime.tv_sec) * 1000 
-          + (abstime->tv_nsec / 1000  - curtime.tv_usec) / 1000;
 
   //
   // When timeout < 0, epoll_wait() will wait indefinitely, but
@@ -126,7 +119,13 @@ EventNotify::timedwait(ink_timestruc *abstime)
 
   return 0;
 #else
-  return ink_cond_timedwait(&m_cond, &m_mutex, abstime);
+  ink_timestruc abstime;
+  ink_hrtime curtime;
+
+  curtime = ink_get_hrtime_internal() + timeout * HRTIME_MSECOND;
+  abstime = ink_based_hrtime_to_timespec(curtime);
+
+  return ink_cond_timedwait(&m_cond, &m_mutex, &abstime);
 #endif
 }
 

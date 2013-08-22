@@ -33,17 +33,16 @@
 class EventNotify
 {
 public:
-  EventNotify(const char *name = NULL);
+  EventNotify();
   void signal(void);
   void wait(void);
-  int timedwait(ink_timestruc *abstime);
+  int timedwait(int timeout); // milliseconds
   void lock(void);
   bool trylock(void);
   void unlock(void);
   ~EventNotify();
 
 private:
-  const char *m_name;
 #ifdef TS_HAS_EVENTFD
   int m_event_fd;
   int m_epoll_fd;
