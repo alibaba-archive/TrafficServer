@@ -76,11 +76,16 @@ raw_stat_get_total(RecRawStatBlock *rsb, int id, RecRawStat *total)
   // get global values
   total->sum = rsb->global[id]->sum;
   total->count = rsb->global[id]->count;
-  int n_ethreads = *(volatile int *) &eventProcessor.n_ethreads;
 
   // get thread local values
-  for (i = 0; i < n_ethreads; i++) {
+  for (i = 0; i < eventProcessor.n_ethreads; i++) {
     tlp = ((RecRawStat *) ((char *) (eventProcessor.all_ethreads[i]) + rsb->ethr_stat_offset)) + id;
+    total->sum += tlp->sum;
+    total->count += tlp->count;
+  }
+
+  for (i = 0; i < eventProcessor.n_dthreads; i++) {
+    tlp = ((RecRawStat *) ((char *) (eventProcessor.all_dthreads[i]) + rsb->ethr_stat_offset)) + id;
     total->sum += tlp->sum;
     total->count += tlp->count;
   }
@@ -103,9 +108,14 @@ raw_stat_sync_to_global(RecRawStatBlock *rsb, int id)
   total.count = 0;
 
   // sum the thread local values
-  int n_ethreads = *(volatile int *) &eventProcessor.n_ethreads;
-  for (i = 0; i < n_ethreads; i++) {
+  for (i = 0; i < eventProcessor.n_ethreads; i++) {
     tlp = ((RecRawStat *) ((char *) (eventProcessor.all_ethreads[i]) + rsb->ethr_stat_offset)) + id;
+    total.sum += tlp->sum;
+    total.count += tlp->count;
+  }
+
+  for (i = 0; i < eventProcessor.n_dthreads; i++) {
+    tlp = ((RecRawStat *) ((char *) (eventProcessor.all_dthreads[i]) + rsb->ethr_stat_offset)) + id;
     total.sum += tlp->sum;
     total.count += tlp->count;
   }
@@ -153,11 +163,16 @@ raw_stat_clear_sum(RecRawStatBlock *rsb, int id)
 
   // reset the local stats
   RecRawStat *tlp;
-  int n_ethreads = *(volatile int *) &eventProcessor.n_ethreads;
-  for (int i = 0; i < n_ethreads; i++) {
+  for (int i = 0; i < eventProcessor.n_ethreads; i++) {
     tlp = ((RecRawStat *) ((char *) (eventProcessor.all_ethreads[i]) + rsb->ethr_stat_offset)) + id;
     ink_atomic_swap64(&(tlp->sum), 0);
   }
+
+  for (int i = 0; i < eventProcessor.n_dthreads; i++) {
+    tlp = ((RecRawStat *) ((char *) (eventProcessor.all_dthreads[i]) + rsb->ethr_stat_offset)) + id;
+    ink_atomic_swap64(&(tlp->sum), (int64_t)0);
+  }
+
   return REC_ERR_OKAY;
 }
 
@@ -179,11 +194,16 @@ raw_stat_clear_count(RecRawStatBlock *rsb, int id)
 
   // reset the local stats
   RecRawStat *tlp;
-  int n_ethreads = *(volatile int *) &eventProcessor.n_ethreads;
-  for (int i = 0; i < n_ethreads; i++) {
+  for (int i = 0; i < eventProcessor.n_ethreads; i++) {
     tlp = ((RecRawStat *) ((char *) (eventProcessor.all_ethreads[i]) + rsb->ethr_stat_offset)) + id;
     ink_atomic_swap64(&(tlp->count), 0);
   }
+
+  for (int i = 0; i < eventProcessor.n_dthreads; i++) {
+    tlp = ((RecRawStat *) ((char *) (eventProcessor.all_dthreads[i]) + rsb->ethr_stat_offset)) + id;
+    ink_atomic_swap64(&(tlp->count), (int64_t)0);
+  }
+
   return REC_ERR_OKAY;
 }
 
