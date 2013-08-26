@@ -7069,6 +7069,7 @@ TSTextLogObjectWrite(TSTextLogObject the_object, char *format, ...)
   switch (((TextLogObject *) the_object)->va_write(format, ap)) {
   case (Log::LOG_OK):
   case (Log::SKIP):
+  case (Log::AGGR):
     break;
   case (Log::FULL):
     retVal = TS_ERROR;

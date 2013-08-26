@@ -239,7 +239,7 @@ Log::periodic_tasks(long time_now)
     Debug("log-config", "Performing reconfiguration, init status = %d", init_status);
 
     if (logging_mode_changed) {
-      int val = (int) LOG_ConfigReadInteger("proxy.config.log.logging_enabled");
+      int val = (int) REC_ConfigReadInteger("proxy.config.log.logging_enabled");
 
       if (val<LOG_NOTHING || val> FULL_LOGGING) {
         logging_mode = FULL_LOGGING;
@@ -966,7 +966,7 @@ Log::init(int flags)
       logging_mode = LOG_TRANSACTIONS_ONLY;
     }
     else {
-      int val = (int) LOG_ConfigReadInteger("proxy.config.log.logging_enabled");
+      int val = (int) REC_ConfigReadInteger("proxy.config.log.logging_enabled");
       if (val < LOG_NOTHING || val > FULL_LOGGING) {
         logging_mode = FULL_LOGGING;
         Warning("proxy.config.log.logging_enabled has an invalid "
@@ -983,11 +983,11 @@ Log::init(int flags)
   //
   if (!(config_flags & NO_REMOTE_MANAGEMENT)) {
 
-    LOG_RegisterConfigUpdateFunc("proxy.config.log.logging_enabled",
-        &Log::handle_logging_mode_change, NULL);
+    REC_RegisterConfigUpdateFunc("proxy.config.log.logging_enabled",
+                                 &Log::handle_logging_mode_change, NULL);
 
-    LOG_RegisterLocalUpdateFunc("proxy.local.log.collation_mode",
-        &Log::handle_logging_mode_change, NULL);
+    REC_RegisterConfigUpdateFunc("proxy.local.log.collation_mode",
+                                 &Log::handle_logging_mode_change, NULL);
 
     // we must create the flush thread since it takes care of the
     // periodic events (should this behavior be reversed ?)
@@ -1002,7 +1002,8 @@ Log::init(int flags)
 
     // Clear any stat values that need to be reset on startup
     //
-    LOG_CLEAR_DYN_STAT( log_stat_log_files_open_stat);
+    RecSetRawStatSum(log_rsb, log_stat_log_files_open_stat, 0);
+    RecSetRawStatCount(log_rsb, log_stat_log_files_open_stat, 0);
   }
 
   if (config_flags & LOGCAT) {
@@ -1111,7 +1112,8 @@ Log::create_threads()
     // condition variable.
     //
     Continuation *collate_continuation = NEW(new LoggingCollateContinuation);
-    Event *collate_event = eventProcessor.spawn_thread(collate_continuation);
+    sprintf(desc, "[LOG_COLLATION]");
+    Event *collate_event = eventProcessor.spawn_thread(collate_continuation, desc);
     collate_thread = collate_event->ethread->tid;
 #endif
     init_status |= THREADS_CREATED;
@@ -1140,6 +1142,7 @@ Log::access(LogAccess * lad)
   int ret;
   static long sample = 1;
   long this_sample;
+  ProxyMutex *mutex = this_ethread()->mutex;
 
   // See if we're sampling and it is not time for another sample
   //
@@ -1147,6 +1150,7 @@ Log::access(LogAccess * lad)
     this_sample = sample++;
     if (this_sample && this_sample % Log::config->sampling_frequency) {
       Debug("log", "sampling, skipping this entry ...");
+      RecIncrRawStat(log_rsb, mutex->thread_holding, log_stat_event_log_access_skip_stat, 1);
       ret = Log::SKIP;
       goto done;
     } else {
@@ -1157,6 +1161,7 @@ Log::access(LogAccess * lad)
 
   if (Log::config->log_object_manager.get_num_objects() == 0) {
     Debug("log", "no log objects, skipping this entry ...");
+    RecIncrRawStat(log_rsb, mutex->thread_holding, log_stat_event_log_access_skip_stat, 1);
     ret = Log::SKIP;
     goto done;
   }
@@ -1186,6 +1191,7 @@ int
 Log::error(const char *format, ...)
 {
   int ret_val = Log::SKIP;
+  ProxyMutex *mutex = this_ethread()->mutex;
 
   if (error_log) {
     ink_debug_assert(format != NULL);
@@ -1194,11 +1200,36 @@ Log::error(const char *format, ...)
     ret_val = error_log->va_write(format, ap);
     va_end(ap);
 
-    if (ret_val == Log::LOG_OK) {
-      ProxyMutex *mutex = this_ethread()->mutex;
-      LOG_INCREMENT_DYN_STAT(log_stat_event_log_error_stat);
+    switch (ret_val) {
+    case Log::LOG_OK:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_ok_stat, 1);
+      break;
+    case Log::SKIP:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_skip_stat, 1);
+      break;
+    case Log::AGGR:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_aggr_stat, 1);
+      break;
+    case Log::FULL:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_full_stat, 1);
+      break;
+    case Log::FAIL:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_fail_stat, 1);
+      break;
+    default:
+      ink_release_assert(!"Unexpected result");
     }
+
+    return ret_val;
   }
+
+  RecIncrRawStat(log_rsb, mutex->thread_holding,
+                 log_stat_event_log_error_skip_stat, 1);
   return ret_val;
 }
 
@@ -1209,13 +1240,35 @@ Log::va_error(char *format, va_list ap)
 
   if (error_log) {
     ink_debug_assert(format != NULL);
+    ProxyMutex *mutex = this_ethread()->mutex; 
     ret_val = error_log->va_write(format, ap);
 
-    if (ret_val == Log::LOG_OK) {
-      ProxyMutex *mutex = this_ethread()->mutex;
-      LOG_INCREMENT_DYN_STAT(log_stat_event_log_error_stat);
+    switch (ret_val) {
+    case Log::LOG_OK:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_ok_stat, 1);
+      break;
+    case Log::SKIP:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_skip_stat, 1);
+      break;
+    case Log::AGGR:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_aggr_stat, 1);
+      break;
+    case Log::FULL:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_full_stat, 1);
+      break;
+    case Log::FAIL:
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_event_log_error_fail_stat, 1);
+      break;
+    default:
+      ink_release_assert(!"Unexpected result");
     }
   }
+
   return ret_val;
 }
 
@@ -1273,6 +1326,7 @@ Log::flush_thread_main(void *args)
   ink_hrtime now, last_time = 0;
   int len, bytes_written, total_bytes;
   SLL<LogFlushData, LogFlushData::Link_link> link, invert_link;
+  ProxyMutex *mutex = this_thread()->mutex;
 
   Log::flush_notify->lock();
 
@@ -1339,6 +1393,9 @@ Log::flush_thread_main(void *args)
         }
         bytes_written += len;
       }
+
+      RecIncrRawStat(log_rsb, mutex->thread_holding,
+                     log_stat_bytes_written_to_disk_stat, bytes_written);
 
       ink_atomic_increment(&logfile->m_bytes_written, bytes_written);
 
@@ -1463,7 +1520,6 @@ Log::collate_thread_main(void *args)
       }
 
       Debug("log-sock", "message accepted, size = %d", bytes_read);
-      LOG_SUM_GLOBAL_DYN_STAT(log_stat_bytes_received_from_network_stat, bytes_read);
 
       obj = match_logobject(header);
       if (!obj) {
