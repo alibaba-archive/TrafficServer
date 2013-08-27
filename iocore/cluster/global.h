@@ -31,6 +31,8 @@ extern int cluster_max_loop_interval;  //us
 extern int64_t cluster_ping_send_interval;
 extern int64_t cluster_ping_latency_threshold;
 extern int cluster_ping_retries;
+extern int max_session_count_per_machine;
+extern int session_lock_count_per_machine;
 
 #ifdef __cplusplus
 }

@@ -26,4 +26,6 @@ int cluster_max_loop_interval = 1000;  //us
 int64_t cluster_ping_send_interval= 0;
 int64_t cluster_ping_latency_threshold = 0;
 int cluster_ping_retries = 3;
+int max_session_count_per_machine = 1000000;
+int session_lock_count_per_machine =  10949;
 

@@ -32,11 +32,11 @@ typedef struct {
 
 #define SESSION_LOCK(pMachineSessions, session_index) \
 	pthread_mutex_lock((pMachineSessions)->locks + session_index % \
-      SESSION_LOCK_COUNT_PER_MACHINE)
+      session_lock_count_per_machine)
 
 #define SESSION_UNLOCK(pMachineSessions, session_index) \
 	pthread_mutex_unlock((pMachineSessions)->locks + session_index % \
-      SESSION_LOCK_COUNT_PER_MACHINE)
+      session_lock_count_per_machine)
 
 #ifdef __cplusplus
 extern "C" {

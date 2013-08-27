@@ -847,6 +847,9 @@ ClusterProcessor::init()
     REC_RegisterConfigUpdateFunc("proxy.config.cluster.ping_latency_threshold_msecs", cluster_ping_config_cb, NULL);
     IOCORE_EstablishStaticConfigInt32(cluster_ping_retries, "proxy.config.cluster.ping_retries");
 
+    IOCORE_ReadConfigInteger(max_session_count_per_machine, "proxy.config.cluster.max_sessions_per_machine");
+    IOCORE_ReadConfigInteger(session_lock_count_per_machine, "proxy.config.cluster.session_locks_per_machine");
+
     bool found;
     IpEndpoint cluster_ip;    // ip addr of the cluster interface
     char *intrName;               // Name of the interface we are to use

@@ -952,7 +952,7 @@ static int deal_write_event(SocketContext * pSockContext)
             &pMachineSessions, &pSessionEntry) == 0)
       {
         int session_index = msg->header.session_id.fields.seq %
-          MAX_SESSION_COUNT_PER_MACHINE;
+          max_session_count_per_machine;
         SESSION_LOCK(pMachineSessions, session_index);
 
         if (!(msg->header.session_id.fields.ip == g_my_machine_ip))
@@ -1067,7 +1067,7 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
 #ifdef MSG_TIME_STAT_FLAG
   if ((pHeader->session_id.fields.ip == g_my_machine_ip)) {  //request by me
     int session_index = pHeader->session_id.fields.seq %
-      MAX_SESSION_COUNT_PER_MACHINE;
+      max_session_count_per_machine;
     SESSION_LOCK(pMachineSessions, session_index);
     if (pSessionEntry->client_start_time != 0) {
       __sync_fetch_and_add(&pMachineSessions->msg_stat.count, 1);
@@ -1247,7 +1247,7 @@ static int deal_read_event(SocketContext *pSockContext)
               &pMachineSessions, &pSessionEntry) == 0)
         {
           int session_index = pHeader->session_id.fields.seq %
-            MAX_SESSION_COUNT_PER_MACHINE;
+            max_session_count_per_machine;
           SESSION_LOCK(pMachineSessions, session_index);
           if (pSessionEntry->server_start_time == 0) {
             pSessionEntry->server_start_time = CURRENT_NS();

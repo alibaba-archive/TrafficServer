@@ -72,7 +72,7 @@ int cluster_send_message(ClusterSession session, const int func_id,
 
 #ifdef MSG_TIME_STAT_FLAG
   int session_index;
-  session_index = session.fields.seq % MAX_SESSION_COUNT_PER_MACHINE;
+  session_index = session.fields.seq % max_session_count_per_machine;
   SESSION_LOCK(pMachineSessions, session_index);
 
   if (session.fields.ip == g_my_machine_ip) {  //request by me

@@ -133,7 +133,7 @@ int init_machine_sessions(ClusterMachine *machine, const bool bMyself)
   pMachineSessions->is_myself = bMyself;
   pMachineSessions->ip = machine->ip;
 
-	sessions_bytes = sizeof(SessionEntry) * MAX_SESSION_COUNT_PER_MACHINE;
+	sessions_bytes = sizeof(SessionEntry) * max_session_count_per_machine;
   pMachineSessions->sessions = (SessionEntry *)malloc(sessions_bytes);
   if (pMachineSessions->sessions == NULL) {
     Error("file: "__FILE__", line: %d, " \
@@ -144,7 +144,7 @@ int init_machine_sessions(ClusterMachine *machine, const bool bMyself)
   }
   memset(pMachineSessions->sessions, 0, sessions_bytes);
 
-  locks_bytes = sizeof(pthread_mutex_t) * SESSION_LOCK_COUNT_PER_MACHINE;
+  locks_bytes = sizeof(pthread_mutex_t) * session_lock_count_per_machine;
   pMachineSessions->locks = (pthread_mutex_t *)malloc(locks_bytes);
   if (pMachineSessions->locks == NULL) {
     Error("file: "__FILE__", line: %d, " \
@@ -154,7 +154,7 @@ int init_machine_sessions(ClusterMachine *machine, const bool bMyself)
     return errno != 0 ? errno : ENOMEM;
   }
 
-  pLockEnd = pMachineSessions->locks + SESSION_LOCK_COUNT_PER_MACHINE;
+  pLockEnd = pMachineSessions->locks + session_lock_count_per_machine;
   for (pLock=pMachineSessions->locks; pLock<pLockEnd; pLock++) {
     if ((result=init_pthread_lock(pLock)) != 0) {
       pthread_mutex_unlock(&session_lock);
@@ -222,7 +222,7 @@ int cluster_create_session(ClusterSession *session,
 
   for (i=0; i<128; i++) {
     seq = __sync_fetch_and_add(&pMachineSessions->current_seq, 1);
-    session_index = seq % MAX_SESSION_COUNT_PER_MACHINE;
+    session_index = seq % max_session_count_per_machine;
     pSessionEntry = pMachineSessions->sessions + session_index;
     if (IS_SESSION_EMPTY(pSessionEntry->session_id)) {
       SESSION_LOCK(pMachineSessions, session_index);
@@ -302,7 +302,7 @@ int cluster_bind_session(ClusterSession session, void *arg)
 
   GET_MACHINE_INDEX(machine_id, session.fields.ip, pMachineSessions, ENOENT);
 
-  session_index = session.fields.seq % MAX_SESSION_COUNT_PER_MACHINE;
+  session_index = session.fields.seq % max_session_count_per_machine;
   pSessionEntry = pMachineSessions->sessions + session_index;
   SESSION_LOCK(pMachineSessions, session_index);
   if ((pSessionEntry=get_session(&session, pSessionEntry)) != NULL) {
@@ -329,7 +329,7 @@ int cluster_set_events(ClusterSession session, const int events)
 
   GET_MACHINE_INDEX(machine_id, session.fields.ip, pMachineSessions, ENOENT);
 
-  session_index = session.fields.seq % MAX_SESSION_COUNT_PER_MACHINE;
+  session_index = session.fields.seq % max_session_count_per_machine;
   pSessionEntry = pMachineSessions->sessions + session_index;
   SESSION_LOCK(pMachineSessions, session_index);
 
@@ -416,7 +416,7 @@ void *cluster_close_session(ClusterSession session)
 
   __sync_fetch_and_add(&pMachineSessions->session_stat.close_total_count, 1);
 
-  session_index = session.fields.seq % MAX_SESSION_COUNT_PER_MACHINE;
+  session_index = session.fields.seq % max_session_count_per_machine;
   pSessionEntry = pMachineSessions->sessions + session_index;
   SESSION_LOCK(pMachineSessions, session_index);
 
@@ -513,7 +513,7 @@ int get_session_for_send(const SessionId *session,
 
   GET_MACHINE_INDEX(machine_id, session->fields.ip, *ppMachineSessions, ENOENT);
 
-  session_index = session->fields.seq % MAX_SESSION_COUNT_PER_MACHINE;
+  session_index = session->fields.seq % max_session_count_per_machine;
   *sessionEntry = (*ppMachineSessions)->sessions + session_index;
   SESSION_LOCK(*ppMachineSessions, session_index);
 
@@ -545,7 +545,7 @@ int get_response_session_internal(const MsgHeader *pHeader,
   GET_MACHINE_INDEX(machine_id, pHeader->session_id.fields.ip,
       *ppMachineSessions, ENOENT);
 
-  session_index = pHeader->session_id.fields.seq % MAX_SESSION_COUNT_PER_MACHINE;
+  session_index = pHeader->session_id.fields.seq % max_session_count_per_machine;
   pSession = (*ppMachineSessions)->sessions + session_index;
   SESSION_LOCK(*ppMachineSessions, session_index);
   pCurrent = pSession;
@@ -602,7 +602,7 @@ int get_response_session(const MsgHeader *pHeader,
   GET_MACHINE_INDEX(machine_id, pHeader->session_id.fields.ip,
       *ppMachineSessions, ENOENT);
 
-  session_index = pHeader->session_id.fields.seq % MAX_SESSION_COUNT_PER_MACHINE;
+  session_index = pHeader->session_id.fields.seq % max_session_count_per_machine;
   pSession = (*ppMachineSessions)->sessions + session_index;
   SESSION_LOCK(*ppMachineSessions, session_index);
   do {
@@ -779,7 +779,7 @@ static int do_notify_connection_closed(const int src_machine_id,
 
   count = 0;
   pSessionEnd = all_sessions[src_machine_id].sessions +
-    MAX_SESSION_COUNT_PER_MACHINE;
+    max_session_count_per_machine;
   for (pSessionEntry=all_sessions[src_machine_id].sessions;
       pSessionEntry<pSessionEnd; pSessionEntry++)
   {
@@ -851,7 +851,7 @@ int push_in_message(const SessionId session,
   int session_index;
   bool call_func;
 
-  session_index = session.fields.seq % MAX_SESSION_COUNT_PER_MACHINE;
+  session_index = session.fields.seq % max_session_count_per_machine;
   SESSION_LOCK(pMachineSessions, session_index);
   pSockContext = pSessionEntry->sock_context;
   if (!(pSockContext != NULL && IS_SESSION_EQUAL(pSessionEntry->session_id,

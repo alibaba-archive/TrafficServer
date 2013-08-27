@@ -27,9 +27,6 @@
 
 #define READ_BUFFER_SIZE    (2 * 1024 * 1024)
 
-#define MAX_SESSION_COUNT_PER_MACHINE   1000000
-#define SESSION_LOCK_COUNT_PER_MACHINE    10949
-
 //combine multi msg to call writev
 #define WRITEV_ARRAY_SIZE   128
 #define WRITEV_ITEM_ONCE    (WRITEV_ARRAY_SIZE / 2)
