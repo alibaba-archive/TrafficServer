@@ -1068,7 +1068,7 @@ CacheVC::openReadStartHead(int event, Event * e)
       ink_assert(doc->hlen);
       if (!doc->hlen)
         goto Ldone;
-      if (vector.get_handles(doc->hdr(), doc->hlen) != doc->hlen) {
+      if ((intptr_t) e == -ECACHE_BAD_META_DATA || vector.get_handles(doc->hdr(), doc->hlen) != doc->hlen) {
         if (buf) {
           Note("OpenReadHead failed for cachekey %X : vector inconsistency with %d", key.word(0), doc->hlen);
           dir_delete(&key, vol, &dir);

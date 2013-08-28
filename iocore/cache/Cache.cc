@@ -2178,7 +2178,7 @@ CacheVC::dead(int event, Event *e) {
 #define STORE_COLLISION 1
 
 #ifdef HTTP_CACHE
-static void unmarshal_helper(Doc *doc, Ptr<IOBufferData> &buf, int &okay) {
+static bool unmarshal_helper(Doc *doc, Ptr<IOBufferData> &buf, int &okay) {
   char *tmp = doc->hdr();
   int len = doc->hlen;
   while (len > 0) {
@@ -2186,11 +2186,12 @@ static void unmarshal_helper(Doc *doc, Ptr<IOBufferData> &buf, int &okay) {
     if (r < 0) {
       ink_assert(!"CacheVC::handleReadDone unmarshal failed");
       okay = 0;
-      break;
+      return false;
     }
     len -= r;
     tmp += r;
   }
+  return true;
 }
 #endif
 
@@ -2206,6 +2207,7 @@ CacheVC::handleReadDone(int event, Event *e) {
     if (is_io_in_progress())
       return EVENT_CONT;
   int okay = 0;
+  bool unmarshal_success = true;
   Doc *doc;
   {
     MUTEX_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
@@ -2310,7 +2312,7 @@ CacheVC::handleReadDone(int event, Event *e) {
       // If http doc we need to unmarshal the headers before putting in the ram cache
       // unless it could be compressed
       if (!http_copy_hdr && doc->ftype == CACHE_FRAG_TYPE_HTTP && doc->hlen && okay)
-        unmarshal_helper(doc, buf, okay);
+        unmarshal_success = unmarshal_helper(doc, buf, okay);
 #endif
       // Put the request in the ram cache only if its a open_read or lookup
       if (vio.op == VIO::READ && okay) {
@@ -2347,7 +2349,7 @@ CacheVC::handleReadDone(int event, Event *e) {
 #ifdef HTTP_CACHE
       // If it could be compressed, unmarshal after
       if (http_copy_hdr && doc->ftype == CACHE_FRAG_TYPE_HTTP && doc->hlen && okay)
-        unmarshal_helper(doc, buf, okay);
+        unmarshal_success = unmarshal_helper(doc, buf, okay);
 #endif
     }                             // end io.ok() check
 Ldone:
@@ -2360,7 +2362,7 @@ Ldone:
 #endif
   }
   POP_HANDLER;
-  return handleEvent(AIO_EVENT_DONE, 0);
+  return handleEvent(AIO_EVENT_DONE, (void *)(unmarshal_success ? 0 : (intptr_t) -ECACHE_BAD_META_DATA));
 }
 
 
