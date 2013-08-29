@@ -685,6 +685,9 @@ ClusterCacheVC::openReadReadDone(int event, void *data)
 {
   cancel_trigger();
   ink_debug_assert(in_progress);
+  if (event == EVENT_IMMEDIATE)
+    return EVENT_CONT;
+
   in_progress = false;
   POP_HANDLER;
 

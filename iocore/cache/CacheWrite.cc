@@ -1232,6 +1232,7 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
 {
   NOWARN_UNUSED(e);
   int ret = 0;
+  cancel_trigger();
 
   if (event == AIO_EVENT_DONE)
     set_io_not_in_progress();
