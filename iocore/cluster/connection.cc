@@ -394,7 +394,7 @@ static int check_socket_status(int sock)
   return result;
 }
 
-static int connection_handler(ConnectContext *pConnectContext)
+static int connection_handler(ConnectContext *pConnectContext, const bool needLock)
 {
   int result;
   SocketContext *pSockContext;
@@ -505,7 +505,7 @@ static int connection_handler(ConnectContext *pConnectContext)
         result, strerror(result));
   }
 
-  remove_connection(pSockContext, true);
+  remove_connection(pSockContext, needLock);
   if (result == 0) {
     result = machine_add_connection(pSockContext);
     if (result == 0) {
@@ -713,7 +713,7 @@ int connection_init()
 	memset(g_machine_sockets, 0, bytes);
 
   connect_thread_context.alloc_size = MAX_MACHINE_COUNT *
-    g_connections_per_machine  + 1;
+    g_connections_per_machine + 1;
   bytes = sizeof(struct epoll_event) * connect_thread_context.alloc_size;
   connect_thread_context.events = (struct epoll_event *)malloc(bytes);
   if (connect_thread_context.events == NULL) {
@@ -828,7 +828,7 @@ static int do_connect(ConnectContext *pConnectContext, const bool needLock)
   {
     pConnectContext->state = STATE_CONNECTED;
     pConnectContext->need_check_timeout = true;
-    return connection_handler(pConnectContext);
+    return connection_handler(pConnectContext, needLock);
   }
 
   result = errno != 0 ? errno : EINPROGRESS;
@@ -1144,8 +1144,16 @@ static int do_reconnect()
 	pthread_mutex_lock(&connect_thread_context.lock);
   ppConnectionEnd = connect_thread_context.connections +
     connect_thread_context.connection_count;
-  ppConnection=connect_thread_context.connections;
-  while (ppConnection<ppConnectionEnd) {
+  ppConnection = connect_thread_context.connections;
+  while (ppConnection < ppConnectionEnd) {
+    if (*ppConnection == NULL || (*ppConnection)->pSockContext == NULL) {
+      Warning("file: " __FILE__ ", line: %d, "
+          "pConnection: %p, pSockContext: %p", __LINE__,
+          *ppConnection, *ppConnection != NULL ? (*ppConnection)->pSockContext : NULL);
+      ppConnection++;
+      continue;
+    }
+
     if ((*ppConnection)->pSockContext->sock >= 0) {  //already in progress or connected
       ppConnection++;
       continue;
@@ -1244,7 +1252,7 @@ static int deal_income_connection(const int incomesock)
   pConnectContext->pSockContext = pSockContext;
   pConnectContext->state = STATE_CONNECTED;
   pConnectContext->need_check_timeout = true;
-  connection_handler(pConnectContext);
+  connection_handler(pConnectContext, true);
   return 0;
 }
 
@@ -1331,7 +1339,7 @@ static int deal_connect_events(const int count)
         */
 
     if ((pEvent->events & EPOLLIN) || (pEvent->events & EPOLLOUT)) {
-      connection_handler(pConnectContext);
+      connection_handler(pConnectContext, true);
     }
 	}
 
