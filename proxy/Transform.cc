@@ -1151,7 +1151,7 @@ RangeTransform::change_response_header()
   char *reason_phrase;
   HTTPStatus status_code;
 
-  //ink_assert(m_transform_resp->field_find(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE) == NULL);
+  MIMEField *content_range_field = m_transform_resp->field_find(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
 
   status_code = HTTP_STATUS_PARTIAL_CONTENT;
   m_transform_resp->status_set(status_code);
@@ -1160,6 +1160,10 @@ RangeTransform::change_response_header()
 
   // set the right Content-Type for multiple entry Range
   if (m_num_range_fields > 1) {
+
+    if (content_range_field)
+      m_transform_resp->field_delete(content_range_field);
+
     field = m_transform_resp->field_find(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE);
 
     if (field != NULL)
@@ -1174,11 +1178,15 @@ RangeTransform::change_response_header()
 
   else {
     char numbers[RANGE_NUMBERS_LENGTH];
-
-    field = m_transform_resp->field_create(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
     snprintf(numbers, sizeof(numbers), "bytes %" PRId64 "-%" PRId64 "/%" PRId64 "", m_ranges[0]._start, m_ranges[0]._end, m_content_length);
-    field->value_append(m_transform_resp->m_heap, m_transform_resp->m_mime, numbers, strlen(numbers));
-    m_transform_resp->field_attach(field);
+
+    if (content_range_field) {
+      mime_field_value_set(m_transform_resp->m_heap, m_transform_resp->m_mime, content_range_field, numbers, strlen(numbers), true);
+    } else {
+      field = m_transform_resp->field_create(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
+      field->value_append(m_transform_resp->m_heap, m_transform_resp->m_mime, numbers, strlen(numbers));
+      m_transform_resp->field_attach(field);
+    }
   }
 }
 
