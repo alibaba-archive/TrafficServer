@@ -2888,7 +2888,6 @@ HttpSM::tunnel_handler_server(int event, HttpTunnelProducer * p)
     ink_assert(p->vc_type == HT_HTTP_SERVER);
     if (is_http_server_eos_truncation(p)) {
       DebugSM("http", "[%" PRId64 "] [HttpSM::tunnel_handler_server] aborting cache writes due to server truncation", sm_id);
-      tunnel.abort_cache_write_finish_others(p);
       t_state.current.server->abort = HttpTransact::ABORTED;
       t_state.client_info.keep_alive = HTTP_NO_KEEPALIVE;
       t_state.current.server->keep_alive = HTTP_NO_KEEPALIVE;
@@ -2897,6 +2896,8 @@ HttpSM::tunnel_handler_server(int event, HttpTunnelProducer * p)
         t_state.squid_codes.log_code = SQUID_LOG_ERR_SPIDER_TIMEOUT_WHILE_DRAINING;
         t_state.squid_codes.hier_code = SQUID_HIER_TIMEOUT_DIRECT;
       }
+
+      tunnel.abort_cache_write_finish_others(p);
     } else {
       p->read_success = true;
       t_state.current.server->abort = HttpTransact::DIDNOT_ABORT;
