@@ -69,7 +69,7 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
   (void) params;
   ink_assert(cont);
   ClusterSession session;
-  if (cluster_create_session(&session, owner_machine, NULL, RESPONSE_EVENT_NOTIFY_DEALER)) {
+  if (cluster_create_session(&session, owner_machine, NULL, 0)) {
     cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, NULL);
     return ACTION_RESULT_DONE;
   }
@@ -186,7 +186,7 @@ Cluster_write(Continuation * cont, int expected_size,
   (void) request;
   ClusterSession session;
   ink_assert(cont);
-  if (cluster_create_session(&session, m, NULL, RESPONSE_EVENT_NOTIFY_DEALER)) {
+  if (cluster_create_session(&session, m, NULL, 0)) {
      cont->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, NULL);
      return ACTION_RESULT_DONE;
   }
@@ -294,7 +294,7 @@ Cluster_link(ClusterMachine * m, Continuation * cont, CacheKey * from, CacheKey 
   Ptr<IOBufferData> d = NULL;
   char *msg = NULL;
 
-  if (cluster_create_session(&session, m, NULL, RESPONSE_EVENT_NOTIFY_DEALER)) {
+  if (cluster_create_session(&session, m, NULL, 0)) {
     cont->handleEvent(CACHE_EVENT_LINK_FAILED, NULL);
     return ACTION_RESULT_DONE;
   }
@@ -342,7 +342,7 @@ Cluster_deref(ClusterMachine * m, Continuation * cont, CacheKey * key, CacheFrag
   Ptr<IOBufferData> d = NULL;
   char *msg = NULL;
 
-  if (cluster_create_session(&session, m, NULL, RESPONSE_EVENT_NOTIFY_DEALER)) {
+  if (cluster_create_session(&session, m, NULL, 0)) {
     cont->handleEvent(CACHE_EVENT_DEREF_FAILED, NULL);
     return ACTION_RESULT_DONE ;
   }
@@ -390,7 +390,7 @@ Cluster_remove(ClusterMachine * m, Continuation * cont, CacheKey * key,
   Ptr<IOBufferData> d = NULL;
   char *msg = NULL;
 
-  if (cluster_create_session(&session, m, NULL, RESPONSE_EVENT_NOTIFY_DEALER)) {
+  if (cluster_create_session(&session, m, NULL, 0)) {
     if (cont)
       cont->handleEvent(CACHE_EVENT_REMOVE_FAILED, NULL);
     return ACTION_RESULT_DONE;

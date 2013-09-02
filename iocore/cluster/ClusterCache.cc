@@ -793,16 +793,17 @@ CacheContinuation::do_op(Continuation * c, ClusterSession cs, void *args,
   IOBufferBlock *ret = new_IOBufferBlock(data, data_len, 0);
   ret->_buf_end = ret->_end;
 
-  if (!ccvc) // no need response
-    cluster_set_events(cs, 0);
-  else
-    ccvc->in_progress = true;
   if (!cluster_send_message(cs, CLUSTER_CACHE_OP_CLUSTER_FUNCTION, ret, -1, PRIORITY_HIGH)) {
-    return ccvc ? &ccvc->_action : 0;
-  } else {
-    cluster_close_session(cs);
-    if (ccvc)
-      free_ClusterCacheVC(ccvc);
+    if (ccvc) {
+      ccvc->in_progress = true;
+      cluster_set_events(cs, RESPONSE_EVENT_NOTIFY_DEALER);
+      return &ccvc->_action;
+    }
+  }
+  cluster_close_session(cs);
+  if (ccvc) {
+    ccvc->session_closed = true;
+    free_ClusterCacheVC(ccvc);
   }
   return 0;
 }
