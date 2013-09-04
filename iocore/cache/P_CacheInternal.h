@@ -243,10 +243,16 @@ extern int good_ssd_disks;
 extern int64_t transistor_range_threshold;
 #endif
 
-// CacheVC
+struct CacheWriterTable;
+struct CacheWriterEntry;
+
 struct CacheVC: public CacheVConnection
 {
   CacheVC();
+
+//  bool get_entry(CacheWriterTable *table);
+  bool add_entry(CacheWriterTable *table);
+  void clear_entry(CacheWriterTable *table);
 
   VIO *do_io_read(Continuation *c, int64_t nbytes, MIOBuffer *buf);
   VIO *do_io_pread(Continuation *c, int64_t nbytes, MIOBuffer *buf, int64_t offset);
@@ -316,6 +322,9 @@ struct CacheVC: public CacheVConnection
 #endif
   int openReadStartHead(int event, Event *e);
   int openReadFromWriter(int event, Event *e);
+  int openReadFromWriterHead(int event, Event *e);
+//  int openReadFromWriterData(int event, Event *e);
+  int handleReadFromWriter(int event, Event *e);
   int openReadFromWriterMain(int event, Event *e);
   int openReadFromWriterFailure(int event, Event *);
   int openReadChooseWriter(int event, Event *e);
@@ -358,6 +367,10 @@ struct CacheVC: public CacheVConnection
   void set_agg_write_in_progress()
   {
     io.aiocb.aio_fildes = AIO_AGG_WRITE_IN_PROGRESS;
+  }
+  void set_read_while_write_in_progress()
+  {
+    io.aiocb.aio_fildes = READ_WHILE_WRITE_IN_PROGRESS;
   }
   int evacuateDocDone(int event, Event *e);
   int evacuateReadHead(int event, Event *e);
@@ -410,10 +423,13 @@ struct CacheVC: public CacheVConnection
   Ptr<IOBufferBlock> blocks; // data available to write
   Ptr<IOBufferBlock> writer_buf;
 
+  Ptr<CacheWriterEntry> cw;
+
   OpenDirEntry *od;
   AIOCallbackInternal io;
   int alternate_index;          // preferred position in vector
   LINK(CacheVC, opendir_link);
+  LINK(CacheVC, signal_link);
 #ifdef CACHE_STAT_PAGES
   LINK(CacheVC, stat_link);
 #endif
@@ -528,6 +544,111 @@ struct CacheVC: public CacheVConnection
     handler = save_handler;                                       \
   } while (0)
 
+struct CacheSignaler: public Continuation
+{
+  Action action;
+  Ptr<IOBufferBlock> blocks;
+  int size;
+
+  CacheSignaler(): size(0) {
+    SET_HANDLER(&CacheSignaler::mainEvent);
+  }
+
+  int mainEvent(int event, void *e);
+};
+
+extern ClassAllocator<CacheSignaler> cacheSignalerAllocator;
+
+inline int
+CacheSignaler::mainEvent(int event, void *e) {
+  action.continuation->handleEvent(event, this);
+  mutex.clear();
+  action.mutex.clear();
+  blocks = NULL;
+  cacheSignalerAllocator.free(this);
+  return EVENT_DONE;
+}
+
+struct CacheWriterEntry: public RefCountObj
+{
+  ink_mutex *mutex;
+  CacheKey key; // for writer set
+  MIOBuffer buffer; // for writer set
+  LINK(CacheWriterEntry, link);
+  CacheHTTPInfo alternate; // for writer set
+  IOBufferReader *r;
+  CacheVC *writer; // backpointer to write_vc;
+  int64_t doc_len;
+  int64_t total_len;
+  int writer_closed;
+  bool header_only_update;
+  Ptr<IOBufferData> first_buf;
+  Queue<CacheVC, CacheVC::Link_signal_link> sq_readers; // reader for signal
+  enum WriterSignalType {
+    WRITER_META, WRITER_DATA, WRITER_CLOSE, WRITER_ABORT, WRITER_ALT_REMOVE
+  };
+
+  CacheWriterEntry();
+  void free();
+  void signal_reader(WriterSignalType type);
+
+  void reserve_writer_head(CacheVC *vc);
+  void set_writer_meta(CacheVC *vc);
+  int get_writer_meta(CacheVC *vc, bool *header_only);
+  int get_writer_data(CacheVC *vc);
+  void add_writer_data(IOBufferReader *reader, int64_t size) {
+    ink_debug_assert(reader->read_avail() >= size);
+    IOBufferBlock *b = iobufferblock_clone(reader->get_current_block(),
+        reader->start_offset, size);
+
+    ink_mutex_acquire(mutex);
+    buffer.append_block(b);
+    total_len += size;
+    Debug("read_from_writer", "received %"PRId64" bytes from writer, reader: %"PRId64"!", total_len, r->read_avail());
+    signal_reader(WRITER_DATA);
+    ink_mutex_release(mutex);
+  }
+
+  void set_writer_close(int close);
+};
+
+extern ClassAllocator<CacheWriterEntry> cacheWriterEntryAllocator;
+
+#define CACHE_WRITER_BUCKET_SIZE  8191
+struct CacheWriterBucket
+{
+  DLL<CacheWriterEntry> writers;
+  ink_mutex the_mutex;
+  CacheWriterBucket()
+  {
+    ink_mutex_init(&the_mutex, "WriterBucketMutex");
+  }
+};
+
+struct CacheWriterTable
+{
+  CacheWriterBucket buckets[CACHE_WRITER_BUCKET_SIZE];
+  bool probe_entry(INK_MD5 *key, Ptr<CacheWriterEntry> *_ref) {
+    int indx = key->word(1) % CACHE_WRITER_BUCKET_SIZE;
+    ink_mutex *mutex = &buckets[indx].the_mutex;
+
+    ink_mutex_acquire(mutex);
+    for (CacheWriterEntry *entry = buckets[indx].writers.head; entry;
+        entry = entry->link.next) {
+      if (*key == entry->key) {
+        *_ref = entry;
+        ink_mutex_release(mutex);
+        return true;
+      }
+    }
+    ink_mutex_release(mutex);
+    *_ref = NULL;
+    return false;
+  }
+};
+
+extern CacheWriterTable writerTable;
+
 struct CacheRemoveCont: public Continuation
 {
   int event_handler(int event, void *data);
@@ -604,11 +725,19 @@ free_CacheVC(CacheVC *cont)
 #endif
     }                             // else abort,cancel
   }
+  if (cont->cw) {
+    if (cont->vio.op == VIO::WRITE) {
+      cont->cw->set_writer_close(-1);
+      cont->clear_entry(&writerTable);
+    }
+    cont->cw = NULL;
+  }
   ink_debug_assert(mutex->thread_holding == this_ethread());
   if (cont->trigger)
     cont->trigger->cancel();
   ink_assert(!cont->is_io_in_progress());
   ink_assert(!cont->od);
+  ink_assert(!cont->signal_link.next && !cont->signal_link.prev);
   /* calling cont->io.action = NULL causes compile problem on 2.6 solaris
      release build....wierd??? For now, null out continuation and mutex
      of the action separately */
@@ -744,6 +873,7 @@ TS_INLINE int
 CacheVC::die()
 {
   if (vio.op == VIO::WRITE) {
+    cw->set_writer_close(closed);
 #ifdef HTTP_CACHE
     if (f.update && total_len) {
       alternate.object_key_set(earliest_key);
@@ -1561,6 +1691,63 @@ local_cache()
 
 LINK_DEFINITION(CacheVC, opendir_link)
 
+//inline bool
+//CacheVC::get_entry(CacheWriterTable *table) {
+//  int indx = first_key.word(1) % CACHE_WRITER_BUCKET_SIZE;
+//  ink_mutex *mutex = &table->buckets[indx].the_mutex;
+//
+//  ink_mutex_acquire(mutex);
+//  for (CacheWriterEntry *entry = table->buckets[indx].writers.head; entry; entry = entry->link.next) {
+//    if (first_key == entry->key) {
+//      cw = entry;
+//      ink_mutex_release(mutex);
+//      return true;
+//    }
+//  }
+//  ink_mutex_release(mutex);
+//  return false;
+//}
+
+inline bool
+CacheVC::add_entry(CacheWriterTable *table) {
+  int indx = first_key.word(1) % CACHE_WRITER_BUCKET_SIZE;
+  ink_mutex *mutex = &table->buckets[indx].the_mutex;
+  bool found = false;
+
+  ink_mutex_acquire(mutex);
+
+  for (CacheWriterEntry *entry = table->buckets[indx].writers.head; entry; entry = entry->link.next) {
+    if (first_key == entry->key) {
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    CacheWriterEntry *entry = cacheWriterEntryAllocator.alloc();
+    entry->mutex = mutex;
+    entry->key = first_key;
+    entry->writer = this;
+    entry->r = entry->buffer.alloc_reader();
+    table->buckets[indx].writers.push(entry);
+    cw = entry;
+  }
+
+  ink_mutex_release(mutex);
+  return !found;
+}
+
+inline void
+CacheVC::clear_entry(CacheWriterTable *table) {
+  int indx = first_key.word(1) % CACHE_WRITER_BUCKET_SIZE;
+  ink_mutex *mutex = &table->buckets[indx].the_mutex;
+
+  ink_assert(cw && cw->writer == this && mutex == cw->mutex);
+
+  ink_mutex_acquire(cw->mutex);
+  table->buckets[indx].writers.remove(cw);
+  ink_mutex_release(cw->mutex);
+
+}
 //struct SetIOReadMessage: public ClusterMessageHeader
 //{
 //  int64_t nbytes;

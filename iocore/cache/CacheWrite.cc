@@ -33,6 +33,10 @@ extern int64_t cache_config_ram_cache_cutoff;
 #define UINT_WRAP_GTE(_x, _y) (((_x)-(_y)) < INT_MAX) // exploit overflow
 #define UINT_WRAP_LT(_x, _y) (((_x)-(_y)) >= INT_MAX) // exploit overflow
 
+static inline uint32 target_fragment_size() {
+  return cache_config_target_fragment_size - sizeofDoc;
+}
+
 // Given a key, finds the index of the alternate which matches
 // used to get the alternate which is actually present in the document
 #ifdef HTTP_CACHE
@@ -1113,6 +1117,7 @@ CacheVC::openWriteCloseDir(int event, Event *e)
     if (closed < 0 && fragment)
       dir_delete(&earliest_key, vol, &earliest_dir);
   }
+
   if (is_debug_tag_set("cache_update")) {
     if (f.update && closed > 0) {
       if (!total_len && alternate_index != CACHE_ALT_REMOVED) {
@@ -1268,8 +1273,8 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
     next_CacheKey(&key, &key);
     if (length) {
       write_len = length;
-      if (write_len > MAX_FRAG_SIZE)
-        write_len = MAX_FRAG_SIZE;
+      if (write_len > target_fragment_size() + target_fragment_size() / 4)
+        write_len = target_fragment_size();
       if ((ret = do_write_call()) == EVENT_RETURN)
         goto Lcallreturn;
       return ret;
@@ -1301,6 +1306,7 @@ CacheVC::openWriteClose(int event, Event *e)
     if (total_len == 0) {
 #ifdef HTTP_CACHE
       if (f.update || f.force_empty) {
+        SET_HANDLER(&CacheVC::updateVector);
         return updateVector(event, e);
       } else {
         // If we've been CLOSE'd but nothing has been written then
@@ -1312,11 +1318,11 @@ CacheVC::openWriteClose(int event, Event *e)
       return openWriteCloseDir(event, e);
 #endif
     }
-    if (length && (fragment || length > MAX_FRAG_SIZE)) {
+    if (length && (fragment || length > target_fragment_size() + target_fragment_size() / 4)) {
       SET_HANDLER(&CacheVC::openWriteCloseDataDone);
       write_len = length;
-      if (write_len > MAX_FRAG_SIZE)
-        write_len = MAX_FRAG_SIZE;
+      if (write_len > target_fragment_size())
+        write_len = target_fragment_size();
       return do_write_lock_call();
     } else
       return openWriteCloseHead(event, e);
@@ -1380,10 +1386,6 @@ CacheVC::openWriteWriteDone(int event, Event *e)
   return openWriteMain(event, e);
 }
 
-static inline int target_fragment_size() {
-  return cache_config_target_fragment_size - sizeofDoc;
-}
-
 int
 CacheVC::openWriteMain(int event, Event *e)
 {
@@ -1415,6 +1417,7 @@ CacheVC::openWriteMain(int event, Event *e)
     offset = vio.buffer.reader()->start_offset;
   }
   if (avail > 0) {
+    cw->add_writer_data(vio.buffer.reader(), avail);
     vio.buffer.reader()->consume(avail);
     vio.ndone += avail;
     total_len += avail;
@@ -1567,6 +1570,7 @@ Lagain:
         dir_set_tag(&od->single_doc_dir, od->single_doc_key.word(2));
       }
       first_buf = buf;
+      cw->reserve_writer_head(this);
       goto Lsuccess;
     }
 
@@ -1688,7 +1692,8 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheFragType frag_type,
   c->f.sync = (options & CACHE_WRITE_OPT_SYNC) == CACHE_WRITE_OPT_SYNC;
   c->pin_in_cache = (uint32_t) apin_in_cache;
 
-  if ((res = c->vol->open_write_lock(c, false, 1)) > 0) {
+  if ((res = c->add_entry(&writerTable) ? 0 : ECACHE_DOC_BUSY) > 0
+      || ((res = c->vol->open_write_lock(c, false, 1)) > 0)) {
     // document currently being written, abort
     CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_FAILURE);
     cont->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, (void *) -res);
@@ -1789,6 +1794,9 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
     c->base_stat = cache_write_active_stat;
   CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
   c->pin_in_cache = (uint32_t) apin_in_cache;
+
+  if (!c->add_entry(&writerTable))
+    goto Lfailure;
 
   {
     CACHE_TRY_LOCK(lock, c->vol->mutex, cont->mutex->thread_holding);
