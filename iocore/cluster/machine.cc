@@ -87,7 +87,7 @@ static int compare_machine(const void *p1, const void *p2)
     return (*m1)->cluster_port - (*m2)->cluster_port;
   }
   else {
-    return (*m1)->ip - (*m2)->ip;
+    return (*m1)->ip < (*m2)->ip ? -1 : 1;
   }
 }
 
@@ -118,7 +118,8 @@ static ClusterMachine *do_add_machine(ClusterMachine *m, int *result)
 
     if (g_machine_count >= MAX_MACHINE_COUNT) {
       Error("file: "__FILE__", line: %d, "
-          "exceeds max machine: %d!", __LINE__, MAX_MACHINE_COUNT);
+          "host: %s:%u, exceeds max machine: %d!", __LINE__, m->hostname,
+          m->cluster_port, MAX_MACHINE_COUNT);
       *result = ENOSPC;
       pMachine = NULL;
       break;
