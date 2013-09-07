@@ -40,7 +40,6 @@ int log_message_stat(void *arg);
 
 SocketContext *get_socket_context(const ClusterMachine *machine);
 
-SocketContext *alloc_accept_sock_context(const unsigned int machine_ip);
 void free_accept_sock_context(SocketContext *pSockContext);
 
 int machine_make_connections(ClusterMachine *m);

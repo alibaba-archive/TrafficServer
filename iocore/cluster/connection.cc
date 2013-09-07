@@ -121,13 +121,11 @@ static int remove_connection(SocketContext *pSockContext, const bool needLock)
 static void close_connection(SocketContext *pSockContext)
 {
   if (pSockContext->sock >= 0) {
-    /*
     Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
         "close connection #%d %s:%d",
         __LINE__, pSockContext->sock,
         pSockContext->machine->hostname,
         pSockContext->machine->cluster_port);
-    */
 
     close(pSockContext->sock);
     pSockContext->sock = -1;
@@ -156,7 +154,7 @@ inline static int get_machine_index(const unsigned int ip)
   }
 
   count = 1;
-  while (count <= 16) {
+  while (count <= MAX_MACHINE_COUNT) {
     index = (id + count) % MAX_MACHINE_COUNT;
     if (g_machine_sockets[index].ip == ip) {
       return index;
@@ -179,13 +177,17 @@ static int alloc_machine_index(const unsigned int ip)
   }
 
   count = 1;
-  while (count <= 16) {
+  while (count <= MAX_MACHINE_COUNT) {
     index = (id + count) % MAX_MACHINE_COUNT;
     if (g_machine_sockets[index].ip == 0) {
       return index;
     }
     count++;
   }
+
+  Warning("file: "__FILE__", line: %d, " \
+      "can't malloc slot for ip: %u.%u.%u.%u",
+      __LINE__, DOT_SEPARATED(ip));
 
   return -1;
 }
@@ -319,13 +321,17 @@ static int do_send_data(ConnectContext *pConnectContext)
     result = errno != 0 ? errno : EAGAIN;
     if (result == EINTR) {
       Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
-          "write failed, errno: %d, error info: %s", \
-          __LINE__, result, strerror(result));
+          "write to %s:%d fail, errno: %d, error info: %s", \
+          __LINE__, pConnectContext->pSockContext->machine->hostname,
+          pConnectContext->pSockContext->machine->cluster_port,
+          result, strerror(result));
     }
     else if (!(result == EAGAIN)) {
       Error("file: "__FILE__", line: %d, " \
-          "write failed, errno: %d, error info: %s", \
-          __LINE__, result, strerror(result));
+          "write to %s:%d fail, errno: %d, error info: %s", \
+          __LINE__, pConnectContext->pSockContext->machine->hostname,
+          pConnectContext->pSockContext->machine->cluster_port,
+          result, strerror(result));
     }
 
     return result;
@@ -355,13 +361,17 @@ static int do_recv_data(ConnectContext *pConnectContext)
     result = errno != 0 ? errno : EAGAIN;
     if (result == EINTR) {
       Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
-          "read failed, errno: %d, error info: %s", \
-          __LINE__, result, strerror(result));
+          "read from %s:%d fail, errno: %d, error info: %s", \
+          __LINE__, pConnectContext->pSockContext->machine->hostname,
+          pConnectContext->pSockContext->machine->cluster_port,
+          result, strerror(result));
     }
     else if (!(result == EAGAIN)) {
       Error("file: "__FILE__", line: %d, " \
-          "read failed, errno: %d, error info: %s", \
-          __LINE__, result, strerror(result));
+          "read from %s:%d fail, errno: %d, error info: %s", \
+          __LINE__, pConnectContext->pSockContext->machine->hostname,
+          pConnectContext->pSockContext->machine->cluster_port,
+          result, strerror(result));
     }
 
     return result;
@@ -571,7 +581,30 @@ static SocketContext *alloc_connect_sock_context(const unsigned int machine_ip)
   return pSockContext;
 }
 
-SocketContext *alloc_accept_sock_context(const unsigned int machine_ip)
+static void free_connect_sock_context(SocketContext *pSockContext,
+    const bool needLock)
+{
+  int machine_id;
+  if ((machine_id=get_machine_index(pSockContext->machine->ip)) < 0) {
+    Warning("file: "__FILE__", line: %d, " \
+        "can't get slot for ip: %u.%u.%u.%u",
+        __LINE__, DOT_SEPARATED(pSockContext->machine->ip));
+    return;
+  }
+
+  if (needLock) {
+    pthread_mutex_lock(&connect_thread_context.lock);
+  }
+
+  pSockContext->next = g_machine_sockets[machine_id].connect_free_list;
+  g_machine_sockets[machine_id].connect_free_list = pSockContext;
+
+  if (needLock) {
+    pthread_mutex_unlock(&connect_thread_context.lock);
+  }
+}
+
+static SocketContext *alloc_accept_sock_context(const unsigned int machine_ip)
 {
   SocketContext *pSockContext;
   int machine_id;
@@ -585,6 +618,13 @@ SocketContext *alloc_accept_sock_context(const unsigned int machine_ip)
 
     g_machine_sockets[machine_id].ip = machine_ip;
   }
+
+  /*
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
+      "alloc slot for ip: %u.%u.%u.%u (%u)",
+      __LINE__, DOT_SEPARATED(machine_ip),
+      g_machine_sockets[machine_id].ip);
+  */
 
   pSockContext = g_machine_sockets[machine_id].accept_free_list;
   if (pSockContext != NULL) {
@@ -600,24 +640,27 @@ SocketContext *alloc_accept_sock_context(const unsigned int machine_ip)
   return pSockContext;
 }
 
-static void free_connect_sock_context(SocketContext *pSockContext,
-    const bool needLock)
+void free_accept_sock_context(SocketContext *pSockContext)
 {
   int machine_id;
   if ((machine_id=get_machine_index(pSockContext->machine->ip)) < 0) {
+    Warning("file: "__FILE__", line: %d, " \
+        "can't get slot for ip: %u.%u.%u.%u",
+        __LINE__, DOT_SEPARATED(pSockContext->machine->ip));
     return;
   }
 
-  if (needLock) {
-    pthread_mutex_lock(&connect_thread_context.lock);
-  }
+  /*
+  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
+      "free slot for ip: %u.%u.%u.%u (%u)",
+      __LINE__, DOT_SEPARATED(pSockContext->machine->ip),
+      g_machine_sockets[machine_id].ip);
+  */
 
-  pSockContext->next = g_machine_sockets[machine_id].connect_free_list;
-  g_machine_sockets[machine_id].connect_free_list = pSockContext;
-
-  if (needLock) {
-    pthread_mutex_unlock(&connect_thread_context.lock);
-  }
+	pthread_mutex_lock(&connect_thread_context.lock);
+  pSockContext->next = g_machine_sockets[machine_id].accept_free_list;
+  g_machine_sockets[machine_id].accept_free_list = pSockContext;
+	pthread_mutex_unlock(&connect_thread_context.lock);
 }
 
 static int alloc_socket_contexts(const int connections_per_machine,
@@ -1228,8 +1271,8 @@ static int deal_income_connection(const int incomesock)
 
   /*
   Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-      "client_ip: %s, sock: #%d", __LINE__,
-      client_ip, incomesock);
+      "income client_ip: %s, ip: %u == %u, sock: #%d", __LINE__,
+      client_ip, ip, machine->ip, incomesock);
   */
 
   pSockContext = alloc_accept_sock_context(machine->ip);
@@ -1325,8 +1368,9 @@ static int deal_connect_events(const int count)
         (pEvent->events & EPOLLHUP))
     {
         Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-            "connect to %s:%d fail, connection closed",
-            __LINE__, pSockContext->machine->hostname,
+            "connect %s %s:%d fail, connection closed",
+            __LINE__, pSockContext->connect_type == CONNECT_TYPE_SERVER ?
+            "from" : "to", pSockContext->machine->hostname,
             pSockContext->machine->cluster_port);
         release_connection(pSockContext, true);
         continue;
@@ -1410,19 +1454,6 @@ void *connect_worker_entrance(void *arg)
   }
 
   return NULL;
-}
-
-void free_accept_sock_context(SocketContext *pSockContext)
-{
-  int machine_id;
-  if ((machine_id=get_machine_index(pSockContext->machine->ip)) < 0) {
-    return;
-  }
-
-	pthread_mutex_lock(&connect_thread_context.lock);
-  pSockContext->next = g_machine_sockets[machine_id].accept_free_list;
-  g_machine_sockets[machine_id].accept_free_list = pSockContext;
-	pthread_mutex_unlock(&connect_thread_context.lock);
 }
 
 int add_machine_sock_context(SocketContext *pSockContext)
