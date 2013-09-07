@@ -3418,6 +3418,12 @@ CacheWriterEntry::get_writer_meta(CacheVC *vc, bool *header_only)
   if (vc->frag_type == CACHE_FRAG_TYPE_HTTP) {
     if (alternate.valid()) {
       ink_debug_assert(doc_len >= 0);
+      if (writer_closed && doc_len != total_len && !header_only_update) {
+        Debug("read_from_writer", "writer aborted!");
+        ink_mutex_release(mutex);
+        vc->cw = NULL;
+        return -1;
+      }
       tmp_alt.copy_shallow(&alternate);
       nbytes = doc_len;
       *header_only = header_only_update;
