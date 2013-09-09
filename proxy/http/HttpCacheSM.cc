@@ -215,8 +215,9 @@ HttpCacheSM::do_cache_open_read()
   }
   //Initialising read-while-write-inprogress flag
   this->readwhilewrite_inprogress = false;
-  Action *action_handle = cacheProcessor.open_read(this, this->lookup_url, master_sm->t_state.cache_control.cluster_cache_local, this->read_request_hdr, this->read_config,
-                                                   this->read_pin_in_cache);
+  Action *action_handle = cacheProcessor.open_read(this, this->lookup_url,
+      master_sm->t_state.cache_control.cluster_cache_local || master_sm->t_state.cop_test_page,
+      this->read_request_hdr, this->read_config, this->read_pin_in_cache);
 
   if (action_handle != ACTION_RESULT_DONE) {
     pending_action = action_handle;
