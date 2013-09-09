@@ -61,7 +61,7 @@ inline static int get_session_machine_index(const unsigned int ip)
   }
 
   count = 1;
-  while (count <= 16) {
+  while (count <= MAX_MACHINE_COUNT) {
     index = (id + count) % MAX_MACHINE_COUNT;
     if (all_sessions[index].ip == ip) {
       return index;
@@ -84,7 +84,7 @@ static int alloc_session_machine_index(const unsigned int ip)
   }
 
   count = 1;
-  while (count <= 16) {
+  while (count <= MAX_MACHINE_COUNT) {
     index = (id + count) % MAX_MACHINE_COUNT;
     if (all_sessions[index].ip == 0) {
       return index;
