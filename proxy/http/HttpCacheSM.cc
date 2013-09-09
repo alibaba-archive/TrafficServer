@@ -305,7 +305,8 @@ HttpCacheSM::open_write(URL * url, HTTPHdr * request, CacheHTTPInfo * old_info, 
   Action *action_handle = cacheProcessor.open_write(this,
                                                     0,
                                                     url,
-                                                    master_sm->t_state.cache_control.cluster_cache_local,
+                                                    master_sm->t_state.cache_control.cluster_cache_local ||
+                                                    master_sm->t_state.cop_test_page,
                                                     request,
                                                     // INKqa11166
                                                     allow_multiple ? (CacheHTTPInfo *) CACHE_ALLOW_MULTIPLE_WRITES :
