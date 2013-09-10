@@ -309,6 +309,8 @@ CacheVC::openReadFromWriterHead(int event, Event * e)
     // and hence fail the read request.
     start_time = ink_get_hrtime();
     f.read_from_writer_called = 1;
+    dir_clean(&first_dir);
+    dir_clean(&earliest_dir);
   }
 
   if (_action.cancelled) {
