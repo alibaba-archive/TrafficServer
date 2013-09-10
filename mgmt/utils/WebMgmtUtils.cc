@@ -1065,7 +1065,7 @@ setHostnameVar()
 
   // Get Our HostName
   if (gethostname(ourHostName, MAXDNAME) < 0) {
-    mgmt_fatal(stderr, "[setHostnameVar] Can not determine our hostname");
+    mgmt_fatal(stderr, errno, "[setHostnameVar] Can not determine our hostname");
   }
 
   res_init();
@@ -1303,17 +1303,17 @@ processSpawn(const char *args[],
 #endif
 
   if (pipe(stdinPipe) == -1)
-    mgmt_elog(stderr, "[processSpawn] unable to create stdin pipe\n");
+    mgmt_elog(stderr, errno, "[processSpawn] unable to create stdin pipe\n");
   if (!nowait) {
     if (pipe(stdoutPipe) == -1)
-      mgmt_elog(stderr, "[processSpawn] unable to create stdout pipe\n");
+      mgmt_elog(stderr, errno, "[processSpawn] unable to create stdout pipe\n");
   }
 
   pid = fork();
   // failed to create child process
   if (pid == (pid_t) - 1) {
     status = 1;
-    mgmt_elog(stderr, "[processSpawn] unable to fork [%d '%s']\n", errno, strerror(errno));
+    mgmt_elog(stderr, 0, "[processSpawn] unable to fork [%d '%s']\n", errno, strerror(errno));
 
   } else if (pid == 0) {        // child process
     // close all the listening port in child process
@@ -1338,20 +1338,20 @@ processSpawn(const char *args[],
        processes run as root.
     */
     if (-1 == seteuid(0))
-        mgmt_elog(stderr, "[processSpawn] unable to set effective user id to 0");
+        mgmt_elog(stderr, errno, "[processSpawn] unable to set effective user id to 0");
 #else
     // set uid to be the effective uid if it's run as root
     if (run_as_root) {
       restoreRootPriv(&saved_euid);
       if (setuid(geteuid()) == -1) {
-        mgmt_elog(stderr, "[processSpawn] unable to set uid to euid");
+        mgmt_elog(stderr, errno, "[processSpawn] unable to set uid to euid");
       }
     }
 #endif
     if (nowait) {
       // nowait - detach from parent process
       if (setsid() == (pid_t) - 1) {
-        mgmt_elog(stderr, "[processSpawn] unable to detach process from parent by setsid");
+        mgmt_elog(stderr, errno, "[processSpawn] unable to detach process from parent by setsid");
       }
     }
     // setup stdin/stdout
@@ -1370,7 +1370,7 @@ processSpawn(const char *args[],
       pid = execv(args[0], (char* const*)&args[0]);
     }
     if (pid == -1) {
-      mgmt_elog(stderr, "[processSpawn] unable to execve [%s...]\n", args[0]);
+      mgmt_elog(stderr, errno, "[processSpawn] unable to execve [%s...]\n", args[0]);
     }
     _exit(1);
 
@@ -1384,7 +1384,7 @@ processSpawn(const char *args[],
     if (input_buf) {
       // write input_buf to stdin of child process
       if (write(stdinPipe[1], input_buf->bufPtr(), input_buf->spaceUsed()) == -1)
-        mgmt_elog(stderr, "[processSpawn] unable to write to stdin pipe\n");
+        mgmt_elog(stderr, errno, "[processSpawn] unable to write to stdin pipe\n");
     }
     close(stdinPipe[1]);
 
@@ -1427,7 +1427,7 @@ processSpawn(const char *args[],
       }
       waitpid(pid, &status, 0);
       if (status) {
-        mgmt_elog(stderr, "[processSpawn] spawned process(%s) returns non-zero status '%d'", args[0], status);
+        mgmt_elog(stderr, 0, "[processSpawn] spawned process(%s) returns non-zero status '%d'", args[0], status);
       }
       close(stdoutPipe[0]);
     }

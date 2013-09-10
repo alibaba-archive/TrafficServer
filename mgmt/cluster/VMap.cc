@@ -91,7 +91,7 @@ VMap::init()
       if (err < 0) {
         snprintf(msg_buffer, sizeof(msg_buffer), "[VMap::VMap] fstat of %s failed, see syslog for more info.",
                  absolute_vipconf_binary);
-        mgmt_elog(msg_buffer);
+        mgmt_elog(errno, msg_buffer);
         snprintf(msg_buffer, sizeof(msg_buffer), "fstat of %s failed, see syslog for more info.",
                  absolute_vipconf_binary);
         lmgmt->alarm_keeper->signalAlarm(MGMT_ALARM_PROXY_SYSTEM_ERROR, msg_buffer);
@@ -99,7 +99,7 @@ VMap::init()
         snprintf(msg_buffer, sizeof(msg_buffer),
                  "[VMap::VMap] %s is not setuid root, manager will be unable to enable virtual ip addresses.",
                  absolute_vipconf_binary);
-        mgmt_elog(msg_buffer);
+        mgmt_elog(0, msg_buffer);
         snprintf(msg_buffer, sizeof(msg_buffer),
                  "%s is not setuid root, traffic manager will be unable to enable virtual ip addresses.",
                  absolute_vipconf_binary);
@@ -175,7 +175,7 @@ VMap::VMap(char *interface, unsigned long ip, ink_mutex * m)
     int len;
 
     if ((tmp_socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-      mgmt_fatal(stderr, "[VMap::VMap] Unable to create socket for interface ioctls\n");
+      mgmt_fatal(stderr, errno, "[VMap::VMap] Unable to create socket for interface ioctls\n");
     }
     // INKqa06739
     // Fetch the list of network interfaces
@@ -190,7 +190,7 @@ VMap::VMap(char *interface, unsigned long ip, ink_mutex * m)
       ifc.ifc_buf = ifbuf;
       if (ioctl(tmp_socket, SIOCGIFCONF, &ifc) < 0) {
         if (errno != EINVAL || lastlen != 0) {
-          mgmt_fatal(stderr, "[VMap::VMap] Unable to read network interface configuration\n");
+          mgmt_fatal(stderr, errno, "[VMap::VMap] Unable to read network interface configuration\n");
         }
       } else {
         if (ifc.ifc_len == lastlen) {
@@ -340,7 +340,7 @@ VMap::lt_runGambit()
         ink_strlcpy(raddr, inet_ntoa(real_addr), sizeof(raddr));
         rl_remote_map(vaddr, raddr);
       } else if (!rl_map(vaddr)) {      /* We are the winner, map it to us */
-        mgmt_elog(stderr, "[VMap::lt_runGambit] Map failed for vaddr: %s\n", vaddr);
+        mgmt_elog(stderr, 0, "[VMap::lt_runGambit] Map failed for vaddr: %s\n", vaddr);
       } else {
         mgmt_log(stderr, "[VMap::lt_runGambit] Map succeeded for vaddr: %s\n", vaddr);
       }
@@ -450,7 +450,7 @@ VMap::lt_readAListFile(char *data)
                  " virtual ips\n", tmp_interface);
       }
     } else {
-      mgmt_elog(stderr, "[VMap::lt_readAListFile] VIP in config file but no interface"
+      mgmt_elog(stderr, 0, "[VMap::lt_readAListFile] VIP in config file but no interface"
                 " '%s' present on node.\n", tmp_interface);
     }
   }
@@ -526,7 +526,7 @@ VMap::rl_remote_map(char *virt_ip, char *real_ip)
 
   snprintf((char *) buf, sizeof(buf), "map: %s", virt_ip);
   if (!(lmgmt->ccom->sendReliableMessage(inet_addr(real_ip), buf, strlen(buf), reply, 4096, false))) {
-    mgmt_elog(stderr, "[VMap::rl_remote_map] Reliable send failed\n");
+    mgmt_elog(stderr, errno, "[VMap::rl_remote_map] Reliable send failed\n");
     return false;
   } else if (strcmp(reply, "map: failed") == 0) {
     mgmt_log(stderr, "[VMap::rl_remote_map] Mapping failed\n");
@@ -548,7 +548,7 @@ VMap::rl_remote_unmap(char *virt_ip, char *real_ip)
 
   snprintf((char *) buf, sizeof(buf), "unmap: %s", virt_ip);
   if (!(lmgmt->ccom->sendReliableMessage(inet_addr(real_ip), buf, strlen(buf), reply, 4096, false))) {
-    mgmt_elog(stderr, "[VMap::rl_remote_unmap] Reliable send failed\n");
+    mgmt_elog(stderr, errno, "[VMap::rl_remote_unmap] Reliable send failed\n");
     return false;
   } else if (strcmp((char *) reply, "unmap: failed") == 0) {
     mgmt_log(stderr, "[VMap::rl_remote_unmap] Mapping failed\n");
@@ -591,7 +591,7 @@ VMap::rl_map(char *virt_ip, char *real_ip)
     last_map_change = time(NULL);
 
     if (!upAddr(virt_ip)) {
-      mgmt_elog(stderr, "[VMap::rl_map] upAddr failed\n");
+      mgmt_elog(stderr, 0, "[VMap::rl_map] upAddr failed\n");
       ats_free(entry);
       return false;
     }
@@ -623,7 +623,7 @@ VMap::rl_unmap(char *virt_ip, char *real_ip)
   if (!real_ip) {
     last_map_change = time(NULL);
     if (!(downAddr(virt_ip))) {
-      mgmt_elog(stderr, "[VMap::rl_unmap] downAddr failed\n");
+      mgmt_elog(stderr, 0, "[VMap::rl_unmap] downAddr failed\n");
       return false;
     }
   }
@@ -672,7 +672,7 @@ VMap::rl_checkConflict(char *virt_ip)
       buf++;
       ink_strlcpy(buf2, buf, sizeof(buf2));
     } else {
-      mgmt_fatal(stderr, "[VMap::rl_checkConflict] Corrupt VMap entry('%s'), bailing\n", key);
+      mgmt_fatal(stderr, 0, "[VMap::rl_checkConflict] Corrupt VMap entry('%s'), bailing\n", key);
     }
     return ats_strdup(buf2);
   }
@@ -856,7 +856,7 @@ VMap::rl_boundTo(char *virt_ip)
         buf++;
         ink_strlcpy(buf2, buf, sizeof(buf2));
       } else {
-        mgmt_fatal(stderr, "[VMap::rl_boundTo] Corrupt VMap entry('%s'), bailing\n", key);
+        mgmt_fatal(stderr, 0, "[VMap::rl_boundTo] Corrupt VMap entry('%s'), bailing\n", key);
       }
       return (inet_addr(buf2));
     }
@@ -978,7 +978,7 @@ VMap::rl_rebalance()
 
       mgmt_log(stderr, "[VMap::rl_rebalance] Remapping vaddr: '%s' from: '%s' to: '%s'\n", key, high_ip, low_ip);
       if (!rl_remap(key, high_ip, low_ip, naddr_high, naddr_low)) {
-        mgmt_elog(stderr, "[VMap::rl_rebalance] Remap failed vaddr: '%s' from: '%s' to: '%s'\n", key, high_ip, low_ip);
+        mgmt_elog(stderr, 0, "[VMap::rl_rebalance] Remap failed vaddr: '%s' from: '%s' to: '%s'\n", key, high_ip, low_ip);
       }
     } else {
       for (entry = ink_hash_table_iterator_first(ext_map, &iterator_state);
@@ -989,12 +989,12 @@ VMap::rl_rebalance()
           char vip[80], buf[80];
           //coverity[secure_coding]
           if (sscanf(key, "%79s %79s", vip, buf) != 2) {
-            mgmt_fatal("[VMap::rl_rebalance] Corrupt VMap entry('%s'), bailing\n", key);
+            mgmt_fatal(0, "[VMap::rl_rebalance] Corrupt VMap entry('%s'), bailing\n", key);
           }
 
           mgmt_log(stderr, "[VMap::rl_rebalance] Remapping vaddr: '%s' from: '%s' to: '%s'\n", vip, high_ip, low_ip);
           if (!rl_remap(vip, high_ip, low_ip, naddr_high, naddr_low)) {
-            mgmt_elog(stderr, "[VMap::lt_rebalance] Failed vaddr: '%s' from: '%s' to: '%s'\n", vip, high_ip, low_ip);
+            mgmt_elog(stderr, 0, "[VMap::lt_rebalance] Failed vaddr: '%s' from: '%s' to: '%s'\n", vip, high_ip, low_ip);
           }
           break;
         }
@@ -1013,13 +1013,13 @@ VMap::upAddr(char *virt_ip)
   InkHashTableValue hash_value;
 
   if (!enabled) {
-    mgmt_elog(stderr, "[VMap::upAddr] Called for '%s' though virtual addressing disabled\n", virt_ip);
+    mgmt_elog(stderr, 0, "[VMap::upAddr] Called for '%s' though virtual addressing disabled\n", virt_ip);
     return false;
   }
   mgmt_log(stderr, "[VMap::upAddr] Bringing up addr: '%s'\n", virt_ip);
 
   if (ink_hash_table_lookup(id_map, (InkHashTableKey) virt_ip, &hash_value) == 0) {
-    mgmt_elog(stderr, "[VMap::upAddr] Called for '%s' which is not in our vaddr.config\n", virt_ip);
+    mgmt_elog(stderr, 0, "[VMap::upAddr] Called for '%s' which is not in our vaddr.config\n", virt_ip);
     return false;
   }
 #ifdef POSIX_THREAD
@@ -1028,7 +1028,7 @@ VMap::upAddr(char *virt_ip)
   if ((pid = fork1()) < 0)
 #endif
   {
-    mgmt_elog(stderr, "[VMap::upAddr] Unable to fork1 process\n");
+    mgmt_elog(stderr, errno, "[VMap::upAddr] Unable to fork1 process\n");
     return false;
   } else if (pid > 0) {         /* Parent */
     waitpid(pid, &status, 0);
@@ -1065,7 +1065,7 @@ bool
 VMap::downAddr(char *virt_ip)
 {
   if (!enabled && !turning_off) {
-    mgmt_elog(stderr, "[VMap::downAddr] Called for '%s' though virtual addressing disabled\n", virt_ip);
+    mgmt_elog(stderr, 0, "[VMap::downAddr] Called for '%s' though virtual addressing disabled\n", virt_ip);
     return false;
   }
   mgmt_log(stderr, "[VMap::downAddr] Bringing down addr: '%s'\n", virt_ip);
@@ -1076,7 +1076,7 @@ VMap::downAddr(char *virt_ip)
   InkHashTableValue hash_value;
 
   if (ink_hash_table_lookup(id_map, (InkHashTableKey) virt_ip, &hash_value) == 0) {
-    mgmt_elog(stderr, "[VMap::downAddr] Called for '%s' which is not in our vaddr.config\n", virt_ip);
+    mgmt_elog(stderr, 0, "[VMap::downAddr] Called for '%s' which is not in our vaddr.config\n", virt_ip);
     return false;
   }
 #ifdef POSIX_THREAD
@@ -1085,7 +1085,7 @@ VMap::downAddr(char *virt_ip)
   if ((pid = fork1()) < 0)
 #endif
   {
-    mgmt_elog(stderr, "[VMap::downAddr] Unable to fork1 process\n");
+    mgmt_elog(stderr, errno, "[VMap::downAddr] Unable to fork1 process\n");
     return false;
   } else if (pid > 0) {         /* Parent */
     waitpid(pid, &status, 0);
