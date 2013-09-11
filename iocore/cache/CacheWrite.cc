@@ -1795,8 +1795,10 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
   CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
   c->pin_in_cache = (uint32_t) apin_in_cache;
 
-  if (!c->add_entry(&writerTable))
+  if (!c->add_entry(&writerTable)) {
+    err = ECACHE_DOC_BUSY;
     goto Lfailure;
+  }
 
   {
     CACHE_TRY_LOCK(lock, c->vol->mutex, cont->mutex->thread_holding);

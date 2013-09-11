@@ -2056,8 +2056,19 @@ CacheContinuation::setupVCdataRead(int event, void *data)
       return EVENT_CONT;
     }
     result_error = (int) cache_vc->flags; // if open
-  } else
+  } else {
     result_error = (intptr_t) data;
+    if (cache_config_read_while_writer && request_opcode == CACHE_OPEN_READ_LONG && result_error == -ECACHE_NO_DOC) {
+      SET_HANDLER((CacheContHandler) & CacheContinuation::setupVCdataWrite);
+      Cache *call_cache = caches[frag_type];
+      Action *a = call_cache->open_write(this, &this->url_md5, NULL, this->pin_in_cache,
+                                               NULL, this->frag_type, this->ic_hostname, this->ic_hostname_len);
+      if (a != ACTION_RESULT_DONE) {
+        pending_action = a;
+      }
+      return EVENT_CONT;
+    }
+  }
 
   // send reponse back
   if (replyOpEvent() != 0 || result != CACHE_EVENT_OPEN_READ || doc_size == 0) {

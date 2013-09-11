@@ -74,6 +74,7 @@ public:
 
   CacheVConnection *cache_read_vc;
   CacheVConnection *cache_write_vc;
+  CacheVConnection *cache_pre_write;
 
   bool read_locked;
   bool write_locked;
@@ -110,6 +111,11 @@ public:
       cache_write_vc->do_io(VIO::ABORT);
       cache_write_vc = NULL;
     }
+    if (cache_pre_write) {
+      HTTP_DECREMENT_DYN_STAT(http_current_cache_connections_stat);
+      cache_pre_write->do_io(VIO::ABORT);
+      cache_pre_write = NULL;
+    }
   }
   inline void close_write()
   {
@@ -118,6 +124,7 @@ public:
       cache_write_vc->do_io(VIO::CLOSE);
       cache_write_vc = NULL;
     }
+    ink_assert(!cache_pre_write);
   }
   inline void close_read()
   {

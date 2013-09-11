@@ -743,6 +743,13 @@ ClusterCacheVC::openReadStart(int event, void *data)
     return EVENT_DONE;
   }
   if (event != CACHE_EVENT_OPEN_READ) {
+    if (event == CACHE_EVENT_OPEN_WRITE) {
+      // the remote side do the pre_write
+      vio.op = VIO::WRITE;
+      SET_HANDLER(&ClusterCacheVC::openWriteMain);
+      _action.continuation->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, this);
+      return EVENT_DONE;
+    }
     // prevent further trigger
     remote_closed = true;
     CLUSTER_CACHE_VC_CLOSE_SESSION;

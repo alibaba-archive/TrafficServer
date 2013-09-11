@@ -63,7 +63,7 @@ HttpCacheAction::cancel(Continuation * c)
 
 HttpCacheSM::HttpCacheSM():
   Continuation(NULL),
-  cache_read_vc(NULL), cache_write_vc(NULL),
+  cache_read_vc(NULL), cache_write_vc(NULL), cache_pre_write(NULL),
   read_locked(false), write_locked(false),
   readwhilewrite_inprogress(false),
   master_sm(NULL), pending_action(NULL),
@@ -134,6 +134,11 @@ HttpCacheSM::state_cache_open_read(int event, void *data)
         open_read_cb = true;
         master_sm->handleEvent(event, data);
       }
+    } else if (0 < (intptr_t) data) {
+      // special case: remote side pre_open_write
+      open_read_cb = true;
+      cache_pre_write = (CacheVConnection *) data;
+      master_sm->handleEvent(event, (void *) -ECACHE_NO_DOC);
     } else {
       // Simple miss in the cache.
       open_read_cb = true;
@@ -282,6 +287,14 @@ HttpCacheSM::open_write(URL * url, HTTPHdr * request, CacheHTTPInfo * old_info, 
   open_write_cb = false;
   open_write_tries++;
   this->retry_write = retry;
+
+  // special case: write_vc pre_allocated on the remote side
+  if (cache_pre_write) {
+    CacheVConnection *write_vc = cache_pre_write;
+    cache_pre_write = NULL;
+    handleEvent(CACHE_EVENT_OPEN_WRITE, write_vc);
+    return ACTION_RESULT_DONE;
+  }
 
   // We should be writing the same document we did
   //  a lookup on

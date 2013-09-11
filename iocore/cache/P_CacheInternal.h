@@ -604,7 +604,6 @@ struct CacheWriterEntry: public RefCountObj
     ink_mutex_acquire(mutex);
     buffer.append_block(b);
     total_len += size;
-    Debug("read_from_writer", "received %"PRId64" bytes from writer, reader: %"PRId64"!", total_len, r->read_avail());
     signal_reader(WRITER_DATA);
     ink_mutex_release(mutex);
   }
