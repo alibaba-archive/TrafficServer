@@ -112,7 +112,6 @@ public:
       cache_write_vc = NULL;
     }
     if (cache_pre_write) {
-      HTTP_DECREMENT_DYN_STAT(http_current_cache_connections_stat);
       cache_pre_write->do_io(VIO::ABORT);
       cache_pre_write = NULL;
     }

@@ -1081,7 +1081,8 @@ ClusterCacheVC::do_io_close(int alerrno)
             remote_closed = cluster_send_message(cs,
                 -CLUSTER_CACHE_HEADER_ONLY_UPDATE, ret, -1, PRIORITY_HIGH);
           } else
-            remote_closed = cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+            remote_closed = cluster_send_message(cs, -CLUSTER_CACHE_DATA_CLOSE, &total_len,
+                sizeof total_len, PRIORITY_HIGH);
         } else {
           remote_closed = cluster_send_message(cs, -CLUSTER_CACHE_DATA_CLOSE,
               &total_len, sizeof total_len, priority);

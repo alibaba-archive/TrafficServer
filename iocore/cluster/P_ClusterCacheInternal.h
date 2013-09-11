@@ -192,6 +192,8 @@ ClusterCont::handleEvent(int event, void *d) {
     cache_op_ClusterFunction(session, context, this);
   else if (func_id == CLUSTER_CACHE_OP_RESULT_CLUSTER_FUNCTION)
     cache_op_result_ClusterFunction(session, context, this);
+  else if (func_id == CLUSTER_INTERNEL_ERROR)
+    _action.continuation->handleEvent(func_id, NULL);
   else
     _action.continuation->handleEvent(func_id, this);
 

@@ -2411,16 +2411,17 @@ CacheContinuation::VCdataWrite(int event, void *data)
       ClusterCont *cc = (ClusterCont *) data;
       ink_assert(cc && cc->data_len > 0);
       int64_t nbytes = *(int64_t *)(cc->data->start());
-      vio->nbytes = nbytes;
-      if (vio->nbytes != vio->ndone) {
-        vio->reenable();
-        return EVENT_CONT;
+      if (nbytes > 0) {
+        vio->nbytes = nbytes;
+        if (vio->nbytes != vio->ndone) {
+          vio->reenable();
+          return EVENT_CONT;
+        }
       }
     }
     case VC_EVENT_WRITE_COMPLETE:
     {
       ink_assert(!expect_next);
-      ink_assert(vio->nbytes == vio->ndone);
       cache_vc->do_io_close();
       cache_vc = NULL;
       break;
