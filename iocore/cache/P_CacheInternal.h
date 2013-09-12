@@ -110,7 +110,11 @@ struct EvacuationBlock;
     return EVENT_CONT; \
   } while (0)
 
-
+#define VC_SCHED_RWW_WAIT_TIMEOUT() \
+  do { \
+    trigger = mutex->thread_holding->schedule_in_local(this, cache_config_rww_max_delay); \
+    return EVENT_CONT; \
+  } while (0)
   // cache stats definitions
 enum
 {
@@ -235,6 +239,8 @@ extern int cache_config_hit_evacuate_size_limit;
 extern int cache_config_force_sector_size;
 extern int cache_config_target_fragment_size;
 extern int cache_config_mutex_retry_delay;
+extern int cache_config_rww_max_delay;
+
 #ifdef HTTP_CACHE
 extern int enable_cache_empty_http_doc;
 #endif
@@ -609,6 +615,20 @@ struct CacheWriterEntry: public RefCountObj
   }
 
   void set_writer_close(int close);
+  bool in_and_remove(CacheVC *vc) {
+    ink_debug_assert(this == vc->cw.m_ptr && vc->mutex->thread_holding == this_ethread());
+    ink_assert(!vc->is_io_in_progress());
+
+    bool result;
+    ink_mutex_acquire(mutex);
+    result = sq_readers.in(vc);
+    if (result) {
+      sq_readers.remove(vc);
+      vc->cw = NULL;
+    }
+    ink_mutex_release(mutex);
+    return result;
+  }
 };
 
 extern ClassAllocator<CacheWriterEntry> cacheWriterEntryAllocator;

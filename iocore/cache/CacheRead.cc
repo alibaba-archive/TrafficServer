@@ -347,7 +347,7 @@ CacheVC::openReadFromWriterHead(int event, Event * e)
     return callcont(CACHE_EVENT_OPEN_READ);
   } else if (result > 0) {
     PUSH_HANDLER(&CacheVC::handleReadFromWriter);
-    return EVENT_CONT;
+    VC_SCHED_RWW_WAIT_TIMEOUT();
   } else {
     ink_debug_assert(cw == NULL);
     SET_HANDLER(&CacheVC::openReadStartHead);
@@ -361,8 +361,15 @@ CacheVC::handleReadFromWriter(int event, Event * e)
 {
   cancel_trigger();
   ink_assert(mutex.m_ptr->thread_holding == this_ethread());
-  if (event == EVENT_IMMEDIATE)
+  if (event == EVENT_IMMEDIATE || event == EVENT_INTERVAL) {
+    if (event != EVENT_IMMEDIATE && cw->in_and_remove(this)) {
+      Debug("read_from_writer", "delay too long, give up read from writer.")
+      // rww delay timeout, just read from cache
+      SET_HANDLER(&CacheVC::openReadStartHead);
+      return openReadStartHead(EVENT_IMMEDIATE, 0);
+    }
     return EVENT_CONT;
+  }
 
   ink_assert(event >= CACHE_EVENT_META_FROM_WRITER && event <= CACHE_EVENT_WRITER_ABORTED);
   ink_debug_assert(is_io_in_progress());
@@ -1296,7 +1303,7 @@ CacheVC::openReadStartHead(int event, Event * e)
     // being written to the cache.
 
     // fix me: move this out of vol lock`s range. has no need anymore.
-    if (writerTable.probe_entry(&key, &cw) && !f.read_from_writer_called) {
+    if (!f.read_from_writer_called && writerTable.probe_entry(&key, &cw)) {
       if (f.lookup) {
         err = ECACHE_DOC_BUSY;
         goto Ldone;
