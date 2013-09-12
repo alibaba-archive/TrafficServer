@@ -132,7 +132,7 @@ RemapPlugins::run_single_remap()
     return 1;
 
   // skip the !plugin_modified_* stuff if we are on our 2nd plugin (or greater) and there's no more plugins
-  if (_cur > 0 && (_cur + 1) >= map->_plugin_count)
+  if (_cur > 0 && (_cur + 1) >= map->plugin_count)
     goto done;
 
   if (TSREMAP_NO_REMAP == plugin_retcode || TSREMAP_NO_REMAP_STOP == plugin_retcode) {
@@ -280,7 +280,7 @@ done:
     return 1;
   }
 
-  if (++_cur >= map->_plugin_count) {
+  if (++_cur >= map->plugin_count) {
     //normally, we would callback into this function but we dont have anything more to do!
     Debug("url_rewrite", "We completed all remap plugins for this rule");
     return 1;

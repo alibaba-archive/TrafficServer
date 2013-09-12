@@ -461,6 +461,13 @@ extern "C"
    ****************************************************************************/
   tsapi int TSSendClusterRPC(TSNodeHandle_t *nh, TSClusterRPCMsg_t *msg);
 
+  /****************************************************************************
+   *  get the cache url for the input url
+   *	Return == 0 Success
+   *	Return != 0 Failure
+   ****************************************************************************/
+  tsapi TSReturnCode TSCacheUrlGet(const char *in_url, const int in_url_len, char *out_url, const int out_size, int *out_url_len);
+
 #ifdef __cplusplus
 }
 #endif                          /* __cplusplus */

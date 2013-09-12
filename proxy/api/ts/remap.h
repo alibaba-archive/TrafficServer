@@ -78,7 +78,19 @@ extern "C"
     TSREMAP_ERROR = -1		/* Some error, that should generate an error page */
   } TSRemapStatus;
 
+  typedef struct {
+    char *str;   //buffer
+    int length;  //string length
+    int size;    //the buffer size
+  } RemapStringBuffer;
 
+  typedef struct {
+    RemapStringBuffer scheme;  //http or https etc
+    RemapStringBuffer host;
+    int port;
+    RemapStringBuffer path;   //TS style url path
+    RemapStringBuffer query; //url query such as: key=value&login=foo
+  } RemapUrlInfo;
 
   /* ----------------------------------------------------------------------------------
      These are the entry points a plugin can implement. Note that TSRemapInit() and
@@ -103,6 +115,14 @@ extern "C"
              TSREMAP_DID_REMAP_STOP -  Remapping was done, but stop plugin chain evaluation
   */
   TSRemapStatus TSRemapDoRemap(void* ih, TSHttpTxn rh, TSRemapRequestInfo* rri);
+
+  /* Remap convert cache url, you can change any member of url_info
+     return: TSREMAP_NO_REMAP - No remaping was done, continue with next in chain
+             TSREMAP_DID_REMAP - Remapping was done, continue with next in chain
+             TSREMAP_NO_REMAP_STOP - No remapping was done, and stop plugin chain evaluation
+             TSREMAP_DID_REMAP_STOP -  Remapping was done, but stop plugin chain evaluation
+  */
+  TSRemapStatus TSRemapConvertCacheUrl(void* ih, RemapUrlInfo *url_info);
 
 
   /* Plugin shutdown, called when plugin is unloaded.

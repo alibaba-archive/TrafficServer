@@ -71,6 +71,8 @@ public:
   void SetReverseFlag(int flag);
   void Print();
   inline bool is_valid() const { return _valid; };
+  void doRemap(UrlMappingContainer &mapping_container, URL *request_url, const bool pristine_host_hdr);
+
 //  private:
 
   static const int MAX_REGEX_SUBS = 10;
@@ -220,8 +222,6 @@ public:
 private:
   bool _valid;
   DynamicArray<ACLDefineChecker *> *_oldDefineCheckers;  //for relay delete
-
-  void _doRemap(UrlMappingContainer &mapping_container, URL *request_url);
 
   bool _mappingLookup(MappingsStore &mappings, URL *request_url,
       int request_port, const char *request_host,

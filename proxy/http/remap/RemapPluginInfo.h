@@ -44,6 +44,7 @@
 #define TSREMAP_FUNCNAME_DELETE_INSTANCE "TSRemapDeleteInstance"
 #define TSREMAP_FUNCNAME_DO_REMAP "TSRemapDoRemap"
 #define TSREMAP_FUNCNAME_OS_RESPONSE "TSRemapOSResponse"
+#define TSREMAP_FUNCNAME_CONVERT_CACHE_URL "TSRemapConvertCacheUrl"
 
 class url_mapping;
 
@@ -59,6 +60,7 @@ public:
   typedef void _tsremap_delete_instance(void*);
   typedef TSRemapStatus _tsremap_do_remap(void* ih, TSHttpTxn rh, TSRemapRequestInfo* rri);
   typedef void _tsremap_os_response(void* ih, TSHttpTxn rh, int os_response_type);
+  typedef TSRemapStatus _tsremap_convert_cache_url(void* ih, RemapUrlInfo *url_info);
 
   remap_plugin_info *next;
   char *path;
@@ -70,6 +72,7 @@ public:
   _tsremap_delete_instance *fp_tsremap_delete_instance;
   _tsremap_do_remap *fp_tsremap_do_remap;
   _tsremap_os_response *fp_tsremap_os_response;
+  _tsremap_convert_cache_url *fp_tsremap_convert_cache_url;
 
   remap_plugin_info(const char *_path);
   ~remap_plugin_info();

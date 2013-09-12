@@ -81,9 +81,13 @@ public:
   bool add_plugin(remap_plugin_info *i, void* ih);
   remap_plugin_info *get_plugin(unsigned int) const;
 
-  void* get_instance(unsigned int index) const { return _instance_data[index]; };
+  inline void* get_instance(unsigned int index) const { return _instance_data[index]; };
   void delete_instance(unsigned int index);
   void Print();
+
+  inline remap_plugin_info **get_plugins() {
+    return _plugin_list;
+  }
 
   inline int getRank() const {
     return _rank;
@@ -118,7 +122,8 @@ public:
   bool wildcard_from_scheme;    // from url is '/foo', only http or https for now
   char *filter_redirect_url;    // redirect url when referer filtering enabled
   redirect_tag_str *redir_chunk_list;
-  unsigned int _plugin_count;
+  unsigned int plugin_count;
+  unsigned int cache_url_convert_plugin_count;
   LINK(url_mapping, link); // For use with the main Queue linked list holding all the mapping
   OverridableHttpConfigParams *overridableHttpConfig;
 

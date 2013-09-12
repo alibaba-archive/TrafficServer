@@ -65,6 +65,7 @@
 #include "HttpDebugNames.h"
 #include "I_AIO.h"
 #include "I_Tasks.h"
+#include "RemapProcessor.h"
 
 #include "I_RecDefs.h"
 #include "I_RecCore.h"
@@ -8418,4 +8419,15 @@ TSMgmtIntCreate(TSRecordType rec_type, const char *name, TSMgmtInt data_default,
   return TS_SUCCESS;
 }
 
+TSReturnCode TSCacheUrlGet(const char *in_url, const int in_url_len, char *out_url, const int out_size, int *out_url_len)
+{
+  if (RemapProcessor::convert_cache_url(in_url, in_url_len, out_url, out_size, out_url_len)) {
+    return TS_SUCCESS;
+  }
+  else {
+    return TS_ERROR;
+  }
+}
+
 #endif //TS_NO_API
+

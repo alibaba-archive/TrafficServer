@@ -35,9 +35,9 @@ url_mapping::url_mapping(int rank /* = 0 */)
     unique(false), default_redirect_url(false),
     wildcard_from_scheme(false),
     filter_redirect_url(NULL),
-    redir_chunk_list(0), _plugin_count(0), overridableHttpConfig(NULL),
-    _needCheckRefererHost(false), _aclMethodIpCheckListCount(0),
-    _aclRefererCheckListCount(0), _rank(rank)
+    redir_chunk_list(0), plugin_count(0), cache_url_convert_plugin_count(0),
+    overridableHttpConfig(NULL), _needCheckRefererHost(false),
+    _aclMethodIpCheckListCount(0), _aclRefererCheckListCount(0), _rank(rank)
 {
   memset(_plugin_list, 0, sizeof(_plugin_list));
   memset(_instance_data, 0, sizeof(_instance_data));
@@ -61,7 +61,7 @@ url_mapping::~url_mapping()
   }
 
   // Delete all instance data
-  for (unsigned int i = 0; i < _plugin_count; ++i) {
+  for (unsigned int i = 0; i < plugin_count; ++i) {
     delete_instance(i);
   }
 
@@ -82,12 +82,16 @@ url_mapping::~url_mapping()
 bool
 url_mapping::add_plugin(remap_plugin_info* i, void* ih)
 {
-  if (_plugin_count >= MAX_REMAP_PLUGIN_CHAIN)
+  if (plugin_count >= MAX_REMAP_PLUGIN_CHAIN)
     return false;
 
-  _plugin_list[_plugin_count] = i;
-  _instance_data[_plugin_count] = ih;
-  ++_plugin_count;
+  _plugin_list[plugin_count] = i;
+  _instance_data[plugin_count] = ih;
+  ++plugin_count;
+
+  if (i->fp_tsremap_convert_cache_url != NULL) {
+    ++cache_url_convert_plugin_count;
+  }
 
   return true;
 }
@@ -99,8 +103,8 @@ url_mapping::add_plugin(remap_plugin_info* i, void* ih)
 remap_plugin_info*
 url_mapping::get_plugin(unsigned int index) const
 {
-  Debug("url_rewrite", "get_plugin says we have %d plugins and asking for plugin %d", _plugin_count, index);
-  if ((_plugin_count == 0) || unlikely(index > _plugin_count))
+  Debug("url_rewrite", "get_plugin says we have %d plugins and asking for plugin %d", plugin_count, index);
+  if ((plugin_count == 0) || unlikely(index > plugin_count))
     return NULL;
 
   return _plugin_list[index];
@@ -205,8 +209,8 @@ url_mapping::Print()
   toUrl.string_get_buf(to_url_buf, (int) sizeof(to_url_buf));
   printf("\t %s %s=> %s %s [plugins %s enabled; running with %u plugins]\n",
       from_url_buf, unique ? "(unique)" : "", to_url_buf,
-      homePageRedirect ? "(R)" : "", _plugin_count > 0 ? "are" : "not",
-      _plugin_count);
+      homePageRedirect ? "(R)" : "", plugin_count > 0 ? "are" : "not",
+      plugin_count);
 }
 
 /**

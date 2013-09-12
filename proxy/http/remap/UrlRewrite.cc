@@ -355,7 +355,7 @@ UrlRewrite::_tableLookup(InkHashTable *h_table, URL *request_url,
 // This is only used for redirects and reverse rules, and the homepageredirect flag
 // can never be set. The end result is that request_url is modified per remap container.
 void
-UrlRewrite::_doRemap(UrlMappingContainer &mapping_container, URL *request_url)
+UrlRewrite::doRemap(UrlMappingContainer &mapping_container, URL *request_url, const bool pristine_host_hdr)
 {
   const char *requestPath;
   int requestPathLen;
@@ -365,25 +365,29 @@ UrlRewrite::_doRemap(UrlMappingContainer &mapping_container, URL *request_url)
   int fromPathLen;
 
   URL *map_to = mapping_container.getToURL();
-  const char *toHost;
   const char *toPath;
   const char *toScheme;
   int toPathLen;
-  int toHostLen;
   int toSchemeLen;
 
   requestPath = request_url->path_get(&requestPathLen);
   map_from->path_get(&fromPathLen);
 
-  toHost = map_to->host_get(&toHostLen);
   toPath = map_to->path_get(&toPathLen);
   toScheme = map_to->scheme_get(&toSchemeLen);
 
-  Debug("url_rewrite", "_doRemap(): Remapping rule id: %d matched", mapPtr->getRank());
+  Debug("url_rewrite", "doRemap(): Remapping rule id: %d matched", mapPtr->getRank());
 
-  request_url->host_set(toHost, toHostLen);
-  request_url->port_set(map_to->port_get_raw());
   request_url->scheme_set(toScheme, toSchemeLen);
+
+  if (!pristine_host_hdr) {
+    const char *toHost;
+    int toHostLen;
+
+    toHost = map_to->host_get(&toHostLen);
+    request_url->host_set(toHost, toHostLen);
+    request_url->port_set(map_to->port_get_raw());
+  }
 
   // Should be +3, little extra padding won't hurt. Use the stack allocation
   // for better performance (bummer that arrays of variable length is not supported
@@ -466,7 +470,7 @@ UrlRewrite::ReverseMap(HTTPHdr *response_header)
 
   if (reverseMappingLookup(&location_url, location_url.port_get(), host, host_len, reverse_mapping)) {
     remap_found = true;
-    _doRemap(reverse_mapping, &location_url);
+    doRemap(reverse_mapping, &location_url, false);
     new_loc_hdr = location_url.string_get_ref(&new_loc_length);
     response_header->value_set(MIME_FIELD_LOCATION, MIME_LEN_LOCATION, new_loc_hdr, new_loc_length);
   }
@@ -595,7 +599,7 @@ UrlRewrite::Remap_redirect(HTTPHdr *request_header, URL *redirect_url)
     redirect_url->copy(request_url);
 
     // Perform the actual URL rewrite
-    _doRemap(redirect_mapping, redirect_url);
+    doRemap(redirect_mapping, redirect_url, false);
 
     return mappingType;
   }
@@ -1384,6 +1388,7 @@ int UrlRewrite::load_remap_plugin(const PluginInfo *plugin,
     pi->fp_tsremap_delete_instance = (remap_plugin_info::_tsremap_delete_instance *) dlsym(pi->dlh, TSREMAP_FUNCNAME_DELETE_INSTANCE);
     pi->fp_tsremap_do_remap = (remap_plugin_info::_tsremap_do_remap *) dlsym(pi->dlh, TSREMAP_FUNCNAME_DO_REMAP);
     pi->fp_tsremap_os_response = (remap_plugin_info::_tsremap_os_response *) dlsym(pi->dlh, TSREMAP_FUNCNAME_OS_RESPONSE);
+    pi->fp_tsremap_convert_cache_url = (remap_plugin_info::_tsremap_convert_cache_url *) dlsym(pi->dlh, TSREMAP_FUNCNAME_CONVERT_CACHE_URL);
 
     if (!pi->fp_tsremap_init) {
       snprintf(errbuf, errbufsize, "Can't find \"%s\" function in remap plugin \"%s\"", TSREMAP_FUNCNAME_INIT, filepath);

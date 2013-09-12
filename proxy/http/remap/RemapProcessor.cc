@@ -50,7 +50,6 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
   URL *request_url = NULL;
   bool mapping_found = false;
   HTTPHdr *request_header = &s->hdr_info.client_request;
-  char **redirect_url = &s->remap_redirect;
   const char *request_host;
   int request_host_len;
   int request_port;
@@ -58,8 +57,6 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
 
   s->reverse_proxy = rewrite_table->reverse_proxy;
   s->url_map.set(s->hdr_info.client_request.m_heap);
-
-  ink_assert(redirect_url != NULL);
 
   if (unlikely((rewrite_table->num_rules_forward == 0) &&
                (rewrite_table->num_rules_forward_with_recv_port == 0))) {
@@ -411,3 +408,209 @@ RemapProcessor::perform_remap(Continuation *cont, HttpTransact::State *s)
     return ACTION_RESULT_DONE;
   }
 }
+
+bool RemapProcessor::findMapping(URL *request_url, UrlMappingContainer &url_map)
+{
+  bool mapping_found = false;
+
+  if (unlikely(rewrite_table->num_rules_forward == 0)) {
+    return false;
+  }
+
+  const char *host;
+  int host_len;
+  host = request_url->host_get(&host_len);
+  if (host_len == 0) {
+    return false;
+  }
+
+  mapping_found = rewrite_table->forwardMappingLookup(request_url, request_url->port_get_raw(),
+      host, host_len, url_map);
+
+  if (!mapping_found && rewrite_table->reverse_proxy) { // do extra checks on a server request
+    // If no rules match and we have a host, check empty host rules since
+    // they function as default rules for server requests.
+    // If there's no host, we've already done this.
+    if (rewrite_table->nohost_rules && host_len > 0) {
+      mapping_found = rewrite_table->forwardMappingLookup(request_url, 0, "", 0, url_map);
+    }
+  }
+
+  return mapping_found;
+}
+
+struct URLPartsBuffer {
+  char scheme[8];  //http or https etc
+  char host[256];
+  char path[1024];   //start with /
+  char query[2048]; //url parameters such as: key=value&login=foo
+};
+
+void RemapProcessor::bindUrlBuffer(struct URLPartsBuffer *urlBuffer, RemapUrlInfo *urlInfo)
+{
+  urlInfo->scheme.str = urlBuffer->scheme;
+  urlInfo->scheme.size = sizeof(urlBuffer->scheme);
+  urlInfo->scheme.length = 0;
+
+  urlInfo->host.str = urlBuffer->host;
+  urlInfo->host.size = sizeof(urlBuffer->host);
+  urlInfo->host.length = 0;
+
+  urlInfo->path.str = urlBuffer->path;
+  urlInfo->path.size = sizeof(urlBuffer->path);
+  urlInfo->path.length = 0;
+
+  urlInfo->query.str = urlBuffer->query;
+  urlInfo->query.size = sizeof(urlBuffer->query);
+  urlInfo->query.length = 0;
+}
+
+bool RemapProcessor::copyFromUrl(URL *srcUrl, RemapUrlInfo *destUrl)
+{
+  const char *value;
+  int length;
+
+  value = srcUrl->scheme_get(&length);
+  if (length >= destUrl->scheme.size) {
+    return false;
+  }
+  memcpy(destUrl->scheme.str, value, length);
+  destUrl->scheme.length = length;
+
+  value = srcUrl->host_get(&length);
+  if (length >= destUrl->host.size) {
+    return false;
+  }
+  memcpy(destUrl->host.str, value, length);
+  destUrl->host.length = length;
+
+  value = srcUrl->path_get(&length);
+  if (length >= destUrl->path.size) {
+    return false;
+  }
+  if (length > 0) {
+    memcpy(destUrl->path.str, value, length);
+  }
+  destUrl->path.length = length;
+
+  value = srcUrl->query_get(&length);
+  if (length >= destUrl->query.size) {
+    return false;
+  }
+  if (length > 0) {
+    memcpy(destUrl->query.str, value, length);
+  }
+  destUrl->query.length = length;
+
+  destUrl->port = srcUrl->port_get_raw();
+  return true;
+}
+
+bool RemapProcessor::convert_cache_url(const char *in_url, const int in_url_len,
+      char *out_url, const int out_url_size, int *out_url_len)
+{
+  bool found;
+  bool maintain_pristine_host_hdr;
+  URL *newURL;
+  HdrHeap *hdrHeap = new_HdrHeap();
+  UrlMappingContainer url_map(hdrHeap);
+  URL old_url;
+
+  old_url.create(hdrHeap);
+  do {
+    if (old_url.parse(in_url, in_url_len) == PARSE_ERROR) {
+      found = false;
+      break;
+    }
+
+    found = findMapping(&old_url, url_map);
+    if (!found) {
+      break;
+    }
+
+    url_mapping *mapping = url_map.getMapping();
+    if (mapping->overridableHttpConfig == NULL) {
+      maintain_pristine_host_hdr = HttpConfig::m_master.oride.maintain_pristine_host_hdr;
+    }
+    else {
+      maintain_pristine_host_hdr = mapping->overridableHttpConfig->maintain_pristine_host_hdr;
+    }
+
+    newURL = &old_url;
+    rewrite_table->doRemap(url_map, newURL, maintain_pristine_host_hdr);
+    if (mapping->cache_url_convert_plugin_count == 0) {
+      newURL->string_get_buf(out_url, out_url_size, out_url_len);
+      if (*out_url_len == out_url_size) {
+        *out_url_len = out_url_size - 1;
+      }
+      *(out_url + *out_url_len) = '\0';
+      break;
+    }
+
+    URLPartsBuffer parts;
+    RemapUrlInfo url;
+    RemapUrlInfo *inURL = &url;
+    TSRemapStatus status;
+
+    bindUrlBuffer(&parts, inURL);
+    if (!copyFromUrl(newURL, inURL)) {
+      found = false;
+      break;
+    }
+
+    remap_plugin_info **plugins = mapping->get_plugins();
+    for (unsigned int i=0; i<mapping->plugin_count; i++) {
+       if (plugins[i]->fp_tsremap_convert_cache_url != NULL) {
+         status = plugins[i]->fp_tsremap_convert_cache_url(mapping->get_instance(i), inURL);
+         if (status == TSREMAP_NO_REMAP_STOP || status == TSREMAP_DID_REMAP_STOP || status == TSREMAP_ERROR) {
+           break;
+         }
+       }
+    }
+
+    char port_str[16];
+    if (inURL->port > 0) {
+      int default_port;
+      if (inURL->scheme.length == 4 && memcmp(inURL->scheme.str, "http", 4) == 0) {
+        default_port = 80;
+      }
+      else if (inURL->scheme.length == 5 && memcmp(inURL->scheme.str, "https", 5) == 0) {
+        default_port = 443;
+      }
+      else {
+        default_port = 0;
+      }
+
+      if (inURL->port == default_port) {
+        *port_str = '\0';
+      }
+      else {
+        snprintf(port_str, sizeof(port_str), ":%d", inURL->port);
+      }
+    }
+    else {
+      *port_str = '\0';
+    }
+
+    *out_url_len = snprintf(out_url, out_url_size, "%.*s://%.*s%s/%.*s",
+        inURL->scheme.length, inURL->scheme.str,
+        inURL->host.length, inURL->host.str, port_str,
+        inURL->path.length, inURL->path.str);
+    if (inURL->query.length > 0) {
+      *out_url_len += snprintf(out_url + *out_url_len,
+          out_url_size - *out_url_len, "?%.*s",
+          inURL->query.length, inURL->query.str);
+    }
+  } while (0);
+
+  old_url.clear();
+  hdrHeap->destroy();
+
+  if (!found) {
+    *out_url = '\0';
+    *out_url_len = 0;
+  }
+
+  return found;
+}
+

@@ -31,6 +31,7 @@
 #include "RemapPlugins.h"
 #include "RemapPluginInfo.h"
 #include "ReverseProxy.h"
+#include "api/ts/remap.h"
 #undef std  // FIXME: remove dependency on the STL
 #include <map>
 
@@ -59,6 +60,11 @@ public:
   void setUseSeparateThread() { _use_separate_remap_thread = true; }
   bool using_separate_thread() { return _use_separate_remap_thread == true; }
 
+  static void bindUrlBuffer(struct URLPartsBuffer *urlBuffer, RemapUrlInfo *urlInfo);
+  static bool copyFromUrl(URL *srcUrl, RemapUrlInfo *destUrl);
+  static bool findMapping(URL *request_url, UrlMappingContainer &url_map);
+  static bool convert_cache_url(const char *in_url, const int in_url_len,
+      char *out_url, const int out_url_size, int *out_url_len);
 private:
   EventType ET_REMAP;
   bool _use_separate_remap_thread;
