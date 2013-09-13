@@ -410,13 +410,14 @@ struct OverridableHttpConfigParams {
        keep_alive_enabled_in(0), keep_alive_enabled_out(0), keep_alive_post_out(0),
        share_server_sessions(0), fwd_proxy_auth_to_parent(0),
        anonymize_remove_from(0), anonymize_remove_referer(0), anonymize_remove_user_agent(0),
-       anonymize_remove_cookie(0), anonymize_remove_client_ip(0), anonymize_insert_client_ip(1),
+       anonymize_remove_cookie(0), anonymize_remove_client_ip(0),
        proxy_response_server_enabled(0), insert_squid_x_forwarded_for(0),
        send_http11_requests(3), // SEND_HTTP11_IF_REQUEST_11_AND_HOSTDB
        cache_http(0), cache_force_in_ram(0), cache_cluster_cache_local(0), cache_ignore_client_no_cache(0), cache_ignore_client_cc_max_age(1),
        cache_ims_on_client_no_cache(0), cache_ignore_server_no_cache(0), cache_responses_to_cookies(0),
        cache_ignore_auth(0), cache_urls_that_look_dynamic(0), cache_required_headers(0), // CACHE_REQUIRED_HEADERS_NONE
        insert_request_via_string(0), insert_response_via_string(0), doc_in_cache_skip_dns(1),
+       anonymize_insert_client_ip(1),
        negative_caching_lifetime(0),
        sock_recv_buffer_size_out(0), sock_send_buffer_size_out(0), sock_option_flag_out(0),
        sock_packet_mark_out(0), sock_packet_tos_out(0),
@@ -482,7 +483,6 @@ struct OverridableHttpConfigParams {
   MgmtByte anonymize_remove_user_agent;
   MgmtByte anonymize_remove_cookie;
   MgmtByte anonymize_remove_client_ip;
-  MgmtByte anonymize_insert_client_ip;
 
   MgmtByte proxy_response_server_enabled;
 
@@ -519,6 +519,7 @@ struct OverridableHttpConfigParams {
   //////////////////////
   MgmtByte doc_in_cache_skip_dns;
 
+  MgmtInt anonymize_insert_client_ip;
   MgmtInt negative_caching_lifetime;
 
   ///////////////////////////////////////

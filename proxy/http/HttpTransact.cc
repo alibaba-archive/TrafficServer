@@ -5269,13 +5269,21 @@ HttpTransact::add_client_ip_to_outgoing_request(State* s, HTTPHdr* request)
   ////////////////////////////////////////////////////////////////
   // if we want client-ip headers, and there isn't one, add one //
   ////////////////////////////////////////////////////////////////
-  if ((s->txn_conf->anonymize_insert_client_ip) && (!s->txn_conf->anonymize_remove_client_ip)) {
+  if (!s->txn_conf->anonymize_remove_client_ip && ip_string_size > 0) {
     bool client_ip_set = request->presence(MIME_PRESENCE_CLIENT_IP);
     DebugTxn("http_trans", "client_ip_set = %d", client_ip_set);
 
-    if (!client_ip_set && ip_string_size > 0) {
+    if (1 == s->txn_conf->anonymize_insert_client_ip) {
+      if (!client_ip_set) {
+        request->value_set(MIME_FIELD_CLIENT_IP, MIME_LEN_CLIENT_IP, ip_string, ip_string_size);
+        DebugTxn("http_trans", "inserted request header 'Client-ip: %s'", ip_string);
+      }
+    } else if (2 == s->txn_conf->anonymize_insert_client_ip) {
+      if (client_ip_set)
+        request->field_delete(MIME_FIELD_CLIENT_IP, MIME_LEN_CLIENT_IP);
+
       request->value_set(MIME_FIELD_CLIENT_IP, MIME_LEN_CLIENT_IP, ip_string, ip_string_size);
-      DebugTxn("http_trans", "inserted request header 'Client-ip: %s'", ip_string);
+      DebugTxn("http_trans", "replace request header 'Client-ip: %s'", ip_string);
     }
   }
 
