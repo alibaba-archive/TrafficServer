@@ -442,8 +442,8 @@ bool RemapProcessor::findMapping(URL *request_url, UrlMappingContainer &url_map)
 struct URLPartsBuffer {
   char scheme[8];  //http or https etc
   char host[256];
-  char path[1024];   //start with /
-  char query[2048]; //url parameters such as: key=value&login=foo
+  char path[1024];  //NOT start with /
+  char query[4096]; //url parameters such as: key=value&login=foo
 };
 
 void RemapProcessor::bindUrlBuffer(struct URLPartsBuffer *urlBuffer, RemapUrlInfo *urlInfo)
