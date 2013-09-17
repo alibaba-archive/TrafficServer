@@ -32,6 +32,8 @@
 #include "P_Net.h"
 #include "P_RecUtils.h"
 #include <records/I_RecHttp.h>
+#include "api/ts/ts.h"
+#include "ReverseProxy.h"
 
 #ifndef min
 #define         min(a,b)        ((a) < (b) ? (a) : (b))
@@ -65,6 +67,7 @@ do { \
 } while (0);
 
 
+static bool reload_remap_config = false;  //reload remap config by overridable records.config parameters
 
 class HttpConfigCont:public Continuation
 {
@@ -100,6 +103,10 @@ HttpConfigCont::handle_event(int event, void *edata)
   NOWARN_UNUSED(edata);
   if (ink_atomic_increment((int *) &http_config_changes, -1) == 1) {
     HttpConfig::reconfigure();
+    if (reload_remap_config) {
+      reloadUrlRewrite();
+      reload_remap_config = false;
+    }
   }
   return 0;
 }
@@ -108,11 +115,18 @@ HttpConfigCont::handle_event(int event, void *edata)
 static int
 http_config_cb(const char *name, RecDataT data_type, RecData data, void *cookie)
 {
-  NOWARN_UNUSED(name);
+  TSOverridableConfigKey conf;
+  TSRecordDataType recordType;
+
   NOWARN_UNUSED(data_type);
   NOWARN_UNUSED(data);
   NOWARN_UNUSED(cookie);
   ink_atomic_increment((int *) &http_config_changes, 1);
+
+  //if the changed parameter is an overridable parameter, should reload remap.config
+  if (TSHttpTxnConfigFind(name, strlen(name), &conf, &recordType) == TS_SUCCESS) {
+    reload_remap_config = true;
+  }
 
   INK_MEMORY_BARRIER;
 
