@@ -110,11 +110,8 @@ struct EvacuationBlock;
     return EVENT_CONT; \
   } while (0)
 
-#define VC_SCHED_RWW_WAIT_TIMEOUT() \
-  do { \
-    trigger = mutex->thread_holding->schedule_in_local(this, cache_config_rww_max_delay); \
-    return EVENT_CONT; \
-  } while (0)
+#define VC_SCHED_RWW_WAIT_TIMEOUT(vc, v) \
+  vc->trigger = vc->mutex->thread_holding->schedule_in_local(vc, v)
   // cache stats definitions
 enum
 {

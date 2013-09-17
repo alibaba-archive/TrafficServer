@@ -3164,11 +3164,6 @@ ink_cache_init(ModuleVersion v)
   IOCORE_EstablishStaticConfigInt32(cache_config_mutex_retry_delay, "proxy.config.cache.mutex_retry_delay");
   Debug("cache_init", "proxy.config.cache.mutex_retry_delay = %dms", cache_config_mutex_retry_delay);
 
-  IOCORE_EstablishStaticConfigInt32(cache_config_rww_max_delay, "proxy.config.cache.read_while_writer.max_delay");
-  Debug("cache_init", "proxy.config.cache.read_while_writer.max_delay = %dms", cache_config_rww_max_delay);
-  if (cache_config_rww_max_delay <= 0)
-    cache_config_rww_max_delay = 100;
-
   // This is just here to make sure IOCORE "standalone" works, it's usually configured in RecordsConfig.cc
   IOCORE_RegisterConfigString(RECT_CONFIG, "proxy.config.config_dir", TS_BUILD_SYSCONFDIR, RECU_DYNAMIC, RECC_NULL, NULL);
   IOCORE_ReadConfigString(cache_system_config_directory, "proxy.config.config_dir", PATH_NAME_MAX);
@@ -3435,7 +3430,7 @@ CacheWriterEntry::get_writer_meta(CacheVC *vc, bool *header_only)
       *header_only = header_only_update;
       vc->first_buf = first_buf;
       ink_mutex_release(mutex);
-    } else if (writer_closed) {
+    } else if (writer_closed || !vc->params || vc->params->max_rww_delay <= 0) {
       ink_mutex_release(mutex);
       vc->cw = NULL;
       return -1;
@@ -3446,6 +3441,7 @@ CacheWriterEntry::get_writer_meta(CacheVC *vc, bool *header_only)
       ink_assert(!vc->signal_link.next && !vc->signal_link.prev);
       sq_readers.enqueue(vc);
       ink_mutex_release(mutex);
+      VC_SCHED_RWW_WAIT_TIMEOUT(vc, vc->params->max_rww_delay);
       return 1;
     }
     float Q = HttpTransactCache::calculate_quality_of_match(vc->params, &vc->request,
@@ -3463,7 +3459,7 @@ CacheWriterEntry::get_writer_meta(CacheVC *vc, bool *header_only)
     }
   } else {
     *header_only = false;
-    if (writer_closed < 0) {
+    if (writer_closed < 0 || !cache_config_read_while_writer) {
       ink_mutex_release(mutex);
       vc->cw = NULL;
       return -1;
@@ -3472,6 +3468,7 @@ CacheWriterEntry::get_writer_meta(CacheVC *vc, bool *header_only)
       ink_assert(!vc->signal_link.next && !vc->signal_link.prev);
       sq_readers.enqueue(vc);
       ink_mutex_release(mutex);
+      VC_SCHED_RWW_WAIT_TIMEOUT(vc, cache_config_rww_max_delay);
       return 1;
     }
   }

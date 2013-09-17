@@ -424,7 +424,7 @@ struct OverridableHttpConfigParams {
        server_tcp_init_cwnd(0),
        cache_heuristic_min_lifetime(0), cache_heuristic_max_lifetime(0),
        cache_guaranteed_min_lifetime(0), cache_guaranteed_max_lifetime(0), cache_max_stale_age(0),
-       keep_alive_no_activity_timeout_in(0),
+       cache_max_rww_delay(0), keep_alive_no_activity_timeout_in(0),
        keep_alive_no_activity_timeout_out(0),
        transaction_no_activity_timeout_in(0), transaction_no_activity_timeout_out(0),
        transaction_header_active_timeout_in(0),
@@ -544,7 +544,7 @@ struct OverridableHttpConfigParams {
   MgmtInt cache_guaranteed_min_lifetime;
   MgmtInt cache_guaranteed_max_lifetime;
   MgmtInt cache_max_stale_age;
-
+  MgmtInt cache_max_rww_delay;
   ///////////////////////////////////////////////////
   // connection variables. timeouts are in seconds //
   ///////////////////////////////////////////////////
@@ -821,6 +821,10 @@ public:
   ////////////////////////////////
   MgmtByte normalize_ae_gzip;
 
+  // for <= 0, not read from writer
+  // > 0, the max time that the read to wait for writer`s response
+  MgmtInt cache_max_rww_delay;
+
   OverridableHttpConfigParams oride;
 
 private:
@@ -989,7 +993,8 @@ HttpConfigParams::HttpConfigParams()
     ignore_accept_language_mismatch(0),
     ignore_accept_encoding_mismatch(0),
     ignore_accept_charset_mismatch(0),
-    normalize_ae_gzip(1)
+    normalize_ae_gzip(1),
+    cache_max_rww_delay(0)
 {
 }
 

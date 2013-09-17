@@ -5797,6 +5797,9 @@ HttpTransact::initialize_state_variables_from_request(State* s, HTTPHdr* obsolet
   s->dns_info.looking_up = ORIGIN_SERVER;
   s->dns_info.attempts = 0;
   s->dns_info.lookup_name = s->server_info.name;
+
+  // set the rww config
+  s->cache_info.config.max_rww_delay = (int) s->txn_conf->cache_max_rww_delay;
 }
 
 void

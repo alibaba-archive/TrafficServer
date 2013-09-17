@@ -2058,7 +2058,7 @@ CacheContinuation::setupVCdataRead(int event, void *data)
     result_error = (int) cache_vc->flags; // if open
   } else {
     result_error = (intptr_t) data;
-    if (cache_config_read_while_writer && request_opcode == CACHE_OPEN_READ_LONG && result_error == -ECACHE_NO_DOC) {
+    if (request_opcode == CACHE_OPEN_READ_LONG && result_error == -ECACHE_NO_DOC && (ic_params && ic_params->max_rww_delay > 0)) {
       SET_HANDLER((CacheContHandler) & CacheContinuation::setupVCdataWrite);
       Cache *call_cache = caches[frag_type];
       Action *a = call_cache->open_write(this, &this->url_md5, NULL, this->pin_in_cache,

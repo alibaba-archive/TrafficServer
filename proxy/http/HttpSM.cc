@@ -413,6 +413,7 @@ HttpSM::init()
   t_state.cache_info.config.ignore_accept_encoding_mismatch = t_state.http_config_param->ignore_accept_encoding_mismatch ? true : false;
   t_state.cache_info.config.ignore_accept_charset_mismatch = t_state.http_config_param->ignore_accept_charset_mismatch ? true : false;
   t_state.cache_info.config.cache_enable_default_vary_headers = t_state.http_config_param->cache_enable_default_vary_headers ? true : false;
+  t_state.cache_info.config.max_rww_delay = (int) t_state.http_config_param->cache_max_rww_delay;
 
   t_state.cache_info.config.cache_vary_default_text = t_state.http_config_param->cache_vary_default_text;
   t_state.cache_info.config.cache_vary_default_images = t_state.http_config_param->cache_vary_default_images;

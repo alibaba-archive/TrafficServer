@@ -62,7 +62,7 @@
 // - provides callbacks to other processors when the cluster configuration
 //   changes
 //
-#define CLUSTER_MAJOR_VERSION               5
+#define CLUSTER_MAJOR_VERSION               6
 #define CLUSTER_MINOR_VERSION               0
 
 // Lowest supported major/minor cluster version

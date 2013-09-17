@@ -347,7 +347,7 @@ CacheVC::openReadFromWriterHead(int event, Event * e)
     return callcont(CACHE_EVENT_OPEN_READ);
   } else if (result > 0) {
     PUSH_HANDLER(&CacheVC::handleReadFromWriter);
-    VC_SCHED_RWW_WAIT_TIMEOUT();
+    return EVENT_CONT;
   } else {
     ink_debug_assert(cw == NULL);
     SET_HANDLER(&CacheVC::openReadStartHead);

@@ -7776,6 +7776,10 @@ _conf_to_memberp(TSOverridableConfigKey conf,
     typ = OVERRIDABLE_TYPE_INT;
     ret = &overridablehttpConfig->cache_guaranteed_max_lifetime;
     break;
+  case TS_CONFIG_HTTP_CACHE_MAX_RWW_DELAY:
+    typ = OVERRIDABLE_TYPE_INT;
+    ret = &overridablehttpConfig->cache_max_rww_delay;
+    break;
   case TS_CONFIG_HTTP_CACHE_MAX_STALE_AGE:
     typ = OVERRIDABLE_TYPE_INT;
     ret = &overridablehttpConfig->cache_max_stale_age;
@@ -8304,6 +8308,10 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
     case 't':
       if (!strncmp(name, "proxy.config.http.forward.proxy_auth_to_parent", length))
         cnf = TS_CONFIG_HTTP_FORWARD_PROXY_AUTH_TO_PARENT;
+      break;
+    case 'y':
+      if (!strncmp(name, "proxy.config.cache.read_while_writer.max_delay", length))
+        cnf = TS_CONFIG_HTTP_CACHE_MAX_RWW_DELAY;
       break;
     }
     break;

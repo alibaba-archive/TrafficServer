@@ -1300,6 +1300,8 @@ HttpConfig::startup()
 
   HttpEstablishStaticConfigLongLong(c.oride.cache_max_stale_age, "proxy.config.http.cache.max_stale_age");
 
+  HttpEstablishStaticConfigLongLong(c.oride.cache_max_rww_delay, "proxy.config.cache.read_while_writer.max_delay");
+
   HttpEstablishStaticConfigLongLong(c.oride.freshness_fuzz_time, "proxy.config.http.cache.fuzz.time");
   HttpEstablishStaticConfigLongLong(c.oride.freshness_fuzz_min_time, "proxy.config.http.cache.fuzz.min_time");
   HttpEstablishStaticConfigFloat(c.oride.freshness_fuzz_prob, "proxy.config.http.cache.fuzz.probability");
@@ -1548,6 +1550,7 @@ HttpConfig::reconfigure()
   params->global_user_agent_header = ats_strdup(m_master.global_user_agent_header);
   params->global_user_agent_header_size = params->global_user_agent_header ?
     strlen(params->global_user_agent_header) : 0;
+  params->oride.cache_max_rww_delay = m_master.oride.cache_max_rww_delay;
 
   params->oride.proxy_response_server_string = ats_strdup(m_master.oride.proxy_response_server_string);
   params->oride.proxy_response_server_string_len = params->oride.proxy_response_server_string ?
