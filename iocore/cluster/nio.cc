@@ -14,9 +14,7 @@
 #include <sys/prctl.h>
 #include "Diags.h"
 #include "global.h"
-#include "shared_func.h"
-#include "pthread_func.h"
-#include "sockopt.h"
+#include "machine.h"
 #include "session.h"
 #include "message.h"
 #include "connection.h"
@@ -30,17 +28,15 @@
 #include "ink_config.h"
 #include "nio.h"
 
-int g_worker_thread_count = 0;
+int cluster_worker_thread_count = 0;
+WorkerThreadContext *cluster_worker_thread_contexts = NULL;
 
-struct worker_thread_context *g_worker_thread_contexts = NULL;
-
-static pthread_mutex_t worker_thread_lock;
-//static char magic_buff[4];
+static ink_mutex worker_thread_lock;
 
 static void *work_thread_entrance(void* arg);
 
-message_deal_func g_msg_deal_func = NULL;
-machine_change_notify_func g_machine_change_notify = NULL;
+message_deal_func cluster_msg_deal_func = NULL;
+machine_change_notify_func cluster_machine_change_notify = NULL;
 
 struct NIORecords {
   RecRecord * send_retry_count;
@@ -162,16 +158,16 @@ static void init_nio_stats()
 void log_nio_stats()
 {
   RecData data;
-	struct worker_thread_context *pThreadContext;
-	struct worker_thread_context *pContextEnd;
+  WorkerThreadContext *pThreadContext;
+  WorkerThreadContext *pContextEnd;
   SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   static time_t last_calc_bps_time = CURRENT_TIME();
   static int64_t last_send_bytes = 0;
 
-	pContextEnd = g_worker_thread_contexts + g_work_threads;
-	for (pThreadContext=g_worker_thread_contexts; pThreadContext<pContextEnd;
+  pContextEnd = cluster_worker_thread_contexts + num_of_cluster_threads;
+  for (pThreadContext=cluster_worker_thread_contexts; pThreadContext<pContextEnd;
       pThreadContext++)
-	{
+  {
     sum.send_msg_count += pThreadContext->stats.send_msg_count;
     sum.drop_msg_count += pThreadContext->stats.drop_msg_count;
     sum.send_bytes += pThreadContext->stats.send_bytes;
@@ -223,27 +219,27 @@ void log_nio_stats()
   RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.call_read_count", RECD_INT, &data, NULL);
 
   RecDataSetFromInk64(RECD_INT, &nio_records.send_retry_count->data,
-        sum.send_retry_count);
+      sum.send_retry_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.epoll_wait_count->data,
-        sum.epoll_wait_count);
+      sum.epoll_wait_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.epoll_wait_time_used->data,
-        sum.epoll_wait_time_used);
+      sum.epoll_wait_time_used);
   RecDataSetFromInk64(RECD_INT, &nio_records.loop_usleep_count->data,
-        sum.loop_usleep_count);
+      sum.loop_usleep_count);
   RecDataSetFromInk64(RECD_INT, &nio_records.loop_usleep_time->data,
-        sum.loop_usleep_time);
+      sum.loop_usleep_time);
 
 #ifdef DEBUG
   RecDataSetFromInk64(RECD_INT, &nio_records.max_write_loop_time_used->data,
-        max_write_loop_time_used);
+      max_write_loop_time_used);
   RecDataSetFromInk64(RECD_INT, &nio_records.max_read_loop_time_used->data,
-        max_read_loop_time_used);
+      max_read_loop_time_used);
   RecDataSetFromInk64(RECD_INT, &nio_records.max_epoll_time_used->data,
-        max_epoll_time_used);
+      max_epoll_time_used);
   RecDataSetFromInk64(RECD_INT, &nio_records.max_usleep_time_used->data,
-        max_usleep_time_used);
+      max_usleep_time_used);
   RecDataSetFromInk64(RECD_INT, &nio_records.max_callback_time_used->data,
-        max_callback_time_used);
+      max_callback_time_used);
 #endif
 
   int time_pass = CURRENT_TIME() - last_calc_bps_time;
@@ -283,119 +279,117 @@ void log_nio_stats()
 
 int nio_init()
 {
-	int result;
-	int bytes;
+  int result;
+  int bytes;
   int total_connections;
-	int max_connections_per_thread;
-	struct worker_thread_context *pThreadContext;
-	struct worker_thread_context *pContextEnd;
-	pthread_t tid;
+  int max_connections_per_thread;
+  WorkerThreadContext *pThreadContext;
+  WorkerThreadContext *pContextEnd;
 
-	if ((result=init_pthread_lock(&worker_thread_lock)) != 0) {
-		return result;
-	}
+  if ((result=ink_mutex_init(&worker_thread_lock, "worker_lock")) != 0) {
+    return result;
+  }
 
-	bytes = sizeof(struct worker_thread_context) * g_work_threads;
-	g_worker_thread_contexts = (struct worker_thread_context *)malloc(bytes);
-	if (g_worker_thread_contexts == NULL) {
-		Error("file: "__FILE__", line: %d, " \
-			"malloc %d bytes fail, errno: %d, error info: %s", \
-			__LINE__, bytes, errno, strerror(errno));
-		return errno != 0 ? errno : ENOMEM;
-	}
-  memset(g_worker_thread_contexts, 0, bytes);
+  bytes = sizeof(WorkerThreadContext) * num_of_cluster_threads;
+  cluster_worker_thread_contexts = (WorkerThreadContext *)malloc(bytes);
+  if (cluster_worker_thread_contexts == NULL) {
+    Error("file: "__FILE__", line: %d, "
+        "malloc %d bytes fail, errno: %d, error info: %s",
+        __LINE__, bytes, errno, strerror(errno));
+    return errno != 0 ? errno : ENOMEM;
+  }
+  memset(cluster_worker_thread_contexts, 0, bytes);
 
-  total_connections = g_connections_per_machine * (MAX_MACHINE_COUNT - 1);
-	max_connections_per_thread = total_connections / g_work_threads;
-	if (total_connections % g_work_threads != 0) {
-		max_connections_per_thread++;
-	}
+  total_connections = num_of_cluster_connections * (MAX_MACHINE_COUNT - 1);
+  max_connections_per_thread = total_connections / num_of_cluster_threads;
+  if (total_connections % num_of_cluster_threads != 0) {
+    max_connections_per_thread++;
+  }
 
-	g_worker_thread_count = 0;
-	pContextEnd = g_worker_thread_contexts + g_work_threads;
-	for (pThreadContext=g_worker_thread_contexts; pThreadContext<pContextEnd; pThreadContext++)
-	{
-		pThreadContext->thread_index = (int)(pThreadContext - g_worker_thread_contexts);
-		pThreadContext->alloc_size = max_connections_per_thread;
-		bytes = sizeof(struct epoll_event) * pThreadContext->alloc_size;
-		pThreadContext->events = (struct epoll_event *)malloc(bytes);
-		if (pThreadContext->events == NULL)
-		{
-			Error("file: "__FILE__", line: %d, " \
-				"malloc %d bytes fail, errno: %d, error info: %s", \
-				__LINE__, bytes, errno, strerror(errno));
-			return errno != 0 ? errno : ENOMEM;
-		}
+  cluster_worker_thread_count = 0;
+  pContextEnd = cluster_worker_thread_contexts + num_of_cluster_threads;
+  for (pThreadContext=cluster_worker_thread_contexts; pThreadContext<pContextEnd; pThreadContext++)
+  {
+    pThreadContext->thread_index = (int)(pThreadContext - cluster_worker_thread_contexts);
+    pThreadContext->alloc_size = max_connections_per_thread;
+    bytes = sizeof(struct epoll_event) * pThreadContext->alloc_size;
+    pThreadContext->events = (struct epoll_event *)malloc(bytes);
+    if (pThreadContext->events == NULL)
+    {
+      Error("file: "__FILE__", line: %d, "
+          "malloc %d bytes fail, errno: %d, error info: %s",
+          __LINE__, bytes, errno, strerror(errno));
+      return errno != 0 ? errno : ENOMEM;
+    }
 
-		bytes = sizeof(SocketContext *) * pThreadContext->alloc_size;
+    bytes = sizeof(SocketContext *) * pThreadContext->alloc_size;
     pThreadContext->active_sockets = (SocketContext **)malloc(bytes);
-		if (pThreadContext->active_sockets == NULL)
-		{
-			Error("file: "__FILE__", line: %d, " \
-				"malloc %d bytes fail, errno: %d, error info: %s", \
-				__LINE__, bytes, errno, strerror(errno));
-			return errno != 0 ? errno : ENOMEM;
-		}
+    if (pThreadContext->active_sockets == NULL)
+    {
+      Error("file: "__FILE__", line: %d, "
+          "malloc %d bytes fail, errno: %d, error info: %s",
+          __LINE__, bytes, errno, strerror(errno));
+      return errno != 0 ? errno : ENOMEM;
+    }
 
-		pThreadContext->epoll_fd = epoll_create(pThreadContext->alloc_size);
-		if (pThreadContext->epoll_fd < 0)
-		{
-			Error("file: " __FILE__ ", line: %d, "
-				"poll_create fail, errno: %d, error info: %s", \
-				__LINE__, errno, strerror(errno));
-			return errno != 0 ? errno : ENOMEM;
-		}
+    pThreadContext->epoll_fd = epoll_create(pThreadContext->alloc_size);
+    if (pThreadContext->epoll_fd < 0)
+    {
+      Error("file: " __FILE__ ", line: %d, "
+          "poll_create fail, errno: %d, error info: %s",
+          __LINE__, errno, strerror(errno));
+      return errno != 0 ? errno : ENOMEM;
+    }
 
-		if ((result=init_pthread_lock(&pThreadContext->lock)) != 0)
-		{
-			return result;
-		}
+    if ((result=ink_mutex_init(&pThreadContext->lock, "context_lock")) != 0)
+    {
+      return result;
+    }
 
-		if ((result=pthread_create(&tid, NULL,
-			work_thread_entrance, pThreadContext)) != 0)
-		{
-			Error("file: "__FILE__", line: %d, " \
-				"create thread failed, startup threads: %d, " \
-				"errno: %d, error info: %s",
-				__LINE__, g_worker_thread_count,
-				result, strerror(result));
-			break;
-		}
-		else
-		{
-			if ((result=pthread_mutex_lock(&worker_thread_lock)) != 0) {
-				Error("file: "__FILE__", line: %d, " \
-					"call pthread_mutex_lock fail, " \
-					"errno: %d, error info: %s",
-					__LINE__, result, strerror(result));
-			}
-			g_worker_thread_count++;
-			if ((result=pthread_mutex_unlock(&worker_thread_lock)) != 0) {
-				Error("file: "__FILE__", line: %d, " \
-					"call pthread_mutex_unlock fail, " \
-					"errno: %d, error info: %s",
-					__LINE__, result, strerror(result));
-			}
-		}
-	}
+    if (ink_thread_create(work_thread_entrance, pThreadContext) == 0)
+    {
+      result = errno != 0 ? errno : ENOMEM;
+      Error("file: "__FILE__", line: %d, "
+          "create thread failed, startup threads: %d, "
+          "errno: %d, error info: %s",
+          __LINE__, cluster_worker_thread_count,
+          result, strerror(result));
+      break;
+    }
+    else
+    {
+      if ((result=ink_mutex_acquire(&worker_thread_lock)) != 0) {
+        Error("file: "__FILE__", line: %d, "
+            "call ink_mutex_acquire fail, "
+            "errno: %d, error info: %s",
+            __LINE__, result, strerror(result));
+      }
+      cluster_worker_thread_count++;
+      if ((result=ink_mutex_release(&worker_thread_lock)) != 0) {
+        Error("file: "__FILE__", line: %d, "
+            "call ink_mutex_release fail, "
+            "errno: %d, error info: %s",
+            __LINE__, result, strerror(result));
+      }
+    }
+  }
 
   init_nio_stats();
 
-	//int2buff(MAGIC_NUMBER, magic_buff);
-	return 0;
+  return 0;
 }
 
 int nio_destroy()
 {
-	pthread_mutex_destroy(&worker_thread_lock);
-	return 0;
+  ink_mutex_destroy(&worker_thread_lock);
+  return 0;
 }
 
 int cluster_global_init(message_deal_func deal_func,
     machine_change_notify_func machine_change_notify)
 {
-  g_msg_deal_func = deal_func;
-  g_machine_change_notify = machine_change_notify;
+  cluster_msg_deal_func = deal_func;
+  cluster_machine_change_notify = machine_change_notify;
   return 0;
 }
 
@@ -428,26 +422,26 @@ int cluster_global_init(message_deal_func deal_func,
 
 static int set_socket_rw_buff_size(int sock)
 {
-	int bytes;
+  int bytes;
 
-  if (g_socket_send_bufsize > 0) {
-    bytes = g_socket_send_bufsize;
+  if (cluster_send_buffer_size > 0) {
+    bytes = cluster_send_buffer_size;
     if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
           (char *)&bytes, sizeof(int)) < 0)
     {
-      Error("file: "__FILE__", line: %d, " \
+      Error("file: "__FILE__", line: %d, "
           "setsockopt failed, errno: %d, error info: %s",
           __LINE__, errno, strerror(errno));
       return errno != 0 ? errno : ENOMEM;
     }
   }
 
-  if (g_socket_recv_bufsize > 0) {
-    bytes = g_socket_recv_bufsize;
+  if (cluster_receive_buffer_size > 0) {
+    bytes = cluster_receive_buffer_size;
     if (setsockopt(sock, SOL_SOCKET, SO_RCVBUF,
           (char *)&bytes, sizeof(int)) < 0)
     {
-      Error("file: "__FILE__", line: %d, " \
+      Error("file: "__FILE__", line: %d, "
           "setsockopt failed, errno: %d, error info: %s",
           __LINE__, errno, strerror(errno));
       return errno != 0 ? errno : ENOMEM;
@@ -459,11 +453,11 @@ static int set_socket_rw_buff_size(int sock)
 
 static int add_to_active_sockets(SocketContext *pSockContext)
 {
-  pthread_mutex_lock(&pSockContext->thread_context->lock);
+  ink_mutex_acquire(&pSockContext->thread_context->lock);
   pSockContext->thread_context->active_sockets[
     pSockContext->thread_context->active_sock_count] = pSockContext;
   pSockContext->thread_context->active_sock_count++;
-  pthread_mutex_unlock(&pSockContext->thread_context->lock);
+  ink_mutex_release(&pSockContext->thread_context->lock);
   return 0;
 }
 
@@ -474,7 +468,7 @@ static int remove_from_active_sockets(SocketContext *pSockContext)
   SocketContext **ppContextEnd;
   SocketContext **ppCurrent;
 
-  pthread_mutex_lock(&pSockContext->thread_context->lock);
+  ink_mutex_acquire(&pSockContext->thread_context->lock);
   ppContextEnd = pSockContext->thread_context->active_sockets +
     pSockContext->thread_context->active_sock_count;
   for (ppSockContext=pSockContext->thread_context->active_sockets;
@@ -486,9 +480,9 @@ static int remove_from_active_sockets(SocketContext *pSockContext)
   }
 
   if (ppSockContext == ppContextEnd) {
-      Error("file: "__FILE__", line: %d, " \
-          "socket context for %s not found!", __LINE__,
-          pSockContext->machine->hostname);
+    Error("file: "__FILE__", line: %d, "
+        "socket context for %s not found!", __LINE__,
+        pSockContext->machine->hostname);
     result = ENOENT;
   }
   else {
@@ -498,21 +492,21 @@ static int remove_from_active_sockets(SocketContext *pSockContext)
     pSockContext->thread_context->active_sock_count--;
     result = 0;
   }
-  pthread_mutex_unlock(&pSockContext->thread_context->lock);
+  ink_mutex_release(&pSockContext->thread_context->lock);
 
   return result;
 }
 
 int nio_add_to_epoll(SocketContext *pSockContext)
 {
-	struct epoll_event event;
+  struct epoll_event event;
   int i;
 
   /*
-  Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-      "%s:%d nio_add_to_epoll", __LINE__, pSockContext->machine->hostname,
-      pSockContext->machine->cluster_port);
-  */
+     Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
+     "%s:%d nio_add_to_epoll", __LINE__, pSockContext->machine->hostname,
+     pSockContext->machine->cluster_port);
+     */
 
   pSockContext->connected_time = CURRENT_TIME();
   for (i=0; i<PRIORITY_COUNT; i++) {
@@ -532,48 +526,34 @@ int nio_add_to_epoll(SocketContext *pSockContext)
   init_machine_sessions(pSockContext->machine, false);
   add_machine_sock_context(pSockContext);
 
-	event.data.ptr = pSockContext;
-	event.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
-	if (epoll_ctl(pSockContext->thread_context->epoll_fd, EPOLL_CTL_ADD,
-		pSockContext->sock, &event) != 0)
-	{
-		Error("file: " __FILE__ ", line: %d, "
-			"epoll_ctl fail, errno: %d, error info: %s", \
-			__LINE__, errno, strerror(errno));
+  event.data.ptr = pSockContext;
+  event.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
+  if (epoll_ctl(pSockContext->thread_context->epoll_fd, EPOLL_CTL_ADD,
+        pSockContext->sock, &event) != 0)
+  {
+    Error("file: " __FILE__ ", line: %d, "
+        "epoll_ctl fail, errno: %d, error info: %s",
+        __LINE__, errno, strerror(errno));
     remove_machine_sock_context(pSockContext);  //rollback
-		return errno != 0 ? errno : ENOMEM;
-	}
+    return errno != 0 ? errno : ENOMEM;
+  }
 
-	return add_to_active_sockets(pSockContext);
+  return add_to_active_sockets(pSockContext);
 }
-
-/*
-static void pack_header(OutMessage *msg, char *buff)
-{
-	buff[0] = magic_buff[0];
-	buff[1] = magic_buff[1];
-	buff[2] = magic_buff[2];
-	buff[3] = magic_buff[3];
-
-	int2buff(msg->header.func_id, buff + 4);
-	int2buff(msg->header.data_len, buff + 8);
-	long2buff(msg->header.session_id.id, buff + 12);
-}
-*/
 
 static void clear_send_queue(SocketContext * pSockContext)
 {
   int i;
   int count;
   int64_t drop_bytes;
-	OutMessage *msg;
+  OutMessage *msg;
   MessageQueue *send_queue;
 
   count = 0;
   drop_bytes = 0;
   for (i=0; i<PRIORITY_COUNT; i++) {
     send_queue = pSockContext->send_queues + i;
-    pthread_mutex_lock(&send_queue->lock);
+    ink_mutex_acquire(&send_queue->lock);
     while (send_queue->head != NULL) {
       msg = send_queue->head;
       send_queue->head = send_queue->head->next;
@@ -581,7 +561,7 @@ static void clear_send_queue(SocketContext * pSockContext)
       release_out_message(pSockContext, msg);
       count++;
     }
-    pthread_mutex_unlock(&send_queue->lock);
+    ink_mutex_release(&send_queue->lock);
   }
 
   if (count > 0) {
@@ -596,18 +576,18 @@ static void clear_send_queue(SocketContext * pSockContext)
 
 static int close_socket(SocketContext * pSockContext)
 {
-	if (epoll_ctl(pSockContext->thread_context->epoll_fd, EPOLL_CTL_DEL,
-		pSockContext->sock, NULL) != 0)
-	{
-		Error("file: " __FILE__ ", line: %d, "
-			"epoll_ctl fail, errno: %d, error info: %s", \
-			__LINE__, errno, strerror(errno));
-		return errno != 0 ? errno : ENOMEM;
-	}
+  if (epoll_ctl(pSockContext->thread_context->epoll_fd, EPOLL_CTL_DEL,
+        pSockContext->sock, NULL) != 0)
+  {
+    Error("file: " __FILE__ ", line: %d, "
+        "epoll_ctl fail, errno: %d, error info: %s",
+        __LINE__, errno, strerror(errno));
+    return errno != 0 ? errno : ENOMEM;
+  }
   remove_from_active_sockets(pSockContext);
 
   machine_remove_connection(pSockContext);
-	close(pSockContext->sock);
+  close(pSockContext->sock);
   pSockContext->sock = -1;
 
   pSockContext->reader.blocks = NULL;
@@ -622,8 +602,8 @@ static int close_socket(SocketContext * pSockContext)
   else {
     free_accept_sock_context(pSockContext);
   }
-  
-	return 0;
+
+  return 0;
 }
 
 inline static int send_ping_message(SocketContext *pSockContext)
@@ -631,7 +611,7 @@ inline static int send_ping_message(SocketContext *pSockContext)
   ClusterSession session;
 
   //ping message do NOT care session id
-  session.fields.ip = g_my_machine_ip;
+  session.fields.ip = my_machine_ip;
   session.fields.timestamp = CURRENT_TIME();
   session.fields.seq = 0;   //just use 0
   return cluster_send_msg_internal_ex(&session,
@@ -646,7 +626,7 @@ static int deal_write_event(SocketContext * pSockContext)
 #define BUFF_TYPE_PADDING   'P'
 
   MessageQueue *send_queue;
-	struct iovec write_vec[WRITEV_ARRAY_SIZE];
+  struct iovec write_vec[WRITEV_ARRAY_SIZE];
   struct {
     int priority;
     int index;     //message index
@@ -661,24 +641,24 @@ static int deal_write_event(SocketContext * pSockContext)
     int done_count;
   } msgs[PRIORITY_COUNT];
 
-	OutMessage *msg;
+  OutMessage *msg;
   int write_bytes;
   int remain_len;
   int priority;
   int start;
   int total_msg_count;
-	int vec_count;
-	int total_bytes;
+  int vec_count;
+  int total_bytes;
   int total_done_count;
-	int result;
+  int result;
   int i, k;
   bool fetch_done;
   bool last_msg_complete;
 
-	msgs[0].msg_count = msgs[1].msg_count = msgs[2].msg_count = 0;
+  msgs[0].msg_count = msgs[1].msg_count = msgs[2].msg_count = 0;
   total_msg_count = 0;
-	vec_count = 0;
-	total_bytes = 0;
+  vec_count = 0;
+  total_bytes = 0;
 
   priority = pSockContext->queue_index;
   if (pSockContext->queue_index == 0) {
@@ -692,7 +672,7 @@ static int deal_write_event(SocketContext * pSockContext)
   fetch_done = false;
   for (i=start; i<=PRIORITY_COUNT; i++) {
     send_queue = pSockContext->send_queues + priority;
-    pthread_mutex_lock(&send_queue->lock);
+    ink_mutex_acquire(&send_queue->lock);
     msg = send_queue->head;
     if (pSockContext->queue_index > 0 &&
         i == pSockContext->queue_index + 1)
@@ -780,14 +760,14 @@ static int deal_write_event(SocketContext * pSockContext)
       total_msg_count++;
 
       /*
-      Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-          "%s:%d sending msg, data body: %d, msg send bytes: %d, total_bytes: %d",
-          __LINE__,
-          pSockContext->machine->hostname,
-          pSockContext->machine->cluster_port,
-          msg->header.data_len,
-          msg->bytes_sent, total_bytes);
-      */
+         Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
+         "%s:%d sending msg, data body: %d, msg send bytes: %d, total_bytes: %d",
+         __LINE__,
+         pSockContext->machine->hostname,
+         pSockContext->machine->cluster_port,
+         msg->header.data_len,
+         msg->bytes_sent, total_bytes);
+         */
       if (total_msg_count == WRITEV_ITEM_ONCE ||
           vec_count >= WRITEV_ARRAY_SIZE - 2 ||
           total_bytes >= WRITE_MAX_COMBINE_BYTES)
@@ -800,7 +780,7 @@ static int deal_write_event(SocketContext * pSockContext)
       }
       msg = msg->next;
     }
-    pthread_mutex_unlock(&send_queue->lock);
+    ink_mutex_release(&send_queue->lock);
 
     if (fetch_done) {
       break;
@@ -815,46 +795,46 @@ static int deal_write_event(SocketContext * pSockContext)
   }
 
   /*
-  Debug(CLUSTER_DEBUG_TAG, "==wwwwww==file: " __FILE__ ", line: %d, "
-      "%s:%d total_bytes: %d, vec_count: %d, total_msg_count: %d", __LINE__,
-      pSockContext->machine->hostname,
-      pSockContext->machine->cluster_port,
-      total_bytes, vec_count, total_msg_count);
-  */
+     Debug(CLUSTER_DEBUG_TAG, "==wwwwww==file: " __FILE__ ", line: %d, "
+     "%s:%d total_bytes: %d, vec_count: %d, total_msg_count: %d", __LINE__,
+     pSockContext->machine->hostname,
+     pSockContext->machine->cluster_port,
+     total_bytes, vec_count, total_msg_count);
+     */
 
-	if (vec_count == 0) {
+  if (vec_count == 0) {
     return EAGAIN;
-	}
+  }
 
   pSockContext->thread_context->stats.send_retry_count += total_msg_count;
   pSockContext->thread_context->stats.call_writev_count++;
-	write_bytes = writev(pSockContext->sock, write_vec, vec_count);
-	if (write_bytes == 0) {   //connection closed
-		Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
-			"write to %s fail, connection closed",
-			__LINE__, pSockContext->machine->hostname);
-		return ECONNRESET;
-	}
-	else if (write_bytes < 0) {
-		if (errno == EAGAIN || errno == EWOULDBLOCK) {
-			return EAGAIN;
-		}
+  write_bytes = writev(pSockContext->sock, write_vec, vec_count);
+  if (write_bytes == 0) {   //connection closed
+    Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
+        "write to %s fail, connection closed",
+        __LINE__, pSockContext->machine->hostname);
+    return ECONNRESET;
+  }
+  else if (write_bytes < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      return EAGAIN;
+    }
     else if (errno == EINTR) {  //should try again
-			Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__ ", line: %d, "
-				"write to %s fail, errno: %d, error info: %s",
-				__LINE__, pSockContext->machine->hostname,
-        errno, strerror(errno));
+      Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__ ", line: %d, "
+          "write to %s fail, errno: %d, error info: %s",
+          __LINE__, pSockContext->machine->hostname,
+          errno, strerror(errno));
       return 0;
     }
-		else {
-			result = errno != 0 ? errno : EIO;
+    else {
+      result = errno != 0 ? errno : EIO;
       Error("file: "__FILE__", line: %d, "
-				"write to %s fail, errno: %d, error info: %s",
-				__LINE__, pSockContext->machine->hostname,
-        result, strerror(result));
-			return result;
-		}
-	}
+          "write to %s fail, errno: %d, error info: %s",
+          __LINE__, pSockContext->machine->hostname,
+          result, strerror(result));
+      return result;
+    }
+  }
 
   pSockContext->thread_context->stats.send_bytes += write_bytes;
   if (write_bytes == total_bytes && fetch_done) {  //send done and have more message to send
@@ -864,7 +844,7 @@ static int deal_write_event(SocketContext * pSockContext)
     result = EAGAIN;
   }
 
-	if (write_bytes == total_bytes && last_msg_complete) {  //all done
+  if (write_bytes == total_bytes && last_msg_complete) {  //all done
     for (i=0; i<PRIORITY_COUNT; i++) {
       msgs[i].pDoneMsgs = msgs[i].send_msgs;
       msgs[i].done_count = msgs[i].msg_count;
@@ -872,7 +852,7 @@ static int deal_write_event(SocketContext * pSockContext)
 
     total_done_count = total_msg_count;
     pSockContext->queue_index = 0;
-	}
+  }
   else {
     int vi;
     int remain_bytes;
@@ -934,12 +914,12 @@ static int deal_write_event(SocketContext * pSockContext)
     }
 
     send_queue = pSockContext->send_queues + i;
-    pthread_mutex_lock(&send_queue->lock);
+    ink_mutex_acquire(&send_queue->lock);
     send_queue->head = msgs[i].pDoneMsgs[msgs[i].done_count - 1]->next;
     if (send_queue->head == NULL) {
       send_queue->tail = NULL;
     }
-    pthread_mutex_unlock(&send_queue->lock);
+    ink_mutex_release(&send_queue->lock);
   }
 
   for (i=0; i<PRIORITY_COUNT; i++) {
@@ -955,19 +935,19 @@ static int deal_write_event(SocketContext * pSockContext)
           max_session_count_per_machine;
         SESSION_LOCK(pMachineSessions, session_index);
 
-        if (!(msg->header.session_id.fields.ip == g_my_machine_ip))
+        if (!(msg->header.session_id.fields.ip == my_machine_ip))
         {  //request by other
           if (pSessionEntry->server_start_time != 0) {
-            __sync_fetch_and_add(&pMachineSessions->msg_stat.count, 1);
-            __sync_fetch_and_add(&pMachineSessions->msg_stat.time_used,
+            ink_atomic_increment64(&pMachineSessions->msg_stat.count, 1);
+            ink_atomic_increment64(&pMachineSessions->msg_stat.time_used,
                 CURRENT_NS() - pSessionEntry->server_start_time);
             pSessionEntry->server_start_time = 0;
           }
         }
 
         if (pSessionEntry->send_start_time != 0) {
-          __sync_fetch_and_add(&pMachineSessions->msg_send.count, 1);
-          __sync_fetch_and_add(&pMachineSessions->msg_send.time_used,
+          ink_atomic_increment64(&pMachineSessions->msg_send.count, 1);
+          ink_atomic_increment64(&pMachineSessions->msg_send.time_used,
               (CURRENT_NS() - pSessionEntry->send_start_time));
           pSessionEntry->send_start_time = 0;
         }
@@ -978,14 +958,14 @@ static int deal_write_event(SocketContext * pSockContext)
 
 
       /*
-      Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-          "%s:%d send msg done, data body: %d, send bytes: %d",
-          __LINE__,
-          pSockContext->machine->hostname,
-          pSockContext->machine->cluster_port,
-          msgs[i].pDoneMsgs[k]->header.data_len,
-          msgs[i].pDoneMsgs[k]->bytes_sent);
-      */
+         Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
+         "%s:%d send msg done, data body: %d, send bytes: %d",
+         __LINE__,
+         pSockContext->machine->hostname,
+         pSockContext->machine->cluster_port,
+         msgs[i].pDoneMsgs[k]->header.data_len,
+         msgs[i].pDoneMsgs[k]->bytes_sent);
+         */
 
       pSockContext->thread_context->stats.send_delayed_time +=
         CURRENT_NS() - msg->in_queue_time;
@@ -1006,23 +986,23 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
   void *user_data;
   int64_t time_used;
 
- /*
-  Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
-      "func_id: %d, data length: %d, recv_msg_count: %ld", __LINE__,
-      pHeader->func_id, data_len, count + 1);
-  */
+  /*
+     Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
+     "func_id: %d, data length: %d, recv_msg_count: %"PRId64"", __LINE__,
+     pHeader->func_id, data_len, count + 1);
+     */
 
   //deal internal ping message first
   if (pHeader->func_id == FUNC_ID_CLUSTER_PING_REQUEST) {
-      time_used = CURRENT_TIME() - pHeader->session_id.fields.timestamp;
-      if (time_used > 1) {
-        Warning("cluster recv client %s ping, sock: #%d, time pass: %d s",
-            pSockContext->machine->hostname, pSockContext->sock,
-            (int)time_used);
-      }
-      return cluster_send_msg_internal_ex(&pHeader->session_id,
-          pSockContext, FUNC_ID_CLUSTER_PING_RESPONSE, NULL, 0,
-          PRIORITY_HIGH, insert_into_send_queue_head);
+    time_used = CURRENT_TIME() - pHeader->session_id.fields.timestamp;
+    if (time_used > 1) {
+      Warning("cluster recv client %s ping, sock: #%d, time pass: %d s",
+          pSockContext->machine->hostname, pSockContext->sock,
+          (int)time_used);
+    }
+    return cluster_send_msg_internal_ex(&pHeader->session_id,
+        pSockContext, FUNC_ID_CLUSTER_PING_RESPONSE, NULL, 0,
+        PRIORITY_HIGH, insert_into_send_queue_head);
   }
   else if (pHeader->func_id == FUNC_ID_CLUSTER_PING_RESPONSE) {
     if (pSockContext->ping_start_time > 0) {
@@ -1054,37 +1034,37 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
       &pSessionEntry, pSockContext, &call_func, &user_data);
   if (result != 0) {
     /*
-    if (pHeader->session_id.fields.ip != g_my_machine_ip) {  //request by other
-      cluster_send_msg_internal_ex(&pHeader->session_id, pSockContext,
-          FUNC_ID_CONNECTION_CLOSED_NOTIFY, NULL, 0, PRIORITY_HIGH,
-          push_to_send_queue);
-    }
-    */
+       if (pHeader->session_id.fields.ip != my_machine_ip) {  //request by other
+       cluster_send_msg_internal_ex(&pHeader->session_id, pSockContext,
+       FUNC_ID_CONNECTION_CLOSED_NOTIFY, NULL, 0, PRIORITY_HIGH,
+       push_to_send_queue);
+       }
+       */
 
     return result;
   }
 
 #ifdef MSG_TIME_STAT_FLAG
-  if ((pHeader->session_id.fields.ip == g_my_machine_ip)) {  //request by me
+  if ((pHeader->session_id.fields.ip == my_machine_ip)) {  //request by me
     int session_index = pHeader->session_id.fields.seq %
       max_session_count_per_machine;
     SESSION_LOCK(pMachineSessions, session_index);
     if (pSessionEntry->client_start_time != 0) {
-      __sync_fetch_and_add(&pMachineSessions->msg_stat.count, 1);
-      __sync_fetch_and_add(&pMachineSessions->msg_stat.time_used,
-        CURRENT_NS() - pSessionEntry->client_start_time);
+      ink_atomic_increment64(&pMachineSessions->msg_stat.count, 1);
+      ink_atomic_increment64(&pMachineSessions->msg_stat.time_used,
+          CURRENT_NS() - pSessionEntry->client_start_time);
       pSessionEntry->client_start_time = 0;
     }
     SESSION_UNLOCK(pMachineSessions, session_index);
   }
 #endif
- 
+
   if (call_func) {
 #ifdef DEBUG
     int64_t deal_start_time = CURRENT_NS();
 #endif
 
-    g_msg_deal_func(pHeader->session_id, user_data,
+    cluster_msg_deal_func(pHeader->session_id, user_data,
         pHeader->func_id, blocks, pHeader->data_len);
 
 #ifdef DEBUG
@@ -1143,40 +1123,40 @@ static int deal_read_event(SocketContext *pSockContext)
   read_bytes = read(pSockContext->sock, pSockContext->reader.current,
       pSockContext->reader.buff_end - pSockContext->reader.current);
   /*
-  Note("======file: " __FILE__ ", line: %d, "
-      "sock: #%d, %s:%d remain bytes: %ld, recv bytes: %d, errno: %d", __LINE__,
-      pSockContext->sock, pSockContext->machine->hostname,
-      pSockContext->machine->cluster_port,
-      pSockContext->reader.buff_end - pSockContext->reader.current,
-      read_bytes, errno);
-  */
-	if (read_bytes == 0) {
-     Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-          "type: %c, read from %s fail, connection #%d closed", __LINE__,
-          pSockContext->connect_type, pSockContext->machine->hostname,
-          pSockContext->sock);
-      return ECONNRESET;
-	}
-	else if (read_bytes < 0) {
-		if (errno == EAGAIN || errno == EWOULDBLOCK) {
-			return EAGAIN;
-		}
+     Note("======file: " __FILE__ ", line: %d, "
+     "sock: #%d, %s:%d remain bytes: %"PRId64", recv bytes: %d, errno: %d", __LINE__,
+     pSockContext->sock, pSockContext->machine->hostname,
+     pSockContext->machine->cluster_port,
+     pSockContext->reader.buff_end - pSockContext->reader.current,
+     read_bytes, errno);
+     */
+  if (read_bytes == 0) {
+    Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
+        "type: %c, read from %s fail, connection #%d closed", __LINE__,
+        pSockContext->connect_type, pSockContext->machine->hostname,
+        pSockContext->sock);
+    return ECONNRESET;
+  }
+  else if (read_bytes < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      return EAGAIN;
+    }
     else if (errno == EINTR) {  //should try again
-			Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-				"read from %s fail, errno: %d, error info: %s",
-				__LINE__, pSockContext->machine->hostname,
-        errno, strerror(errno));
+      Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
+          "read from %s fail, errno: %d, error info: %s",
+          __LINE__, pSockContext->machine->hostname,
+          errno, strerror(errno));
       return 0;
     }
-		else {
-			result = errno != 0 ? errno : EIO;
-			Error("file: " __FILE__ ", line: %d, "
-				"read from %s fail, errno: %d, error info: %s",
-				__LINE__, pSockContext->machine->hostname,
-        result, strerror(result));
-			return result;
-		}
-	}
+    else {
+      result = errno != 0 ? errno : EIO;
+      Error("file: " __FILE__ ", line: %d, "
+          "read from %s fail, errno: %d, error info: %s",
+          __LINE__, pSockContext->machine->hostname,
+          result, strerror(result));
+      return result;
+    }
+  }
 
   pSockContext->thread_context->stats.recv_bytes += read_bytes;
   pSockContext->reader.current += read_bytes;
@@ -1224,37 +1204,37 @@ static int deal_read_event(SocketContext *pSockContext)
     pHeader = (MsgHeader *)pSockContext->reader.msg_header;
 #ifdef CHECK_MAGIC_NUMBER
     if (pHeader->magic != MAGIC_NUMBER) {
-			Error("file: "__FILE__", line: %d, " \
-				"magic number: %08x != %08x", \
-				__LINE__, pHeader->magic, MAGIC_NUMBER);
+      Error("file: "__FILE__", line: %d, "
+          "magic number: %08x != %08x",
+          __LINE__, pHeader->magic, MAGIC_NUMBER);
       return EINVAL;
     }
 #endif
 
     if (pHeader->aligned_data_len > MAX_MSG_LENGTH) {
-			Error("file: "__FILE__", line: %d, " \
-				"message length: %d is too large, exceeds: %d", \
-				__LINE__, pHeader->aligned_data_len, MAX_MSG_LENGTH);
+      Error("file: "__FILE__", line: %d, "
+          "message length: %d is too large, exceeds: %d",
+          __LINE__, pHeader->aligned_data_len, MAX_MSG_LENGTH);
       return ENOSPC;
     }
 
 #ifdef MSG_TIME_STAT_FLAG
-      if (!(pHeader->session_id.fields.ip == g_my_machine_ip))
-      {  //request by other
-        MachineSessions *pMachineSessions;
-        SessionEntry *pSessionEntry;
-        if (get_response_session_internal(pHeader,
-              &pMachineSessions, &pSessionEntry) == 0)
-        {
-          int session_index = pHeader->session_id.fields.seq %
-            max_session_count_per_machine;
-          SESSION_LOCK(pMachineSessions, session_index);
-          if (pSessionEntry->server_start_time == 0) {
-            pSessionEntry->server_start_time = CURRENT_NS();
-          }
-          SESSION_UNLOCK(pMachineSessions, session_index);
+    if (!(pHeader->session_id.fields.ip == my_machine_ip))
+    {  //request by other
+      MachineSessions *pMachineSessions;
+      SessionEntry *pSessionEntry;
+      if (get_response_session_internal(pHeader,
+            &pMachineSessions, &pSessionEntry) == 0)
+      {
+        int session_index = pHeader->session_id.fields.seq %
+          max_session_count_per_machine;
+        SESSION_LOCK(pMachineSessions, session_index);
+        if (pSessionEntry->server_start_time == 0) {
+          pSessionEntry->server_start_time = CURRENT_NS();
         }
+        SESSION_UNLOCK(pMachineSessions, session_index);
       }
+    }
 #endif
 
     if (recv_body_bytes < pHeader->aligned_data_len) {  //msg not done
@@ -1277,7 +1257,7 @@ static int deal_read_event(SocketContext *pSockContext)
       //must be only one block
       if (pHeader->func_id < 0) {
         if (!bFirstBlock) {
-          Error("file: "__FILE__", line: %d, " \
+          Error("file: "__FILE__", line: %d, "
               "func_id: %d, data length: %d too large exceeds %d",
               __LINE__, pHeader->func_id, pHeader->data_len,
               (int)(READ_BUFFER_SIZE - MSG_HEADER_LENGTH));
@@ -1363,26 +1343,26 @@ static int deal_read_event(SocketContext *pSockContext)
     }
   }
 
-	return result;
+  return result;
 }
 
-inline static void deal_epoll_events(struct worker_thread_context *
-	pThreadContext, const int count)
+inline static void deal_epoll_events(WorkerThreadContext *
+    pThreadContext, const int count)
 {
   int result;
-	struct epoll_event *pEvent;
-	struct epoll_event *pEventEnd;
+  struct epoll_event *pEvent;
+  struct epoll_event *pEventEnd;
   SocketContext *pSockContext;
 
-	pEventEnd = pThreadContext->events + count;
-	for (pEvent=pThreadContext->events; pEvent<pEventEnd; pEvent++) {
-	  pSockContext = (SocketContext *)pEvent->data.ptr;
+  pEventEnd = pThreadContext->events + count;
+  for (pEvent=pThreadContext->events; pEvent<pEventEnd; pEvent++) {
+    pSockContext = (SocketContext *)pEvent->data.ptr;
 
     /*
-    Debug(CLUSTER_DEBUG_TAG, "======file: "__FILE__", line: %d, " \
-        "sock #%d get epoll event: %d", __LINE__,
-        pSockContext->sock, pEvent->events);
-    */
+       Debug(CLUSTER_DEBUG_TAG, "======file: "__FILE__", line: %d, "
+       "sock #%d get epoll event: %d", __LINE__,
+       pSockContext->sock, pEvent->events);
+       */
 
     if ((pEvent->events & EPOLLRDHUP) || (pEvent->events & EPOLLERR) ||
         (pEvent->events & EPOLLHUP))
@@ -1404,10 +1384,10 @@ inline static void deal_epoll_events(struct worker_thread_context *
     }
   }
 
-	return;
+  return;
 }
 
-inline static void schedule_sock_write(struct worker_thread_context * pThreadContext)
+inline static void schedule_sock_write(WorkerThreadContext * pThreadContext)
 {
 #define MAX_SOCK_CONTEXT_COUNT 32
   int result;
@@ -1508,8 +1488,8 @@ static void *work_thread_entrance(void* arg)
 {
 #define MIN_USLEEP_TIME 100
 
-	int result;
-	int count;
+  int result;
+  int count;
   int remain_time;
   int64_t loop_start_time;
   int64_t deal_start_time;
@@ -1517,18 +1497,18 @@ static void *work_thread_entrance(void* arg)
   int64_t deal_end_time;
   int64_t time_used;
 #endif
-	struct worker_thread_context *pThreadContext;
+  WorkerThreadContext *pThreadContext;
 
-	pThreadContext = (struct worker_thread_context *)arg;
+  pThreadContext = (WorkerThreadContext *)arg;
 
 #if defined(HAVE_SYS_PRCTL_H) && defined(PR_SET_NAME)
   char name[32];
   sprintf(name, "[ET_CLUSTER %d]", (int)(pThreadContext -
-        g_worker_thread_contexts) + 1);
+        cluster_worker_thread_contexts) + 1);
   prctl(PR_SET_NAME, name, 0, 0, 0); 
 #endif
 
-	while (g_continue_flag) {
+  while (1) {
     loop_start_time = get_current_time();
 #ifdef DEBUG
     deal_start_time = loop_start_time;
@@ -1544,24 +1524,24 @@ static void *work_thread_entrance(void* arg)
     deal_start_time = CURRENT_NS();
 #endif
     pThreadContext->stats.epoll_wait_count++;
-		count = epoll_wait(pThreadContext->epoll_fd,
-			pThreadContext->events, pThreadContext->alloc_size, 1);
+    count = epoll_wait(pThreadContext->epoll_fd,
+        pThreadContext->events, pThreadContext->alloc_size, 1);
 
     pThreadContext->stats.epoll_wait_time_used += CURRENT_NS() - deal_start_time;
 #ifdef DEBUG
     GET_MAX_TIME_USED(max_epoll_time_used);
 #endif
 
-		if (count == 0) { //timeout
-		}
+    if (count == 0) { //timeout
+    }
     else if (count < 0) {
       if (errno != EINTR) {
-        ink_fatal(1, "file: "__FILE__", line: %d, " \
-            "call epoll_wait fail, " \
+        ink_fatal(1, "file: "__FILE__", line: %d, "
+            "call epoll_wait fail, "
             "errno: %d, error info: %s\n",
             __LINE__, errno, strerror(errno));
       }
-		}
+    }
     else {
       deal_epoll_events(pThreadContext, count);
 
@@ -1572,7 +1552,7 @@ static void *work_thread_entrance(void* arg)
 
     if (io_loop_interval > MIN_USLEEP_TIME) {
       remain_time = io_loop_interval - (int)((CURRENT_NS() -
-          loop_start_time) / HRTIME_USECOND);
+            loop_start_time) / HRTIME_USECOND);
       if (remain_time >= MIN_USLEEP_TIME && remain_time <= io_loop_interval) {
         pThreadContext->stats.loop_usleep_count++;
         pThreadContext->stats.loop_usleep_time += remain_time;
@@ -1583,42 +1563,42 @@ static void *work_thread_entrance(void* arg)
 #endif
       }
     }
-	}
+  }
 
-	if ((result=pthread_mutex_lock(&worker_thread_lock)) != 0)
-	{
-		Error("file: "__FILE__", line: %d, " \
-			"call pthread_mutex_lock fail, " \
-			"errno: %d, error info: %s", \
-			__LINE__, result, strerror(result));
-	}
-	g_worker_thread_count--;
-	if ((result=pthread_mutex_unlock(&worker_thread_lock)) != 0)
-	{
-		Error("file: "__FILE__", line: %d, " \
-			"call pthread_mutex_unlock fail, " \
-			"errno: %d, error info: %s", \
-			__LINE__, result, strerror(result));
-	}
+  if ((result=ink_mutex_acquire(&worker_thread_lock)) != 0)
+  {
+    Error("file: "__FILE__", line: %d, "
+        "call ink_mutex_acquire fail, "
+        "errno: %d, error info: %s",
+        __LINE__, result, strerror(result));
+  }
+  cluster_worker_thread_count--;
+  if ((result=ink_mutex_release(&worker_thread_lock)) != 0)
+  {
+    Error("file: "__FILE__", line: %d, "
+        "call ink_mutex_release fail, "
+        "errno: %d, error info: %s",
+        __LINE__, result, strerror(result));
+  }
 
-	return NULL;
+  return NULL;
 }
 
 int push_to_send_queue(SocketContext *pSockContext, OutMessage *pMessage,
     const MessagePriority priority)
 {
-	pthread_mutex_lock(&pSockContext->send_queues[priority].lock);
-	if (pSockContext->send_queues[priority].head == NULL) {
-		pSockContext->send_queues[priority].head = pMessage;
-	}
-	else {
-		pSockContext->send_queues[priority].tail->next = pMessage;
-	}
-	pSockContext->send_queues[priority].tail = pMessage;
-	pthread_mutex_unlock(&pSockContext->send_queues[priority].lock);
+  ink_mutex_acquire(&pSockContext->send_queues[priority].lock);
+  if (pSockContext->send_queues[priority].head == NULL) {
+    pSockContext->send_queues[priority].head = pMessage;
+  }
+  else {
+    pSockContext->send_queues[priority].tail->next = pMessage;
+  }
+  pSockContext->send_queues[priority].tail = pMessage;
+  ink_mutex_release(&pSockContext->send_queues[priority].lock);
 
-  __sync_fetch_and_add(&pSockContext->thread_context->stats.push_msg_count, 1);
-  __sync_fetch_and_add(&pSockContext->thread_context->stats.push_msg_bytes,
+  ink_atomic_increment64(&pSockContext->thread_context->stats.push_msg_count, 1);
+  ink_atomic_increment64(&pSockContext->thread_context->stats.push_msg_bytes,
       MSG_HEADER_LENGTH + pMessage->header.aligned_data_len);
   return 0;
 }
@@ -1626,12 +1606,12 @@ int push_to_send_queue(SocketContext *pSockContext, OutMessage *pMessage,
 int insert_into_send_queue_head(SocketContext *pSockContext, OutMessage *pMessage,
     const MessagePriority priority)
 {
-	pthread_mutex_lock(&pSockContext->send_queues[priority].lock);
-	if (pSockContext->send_queues[priority].head == NULL) {
-		pSockContext->send_queues[priority].head = pMessage;
+  ink_mutex_acquire(&pSockContext->send_queues[priority].lock);
+  if (pSockContext->send_queues[priority].head == NULL) {
+    pSockContext->send_queues[priority].head = pMessage;
     pSockContext->send_queues[priority].tail = pMessage;
-	}
-	else {
+  }
+  else {
     if (pSockContext->send_queues[priority].head->bytes_sent == 0) { //head message not send yet
       pMessage->next = pSockContext->send_queues[priority].head;
       pSockContext->send_queues[priority].head = pMessage;
@@ -1643,11 +1623,11 @@ int insert_into_send_queue_head(SocketContext *pSockContext, OutMessage *pMessag
         pSockContext->send_queues[priority].tail = pMessage;
       }
     }
-	}
-	pthread_mutex_unlock(&pSockContext->send_queues[priority].lock);
+  }
+  ink_mutex_release(&pSockContext->send_queues[priority].lock);
 
-  __sync_fetch_and_add(&pSockContext->thread_context->stats.push_msg_count, 1);
-  __sync_fetch_and_add(&pSockContext->thread_context->stats.push_msg_bytes,
+  ink_atomic_increment64(&pSockContext->thread_context->stats.push_msg_count, 1);
+  ink_atomic_increment64(&pSockContext->thread_context->stats.push_msg_bytes,
       MSG_HEADER_LENGTH + pMessage->header.aligned_data_len);
 
   return 0;

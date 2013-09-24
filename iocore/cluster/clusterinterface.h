@@ -25,7 +25,7 @@ class IOBufferBlock;
 
 #define RESPONSE_EVENT_NOTIFY_DEALER 1
 
-typedef uint64_t SequenceType;
+typedef int64_t SequenceType;
 
 typedef union {
 	struct {

@@ -37,6 +37,7 @@
 int cluster_port_number = DEFAULT_CLUSTER_PORT_NUMBER;
 int cache_clustering_enabled = 0;
 int num_of_cluster_threads = DEFAULT_NUMBER_OF_CLUSTER_THREADS;
+int num_of_cluster_connections = 0;
 
 ClusterProcessor clusterProcessor;
 RecRawStatBlock *cluster_rsb = NULL;
@@ -782,7 +783,6 @@ ClusterProcessor::init()
   if (num_of_cluster_threads == DEFAULT_NUMBER_OF_CLUSTER_THREADS)
     IOCORE_ReadConfigInteger(num_of_cluster_threads, "proxy.config.cluster.threads");
 
-  int num_of_cluster_connections = 0;
   IOCORE_ReadConfigInteger(num_of_cluster_connections, "proxy.config.cluster.connections");
   if (num_of_cluster_connections == 0) {
     num_of_cluster_connections = num_of_cluster_threads;
@@ -863,15 +863,12 @@ ClusterProcessor::init()
       ink_fatal(1, "[ClusterProcessor::init] Unable to find IPv4 network interface %s.  Exiting...\n", intrName);
     }
 
-    g_work_threads = num_of_cluster_threads;
-    g_connections_per_machine = num_of_cluster_connections;
-    if (g_connections_per_machine % 2 != 0) {
-      g_connections_per_machine++;
+    if (num_of_cluster_connections % 2 != 0) {
+      num_of_cluster_connections++;
     }
-    g_server_port = cluster_port;
     cluster_global_init(cluster_main_handler, machine_change_notify);
 
-    result = connection_manager_init(cluster_ip.sin.sin_addr.s_addr, cluster_port);
+    result = connection_manager_init(cluster_ip.sin.sin_addr.s_addr);
     if (result == 0) {
       cache_clustering_enabled = 1;
       Note("cache clustering enabled");
@@ -926,10 +923,7 @@ ClusterProcessor::start()
     //accept_handler = NEW(new ClusterAccept(&cluster_port, cluster_receive_buffer_size, cluster_send_buffer_size));
     //accept_handler->Init();
 
-    g_socket_recv_bufsize = cluster_receive_buffer_size;
-    g_socket_send_bufsize = cluster_send_buffer_size;
-    pthread_t connection_tid;
-    connection_manager_start(&connection_tid);
+    connection_manager_start();
 
     /*
 #ifdef DEBUG

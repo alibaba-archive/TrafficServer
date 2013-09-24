@@ -178,8 +178,8 @@ make_cluster_connections(MachineList * l, MachineList * old)
         machine_make_connections(m);
       }
 
-      Debug(CL_NOTE, "do connect hostname: %u.%u.%u.%u:%d, %s, g_machine_count: %d\n",
-          DOT_SEPARATED(l->machine[i].ip), l->machine[i].port, inet_ntoa(in), g_machine_count);
+      Debug(CL_NOTE, "do connect hostname: %u.%u.%u.%u:%d, %s, cluster_machine_count: %d\n",
+          DOT_SEPARATED(l->machine[i].ip), l->machine[i].port, inet_ntoa(in), cluster_machine_count);
 
     /*
 #ifdef LOCAL_CLUSTER_TEST_MODE

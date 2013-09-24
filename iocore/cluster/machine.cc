@@ -9,7 +9,6 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 #include "Diags.h"
-#include "pthread_func.h"
 #include "global.h"
 #include "nio.h"
 #include "connection.h"
@@ -18,14 +17,12 @@
 #include "ink_config.h"
 #include "P_Cluster.h"
 
-unsigned int g_my_machine_index = 0;
-unsigned int g_my_machine_ip = 0;
-int g_my_machine_id = 0;
-int g_machine_count = 0;
+unsigned int my_machine_ip = 0;
+int cluster_machine_count = 0; //total machine count of the cluster
 
-ClusterMachine *g_machines = NULL;  //sort by ip and port
-static ClusterMachine **sorted_machines = NULL;
-static pthread_mutex_t machine_lock;
+ClusterMachine *cluster_machines = NULL;
+static ClusterMachine **sorted_machines = NULL;  //sort by ip and port
+static ink_mutex machine_lock;
 
 static ClusterMachine *do_add_machine(ClusterMachine *m, int *result);
 
@@ -52,19 +49,19 @@ int init_machines()
   int result;
   int bytes;
 
-  if ((result=init_pthread_lock(&machine_lock)) != 0) {
+  if ((result=ink_mutex_init(&machine_lock, "machine_lock")) != 0) {
     return result;
   }
 
-  g_machine_count = 0;
+  cluster_machine_count = 0;
   bytes = sizeof(ClusterMachine) * MAX_MACHINE_COUNT;
-  g_machines = (ClusterMachine *)malloc(bytes);
-  if (g_machines == NULL) {
+  cluster_machines = (ClusterMachine *)malloc(bytes);
+  if (cluster_machines == NULL) {
     Error("file: "__FILE__", line: %d, "
         "malloc %d bytes fail!", __LINE__, bytes);
     return ENOMEM;
   }
-  memset(g_machines, 0, bytes);
+  memset(cluster_machines, 0, bytes);
 
   bytes = sizeof(ClusterMachine *) * MAX_MACHINE_COUNT;
   sorted_machines = (ClusterMachine **)malloc(bytes);
@@ -100,8 +97,8 @@ static ClusterMachine *do_add_machine(ClusterMachine *m, int *result)
   int cr;
 
   cr = -1;
-	pthread_mutex_lock(&machine_lock);
-  ppMachineEnd = sorted_machines + g_machine_count;
+  ink_mutex_acquire(&machine_lock);
+  ppMachineEnd = sorted_machines + cluster_machine_count;
   for (ppMachine=sorted_machines; ppMachine<ppMachineEnd; ppMachine++) {
     cr = compare_machine(&m, ppMachine);
     if (cr <= 0) {
@@ -116,7 +113,7 @@ static ClusterMachine *do_add_machine(ClusterMachine *m, int *result)
       break;
     }
 
-    if (g_machine_count >= MAX_MACHINE_COUNT) {
+    if (cluster_machine_count >= MAX_MACHINE_COUNT) {
       Error("file: "__FILE__", line: %d, "
           "host: %s:%u, exceeds max machine: %d!", __LINE__, m->hostname,
           m->cluster_port, MAX_MACHINE_COUNT);
@@ -129,7 +126,7 @@ static ClusterMachine *do_add_machine(ClusterMachine *m, int *result)
       *pp = *(pp - 1);
     }
 
-    pMachine = g_machines + g_machine_count;  //the last emlement
+    pMachine = cluster_machines + cluster_machine_count;  //the last emlement
     *ppMachine = pMachine;
 
     pMachine->dead = true;
@@ -150,11 +147,11 @@ static ClusterMachine *do_add_machine(ClusterMachine *m, int *result)
       memcpy(pMachine->hostname, m->hostname, m->hostname_len + 1);
     }
 
-    g_machine_count++;
+    cluster_machine_count++;
     *result = 0;
   } while (0);
 
-	pthread_mutex_unlock(&machine_lock);
+  ink_mutex_release(&machine_lock);
   return pMachine;
 }
 
@@ -168,7 +165,7 @@ ClusterMachine *get_machine(const unsigned int ip, const int port)
   machine.ip = ip;
   machine.cluster_port = port;
   target = &machine;
-  found = (ClusterMachine **)bsearch(&target, sorted_machines, g_machine_count,
+  found = (ClusterMachine **)bsearch(&target, sorted_machines, cluster_machine_count,
       sizeof(ClusterMachine *), compare_machine);
   if (found != NULL) {
     return *found;
@@ -184,7 +181,7 @@ int machine_up_notify(ClusterMachine *machine)
     return ENOENT;
   }
 
-  pthread_mutex_lock(&machine_lock);
+  ink_mutex_acquire(&machine_lock);
 
   Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
       "machine_up_notify, %s connection count: %d, dead: %d",
@@ -192,9 +189,9 @@ int machine_up_notify(ClusterMachine *machine)
 
   if (machine->dead) {
     machine->dead = false;
-    g_machine_change_notify(machine);
+    cluster_machine_change_notify(machine);
   }
-  pthread_mutex_unlock(&machine_lock);
+  ink_mutex_release(&machine_lock);
 
   return 0;
 }
@@ -204,14 +201,14 @@ int machine_add_connection(SocketContext *pSockContext)
   int result;
   int count;
 
-  pthread_mutex_lock(&machine_lock);
+  ink_mutex_acquire(&machine_lock);
   if ((result=nio_add_to_epoll(pSockContext)) != 0) {
-    pthread_mutex_unlock(&machine_lock);
+    ink_mutex_release(&machine_lock);
     return result;
   }
 
   count = ++pSockContext->machine->now_connections;
-  pthread_mutex_unlock(&machine_lock);
+  ink_mutex_release(&machine_lock);
 
   Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
       "%s add %c connection count: %d, dead: %d", __LINE__,
@@ -226,18 +223,18 @@ int machine_remove_connection(SocketContext *pSockContext)
   int count;
   int result;
 
-  pthread_mutex_lock(&machine_lock);
+  ink_mutex_acquire(&machine_lock);
   if ((result=remove_machine_sock_context(pSockContext)) != 0) {
-    pthread_mutex_unlock(&machine_lock);
+    ink_mutex_release(&machine_lock);
     return result;
   }
 
   count = --pSockContext->machine->now_connections;
   if (count == 0 && !pSockContext->machine->dead) { //should remove machine from config
     pSockContext->machine->dead = true;
-    g_machine_change_notify(pSockContext->machine);
+    cluster_machine_change_notify(pSockContext->machine);
   }
-  pthread_mutex_unlock(&machine_lock);
+  ink_mutex_release(&machine_lock);
 
   Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, "
       "%s remove %c connection count: %d, dead: %d", __LINE__,

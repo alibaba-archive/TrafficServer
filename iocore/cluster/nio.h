@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 #include "types.h"
 #include "clusterinterface.h"
 
@@ -14,11 +13,11 @@
 extern "C" {
 #endif
 
-extern struct worker_thread_context *g_worker_thread_contexts;
-extern int g_worker_thread_count;
+extern WorkerThreadContext *cluster_worker_thread_contexts;
+extern int cluster_worker_thread_count;
 
-extern message_deal_func g_msg_deal_func;
-extern machine_change_notify_func g_machine_change_notify;
+extern message_deal_func cluster_msg_deal_func;
+extern machine_change_notify_func cluster_machine_change_notify;
 
 int nio_init();
 int nio_destroy();

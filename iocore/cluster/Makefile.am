@@ -58,9 +58,6 @@ libinkcluster_a_SOURCES = \
   P_ClusterMachine.h \
   P_TimeTrace.h \
   Inline.cc \
-	shared_func.cc  \
-	pthread_func.cc  \
-	sockopt.cc  \
 	global.cc  \
   nio.cc \
 	session.cc  \
