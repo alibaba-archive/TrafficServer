@@ -58,10 +58,10 @@ libinkcluster_a_SOURCES = \
   P_ClusterMachine.h \
   P_TimeTrace.h \
   Inline.cc \
-	global.cc  \
+  global.cc  \
   nio.cc \
-	session.cc  \
-	message.cc \
-	connection.cc \
-	machine.cc 
+  session.cc  \
+  message.cc \
+  connection.cc \
+  machine.cc 
 

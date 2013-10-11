@@ -145,7 +145,7 @@ public:
     LOG_FILE_FILESYSTEM_CHECKS_FAILED
   };
 
-  void preproc_and_try_delete(LogBuffer * lb);
+  int preproc_and_try_delete(LogBuffer * lb);
 
   int roll(long interval_start, long interval_end);
 
