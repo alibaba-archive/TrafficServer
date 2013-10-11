@@ -814,6 +814,24 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_CONFIG, "proxy.config.cluster.cluster_port", RECD_INT, "8086", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
   ,
+  {RECT_CONFIG, "proxy.config.cluster.flow_ctrl.min_bps", RECD_INT, "804857600", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.cluster.flow_ctrl.max_bps", RECD_INT, "4194304000", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.cluster.flow_ctrl.min_send_wait_time", RECD_INT, "1000", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.cluster.flow_ctrl.max_send_wait_time", RECD_INT, "5000", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.cluster.flow_ctrl.min_loop_interval", RECD_INT, "0", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.cluster.flow_ctrl.max_loop_interval", RECD_INT, "1000", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.cluster.max_sessions_per_machine", RECD_INT, "1000000", RECU_RESTART_TS, RR_NULL, RECC_INT, "[1000-4000000]", RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.cluster.session_locks_per_machine", RECD_INT, "10949", RECU_RESTART_TS, RR_NULL, RECC_INT, "[1-100000]", RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.cluster.read_buffer_size", RECD_INT, "2097152", RECU_RESTART_TS, RR_NULL, RECC_INT, "[65536-2097152]", RECA_NULL}
+  ,
   {RECT_CONFIG, "proxy.config.cluster.cluster_configuration", RECD_STRING, "cluster.config", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.cluster.ethernet_interface", RECD_STRING, TS_BUILD_DEFAULT_LOOPBACK_IFACE, RECU_RESTART_TS, RR_REQUIRED, RECC_STR, "^[^[:space:]]*$", RECA_NULL}

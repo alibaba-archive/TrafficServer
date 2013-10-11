@@ -36,25 +36,30 @@ inline Action *
 Cluster_lookup(Continuation * cont, CacheKey * key, CacheFragType frag_type, char *hostname, int host_len)
 {
   // Try to send remote, if not possible, handle locally
-  Action *retAct;
-  ClusterMachine *m = cluster_machine_at_depth(cache_hash(*key));
-  if (m && !clusterProcessor.disable_remote_cluster_ops(m)) {
-    CacheContinuation *cc = CacheContinuation::cacheContAllocator_alloc();
-    cc->action = cont;
-    cc->mutex = cont->mutex;
-    retAct = CacheContinuation::do_remote_lookup(cont, key, cc, frag_type, hostname, host_len);
-    if (retAct) {
-      return retAct;
-    } else {
-      // not remote, do local lookup
-      CacheContinuation::cacheContAllocator_free(cc);
-      return (Action *) NULL;
-    }
-  } else {
-    Action a;
-    a = cont;
-    return CacheContinuation::callback_failure(&a, CACHE_EVENT_LOOKUP_FAILED, 0);
-  }
+//  Action *retAct;
+//  ClusterMachine *m = cluster_machine_at_depth(cache_hash(*key));
+//  if (m && !clusterProcessor.disable_remote_cluster_ops(m)) {
+//    CacheContinuation *cc = CacheContinuation::cacheContAllocator_alloc();
+//    cc->action = cont;
+//    cc->mutex = cont->mutex;
+//    retAct = CacheContinuation::do_remote_lookup(cont, key, cc, frag_type, hostname, host_len);
+//    if (retAct) {
+//      return retAct;
+//    } else {
+//      // not remote, do local lookup
+//      CacheContinuation::cacheContAllocator_free(cc);
+//      return (Action *) NULL;
+//    }
+//  } else {
+//    Action a;
+//    a = cont;
+//    return CacheContinuation::callback_failure(&a, CACHE_EVENT_LOOKUP_FAILED, 0);
+//  }
+  (void) cont;
+  (void) key;
+  (void) frag_type;
+  (void) hostname;
+  (void) host_len;
   return (Action *) NULL;
 }
 
@@ -66,18 +71,24 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
              time_t pin_in_cache, CacheFragType frag_type, char *hostname, int host_len)
 {
   (void) params;
-  if (clusterProcessor.disable_remote_cluster_ops(owner_machine)) {
-    Action a;
-    a = cont;
-    return CacheContinuation::callback_failure(&a, CACHE_EVENT_OPEN_READ_FAILED, 0);
+  ink_assert(cont);
+  ClusterSession session;
+  if (cluster_create_session(&session, owner_machine, NULL, 0)) {
+    cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, NULL);
+    return ACTION_RESULT_DONE;
   }
+
   int vers = CacheOpMsg_long::protoToVersion(owner_machine->msg_proto_major);
+  CacheOpArgs_General readArgs;
+  Ptr<IOBufferData> d;
+
   int flen;
   int len = 0;
   int cur_len;
   int res = 0;
-  char *msg;
+  char *msg = 0;
   char *data;
+  Action *action = NULL;
 
   if (vers == CacheOpMsg_long::CACHE_OP_LONG_MESSAGE_VERSION) {
     if ((opcode == CACHE_OPEN_READ_LONG)
@@ -87,20 +98,21 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
 
       const char *url_hostname;
       int url_hlen;
-      INK_MD5 url_only_md5;
+      INK_MD5 url_md5;
 
-      Cache::generate_key(&url_only_md5, url, 0);
+      Cache::generate_key(&url_md5, url);
       url_hostname = url->host_get(&url_hlen);
 
       len += request->m_heap->marshal_length();
-      len += params->marshal_length();
+      len += sizeof(CacheLookupHttpConfig) + params->marshal_length();
       len += url_hlen;
 
       if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE)       // Bound marshalled data
         goto err_exit;
 
       // Perform data Marshal operation
-      msg = (char *) ALLOCA_DOUBLE(flen + len);
+      d = new_IOBufferData(iobuffer_size_to_index(flen + len));
+      msg = (char *) d->data();
       data = msg + flen;
 
       cur_len = len;
@@ -110,6 +122,13 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
       }
       data += res;
       cur_len -= res;
+
+      if (cur_len < (int) sizeof(CacheLookupHttpConfig))
+        goto err_exit;
+      memcpy(data, params, sizeof(CacheLookupHttpConfig));
+      data += sizeof(CacheLookupHttpConfig);
+      cur_len -= sizeof(CacheLookupHttpConfig);
+
       if ((res = params->marshal(data, cur_len)) < 0)
         goto err_exit;
       data += res;
@@ -117,37 +136,33 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
       memcpy(data, url_hostname, url_hlen);
 
       CacheOpArgs_General readArgs;
-      readArgs.url_md5 = &url_only_md5;
+      readArgs.url_md5 = &url_md5;
       readArgs.pin_in_cache = pin_in_cache;
       readArgs.frag_type = frag_type;
-      return CacheContinuation::do_op(cont, owner_machine, (void *) &readArgs,
-                                      opcode, (char *) msg, (flen + len), -1, buf);
+
+      action = CacheContinuation::do_op(cont, session, (void *) &readArgs,
+                                            opcode, d, (flen + len), -1, buf);
     } else {
       // Build message if we have host data.
+      flen = op_to_sizeof_fixedlen_msg(opcode);
+      len = host_len;
 
-      if (host_len) {
-        // Determine length of data to Marshal
-        flen = op_to_sizeof_fixedlen_msg(opcode);
-        len = host_len;
+      if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE)     // Bound marshalled data
+        goto err_exit;
 
-        if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE)     // Bound marshalled data
-          goto err_exit;
-
-        msg = (char *) ALLOCA_DOUBLE(flen + len);
-        data = msg + flen;
+      d = new_IOBufferData(iobuffer_size_to_index(flen + len));
+      msg = (char *) d->data();
+      data = msg + flen;
+      if (host_len)
         memcpy(data, hostname, host_len);
 
-      } else {
-        msg = 0;
-        flen = 0;
-        len = 0;
-      }
-      CacheOpArgs_General readArgs;
       readArgs.url_md5 = key;
       readArgs.frag_type = frag_type;
-      return CacheContinuation::do_op(cont, owner_machine, (void *) &readArgs,
-                                      opcode, (char *) msg, (flen + len), -1, buf);
+
+      action = CacheContinuation::do_op(cont, session, (void *) &readArgs,
+                                            opcode, d, (flen + len), -1, buf);
     }
+    ink_assert(msg);
 
   } else {
     //////////////////////////////////////////////////////////////
@@ -155,10 +170,12 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
     //////////////////////////////////////////////////////////////
     ink_release_assert(!"CacheOpMsg_long [read] bad msg version");
   }
+
+  if (action)
+    return action;
 err_exit:
-  Action a;
-  a = cont;
-  return CacheContinuation::callback_failure(&a, CACHE_EVENT_OPEN_READ_FAILED, 0);
+  cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, NULL);
+  return ACTION_RESULT_DONE;
 }
 
 inline Action *
@@ -171,10 +188,11 @@ Cluster_write(Continuation * cont, int expected_size,
 {
   (void) key;
   (void) request;
-  if (clusterProcessor.disable_remote_cluster_ops(m)) {
-    Action a;
-    a = cont;
-    return CacheContinuation::callback_failure(&a, CACHE_EVENT_OPEN_WRITE_FAILED, 0);
+  ClusterSession session;
+  ink_assert(cont);
+  if (cluster_create_session(&session, m, NULL, 0)) {
+     cont->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, NULL);
+     return ACTION_RESULT_DONE;
   }
   char *msg = 0;
   char *data = 0;
@@ -182,24 +200,22 @@ Cluster_write(Continuation * cont, int expected_size,
   int len = 0;
   int flen = 0;
   int vers = CacheOpMsg_long::protoToVersion(m->msg_proto_major);
+  Ptr<IOBufferData> d;
 
   switch (opcode) {
   case CACHE_OPEN_WRITE:
     {
       // Build message if we have host data
-      if (host_len) {
-        // Determine length of data to Marshal
-        flen = op_to_sizeof_fixedlen_msg(CACHE_OPEN_WRITE);
-        len = host_len;
+      len = host_len;
+      flen = op_to_sizeof_fixedlen_msg(CACHE_OPEN_WRITE);
+      if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE)     // Bound marshalled data
+        goto err_exit;
 
-        if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE)     // Bound marshalled data
-          goto err_exit;
-
-        msg = (char *) ALLOCA_DOUBLE(flen + len);
-        data = msg + flen;
-
+      d = new_IOBufferData(iobuffer_size_to_index(flen + len));
+      msg = (char *) d->data();
+      data = msg + flen;
+      if (host_len)
         memcpy(data, hostname, host_len);
-      }
       break;
     }
   case CACHE_OPEN_WRITE_LONG:
@@ -223,8 +239,9 @@ Cluster_write(Continuation * cont, int expected_size,
       if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE)       // Bound marshalled data
         goto err_exit;
 
+      d = new_IOBufferData(iobuffer_size_to_index(flen + len));
+      msg = (char *) d->data();
       // Perform data Marshal operation
-      msg = (char *) ALLOCA_DOUBLE(flen + len);
       data = msg + flen;
       int res = 0;
 
@@ -257,7 +274,9 @@ Cluster_write(Continuation * cont, int expected_size,
     writeArgs.cfl_flags |= (old_info ? CFL_LOPENWRITE_HAVE_OLDINFO : 0);
     writeArgs.cfl_flags |= (allow_multiple_writes ? CFL_ALLOW_MULTIPLE_WRITES : 0);
 
-    return CacheContinuation::do_op(cont, m, (void *) &writeArgs, opcode, msg, flen + len, expected_size, buf);
+    Action *action = CacheContinuation::do_op(cont, session, (void *) &writeArgs, opcode, d, flen + len, expected_size, buf);
+    if (action)
+      return action;
   } else {
     //////////////////////////////////////////////////////////////
     // Create the specified down rev version of this message
@@ -267,19 +286,21 @@ Cluster_write(Continuation * cont, int expected_size,
   }
 
 err_exit:
-  Action a;
-  a = cont;
-  return CacheContinuation::callback_failure(&a, CACHE_EVENT_OPEN_WRITE_FAILED, 0);
+  cont->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, NULL);
+  return ACTION_RESULT_DONE;
 }
 
 inline Action *
 Cluster_link(ClusterMachine * m, Continuation * cont, CacheKey * from, CacheKey * to,
              CacheFragType type, char *hostname, int host_len)
 {
-  if (clusterProcessor.disable_remote_cluster_ops(m)) {
-    Action a;
-    a = cont;
-    return CacheContinuation::callback_failure(&a, CACHE_EVENT_LINK_FAILED, 0);
+  ClusterSession session;
+  Ptr<IOBufferData> d;
+  char *msg = NULL;
+
+  if (cluster_create_session(&session, m, NULL, 0)) {
+    cont->handleEvent(CACHE_EVENT_LINK_FAILED, NULL);
+    return ACTION_RESULT_DONE;
   }
 
   int vers = CacheOpMsg_short_2::protoToVersion(m->msg_proto_major);
@@ -293,7 +314,8 @@ Cluster_link(ClusterMachine * m, Continuation * cont, CacheKey * from, CacheKey 
     if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE) // Bound marshalled data
       goto err_exit;
 
-    char *msg = (char *) ALLOCA_DOUBLE(flen + len);
+    d = new_IOBufferData(iobuffer_size_to_index(flen + len));
+    msg = (char *) d->data();
     memcpy((msg + flen), hostname, host_len);
 
     // Setup args for remote link
@@ -301,7 +323,9 @@ Cluster_link(ClusterMachine * m, Continuation * cont, CacheKey * from, CacheKey 
     linkArgs.from = from;
     linkArgs.to = to;
     linkArgs.frag_type = type;
-    return CacheContinuation::do_op(cont, m, (void *) &linkArgs, CACHE_LINK, msg, (flen + len));
+    Action *action = CacheContinuation::do_op(cont, session, (void *) &linkArgs, CACHE_LINK, d, (flen + len));
+    if (action)
+      return action;
   } else {
     //////////////////////////////////////////////////////////////
     // Create the specified down rev version of this message
@@ -311,18 +335,20 @@ Cluster_link(ClusterMachine * m, Continuation * cont, CacheKey * from, CacheKey 
   }
 
 err_exit:
-  Action a;
-  a = cont;
-  return CacheContinuation::callback_failure(&a, CACHE_EVENT_LINK_FAILED, 0);
+  cont->handleEvent(CACHE_EVENT_LINK_FAILED, NULL);
+  return ACTION_RESULT_DONE;
 }
 
 inline Action *
 Cluster_deref(ClusterMachine * m, Continuation * cont, CacheKey * key, CacheFragType type, char *hostname, int host_len)
 {
-  if (clusterProcessor.disable_remote_cluster_ops(m)) {
-    Action a;
-    a = cont;
-    return CacheContinuation::callback_failure(&a, CACHE_EVENT_DEREF_FAILED, 0);
+  ClusterSession session;
+  Ptr<IOBufferData> d;
+  char *msg = NULL;
+
+  if (cluster_create_session(&session, m, NULL, 0)) {
+    cont->handleEvent(CACHE_EVENT_DEREF_FAILED, NULL);
+    return ACTION_RESULT_DONE ;
   }
 
   int vers = CacheOpMsg_short::protoToVersion(m->msg_proto_major);
@@ -336,14 +362,17 @@ Cluster_deref(ClusterMachine * m, Continuation * cont, CacheKey * key, CacheFrag
     if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE) // Bound marshalled data
       goto err_exit;
 
-    char *msg = (char *) ALLOCA_DOUBLE(flen + len);
+    d = new_IOBufferData(iobuffer_size_to_index(flen + len));
+    msg = (char *) d->data();
     memcpy((msg + flen), hostname, host_len);
 
     // Setup args for remote deref
     CacheOpArgs_Deref drefArgs;
     drefArgs.md5 = key;
     drefArgs.frag_type = type;
-    return CacheContinuation::do_op(cont, m, (void *) &drefArgs, CACHE_DEREF, msg, (flen + len));
+    Action *action = CacheContinuation::do_op(cont, session, (void *) &drefArgs, CACHE_DEREF, d, (flen + len));
+    if (action)
+      return action;
   } else {
     //////////////////////////////////////////////////////////////
     // Create the specified down rev version of this message
@@ -353,19 +382,22 @@ Cluster_deref(ClusterMachine * m, Continuation * cont, CacheKey * key, CacheFrag
   }
 
 err_exit:
-  Action a;
-  a = cont;
-  return CacheContinuation::callback_failure(&a, CACHE_EVENT_DEREF_FAILED, 0);
+  cont->handleEvent(CACHE_EVENT_DEREF_FAILED, NULL);
+  return ACTION_RESULT_DONE ;
 }
 
 inline Action *
 Cluster_remove(ClusterMachine * m, Continuation * cont, CacheKey * key,
                bool rm_user_agents, bool rm_link, CacheFragType frag_type, char *hostname, int host_len)
 {
-  if (clusterProcessor.disable_remote_cluster_ops(m)) {
-    Action a;
-    a = cont;
-    return CacheContinuation::callback_failure(&a, CACHE_EVENT_REMOVE_FAILED, 0);
+  ClusterSession session;
+  Ptr<IOBufferData> d;
+  char *msg = NULL;
+
+  if (cluster_create_session(&session, m, NULL, 0)) {
+    if (cont)
+      cont->handleEvent(CACHE_EVENT_REMOVE_FAILED, NULL);
+    return ACTION_RESULT_DONE;
   }
 
   int vers = CacheOpMsg_short::protoToVersion(m->msg_proto_major);
@@ -379,7 +411,8 @@ Cluster_remove(ClusterMachine * m, Continuation * cont, CacheKey * key,
     if ((flen + len) > DEFAULT_MAX_BUFFER_SIZE) // Bound marshalled data
       goto err_exit;
 
-    char *msg = (char *) ALLOCA_DOUBLE(flen + len);
+    d = new_IOBufferData(iobuffer_size_to_index(flen + len));
+    msg = (char *) d->data();
     memcpy((msg + flen), hostname, host_len);
 
     // Setup args for remote update
@@ -388,7 +421,9 @@ Cluster_remove(ClusterMachine * m, Continuation * cont, CacheKey * key,
     updateArgs.cfl_flags |= (rm_user_agents ? CFL_REMOVE_USER_AGENTS : 0);
     updateArgs.cfl_flags |= (rm_link ? CFL_REMOVE_LINK : 0);
     updateArgs.frag_type = frag_type;
-    return CacheContinuation::do_op(cont, m, (void *) &updateArgs, CACHE_REMOVE, msg, (flen + len));
+    Action *action = CacheContinuation::do_op(cont, session, (void *) &updateArgs, CACHE_REMOVE, d, (flen + len));
+    if (action)
+      return action;
   } else {
     //////////////////////////////////////////////////////////////
     // Create the specified down rev version of this message
@@ -398,9 +433,8 @@ Cluster_remove(ClusterMachine * m, Continuation * cont, CacheKey * key,
   }
 
 err_exit:
-  Action a;
-  a = cont;
-  return CacheContinuation::callback_failure(&a, CACHE_EVENT_REMOVE_FAILED, 0);
+  if (cont)
+    cont->handleEvent(CACHE_EVENT_REMOVE_FAILED, NULL);
+  return ACTION_RESULT_DONE;
 }
-
 #endif /* __CLUSTERINLINE_H__ */

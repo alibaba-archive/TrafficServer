@@ -82,7 +82,7 @@ int cache_config_read_while_writer = 0;
 char cache_system_config_directory[PATH_NAME_MAX + 1];
 int cache_config_mutex_retry_delay = 2;
 #ifdef HTTP_CACHE
-static int enable_cache_empty_http_doc = 0;
+int enable_cache_empty_http_doc = 0;
 #endif
 
 #if TS_USE_INTERIM_CACHE == 1

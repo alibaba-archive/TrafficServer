@@ -368,7 +368,9 @@ struct CacheVC: public CacheVConnection
   virtual time_t get_pin_in_cache();
   virtual bool set_disk_io_priority(int priority);
   virtual int get_disk_io_priority();
-
+  virtual bool is_read_from_writer() {
+    return f.read_from_writer_called;
+  }
   /** Get the fragment table.
       @return The address of the start of the fragment table,
       or @c NULL if there is no fragment table.
@@ -505,6 +507,7 @@ struct CacheVC: public CacheVConnection
 #ifdef HTTP_CACHE
       unsigned int allow_empty_doc:1; // used for cache empty http document
 #endif
+      unsigned int cluster:1;
     } f;
   };
   // BTF optimization used to skip reading stuff in cache partition that doesn't contain any
@@ -1054,7 +1057,7 @@ struct Cache
   Action *open_write(Continuation *cont, URL *url, CacheHTTPHdr *request,
                      CacheHTTPInfo *old_info, time_t pin_in_cache = (time_t) 0,
                      CacheFragType type = CACHE_FRAG_TYPE_HTTP);
-  static void generate_key(INK_MD5 *md5, URL *url, CacheHTTPHdr *request);
+  static void generate_key(INK_MD5 *md5, URL *url, CacheHTTPHdr *request = 0);
 #endif
 
   Action *link(Continuation *cont, CacheKey *from, CacheKey *to, CacheFragType type, char *hostname, int host_len);

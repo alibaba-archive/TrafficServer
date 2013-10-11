@@ -21,29 +21,31 @@
   limitations under the License.
  */
 
-#ifndef _P_CACHE_H__
-#define _P_CACHE_H__
+#ifndef _MACHINE_H
+#define _MACHINE_H
 
-#include "libts.h"
-#include "P_EventSystem.h"
-#include "P_AIO.h"
-#include "I_RecProcess.h"
+#include "types.h"
 
-#ifdef HTTP_CACHE
-#include "HTTP.h"
-#include "MIME.h"
-#include "MimeTable.h"
-#include "HttpTransactCache.h"
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-#include "I_Cache.h"
-#include "P_CacheDisk.h"
-#include "P_CacheDir.h"
-#include "P_RamCache.h"
-#include "P_CacheVol.h"
-#include "P_CacheInternal.h"
-#include "P_CacheHosting.h"
-#include "P_CacheHttp.h"
-#include "clusterinterface.h"
+extern unsigned int my_machine_ip;
+extern int cluster_machine_count;
+extern struct ClusterMachine *cluster_machines;
 
-#endif /* _P_CACHE_H */
+int init_machines();
+ClusterMachine *add_machine(const unsigned int ip, const int port);
+
+ClusterMachine *get_machine(const unsigned int ip, const int port);
+
+int machine_up_notify(ClusterMachine *machine);
+int machine_add_connection(SocketContext *pSockContext);
+int machine_remove_connection(SocketContext *pSockContext);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+

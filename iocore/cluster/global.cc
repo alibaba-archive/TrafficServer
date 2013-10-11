@@ -21,29 +21,20 @@
   limitations under the License.
  */
 
-#ifndef _P_CACHE_H__
-#define _P_CACHE_H__
+#include "global.h"
 
-#include "libts.h"
-#include "P_EventSystem.h"
-#include "P_AIO.h"
-#include "I_RecProcess.h"
+int cluster_connect_timeout = 1;
 
-#ifdef HTTP_CACHE
-#include "HTTP.h"
-#include "MIME.h"
-#include "MimeTable.h"
-#include "HttpTransactCache.h"
-#endif
+//cluster flow control
+int64_t cluster_flow_ctrl_min_bps = 0; //bit
+int64_t cluster_flow_ctrl_max_bps = 0; //bit
+int cluster_send_min_wait_time = 1000; //us
+int cluster_send_max_wait_time = 5000; //us
+int cluster_min_loop_interval = 0;     //us
+int cluster_max_loop_interval = 1000;  //us
+int64_t cluster_ping_send_interval= 0;
+int64_t cluster_ping_latency_threshold = 0;
+int cluster_ping_retries = 3;
+int max_session_count_per_machine = 1000000;
+int session_lock_count_per_machine =  10949;
 
-#include "I_Cache.h"
-#include "P_CacheDisk.h"
-#include "P_CacheDir.h"
-#include "P_RamCache.h"
-#include "P_CacheVol.h"
-#include "P_CacheInternal.h"
-#include "P_CacheHosting.h"
-#include "P_CacheHttp.h"
-#include "clusterinterface.h"
-
-#endif /* _P_CACHE_H */

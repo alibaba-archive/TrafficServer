@@ -123,6 +123,8 @@ enum
   cluster_stat_count
 };
 
+#define SIZE_OF_FRAGEMENT ((1 << 20) - 128)
+
 extern RecRawStatBlock *cluster_rsb;
 #define CLUSTER_INCREMENT_DYN_STAT(x) \
 	RecIncrRawStat(cluster_rsb, mutex->thread_holding, (int) x, 1);
