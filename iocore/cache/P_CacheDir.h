@@ -28,6 +28,7 @@
 #include "P_CacheHttp.h"
 
 struct Vol;
+struct SSDVol;
 struct CacheVC;
 
 /*
@@ -98,6 +99,8 @@ struct CacheVC;
 
 #ifdef SSD_CACHE
 void clear_ssd_dir(Vol *v);
+void clear_ssdvol_dir(Vol *v, int offset);
+void dir_clean_range_ssdvol(off_t start, off_t end, SSDVol *svol);
 #endif
 // OpenDir
 

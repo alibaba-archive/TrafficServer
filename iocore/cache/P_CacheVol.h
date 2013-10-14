@@ -79,6 +79,24 @@
 #ifdef SSD_CACHE
 extern int migrate_threshold;
 extern int good_ssd_disks;
+
+struct SSDVolHeaderFooter
+{
+  unsigned int magic;
+  VersionNumber version;
+  time_t create_time;
+  off_t write_pos;
+  off_t last_write_pos;
+  off_t agg_pos;
+  uint32_t generation;            // token generation (vary), this cannot be 0
+  uint32_t phase;
+  uint32_t cycle;
+  uint32_t sync_serial;
+  uint32_t write_serial;
+  uint32_t dirty;
+  uint32_t sector_size;
+  uint32_t unused;                // pad out to 8 byte boundary
+};
 #endif
 
 struct Cache;
@@ -104,6 +122,9 @@ struct VolHeaderFooter
   uint32_t dirty;
   uint32_t sector_size;
   uint32_t unused;                // pad out to 8 byte boundary
+#ifdef SSD_CACHE
+  SSDVolHeaderFooter ssd_header[8];
+#endif
   uint16_t freelist[1];
 };
 
@@ -339,8 +360,17 @@ struct Transistor {
 };
 struct SSDVol: public Continuation
 {
-  VolHeaderFooter hh;
-  VolHeaderFooter *header;
+//  char *path;
+  char *hash_id;
+
+  SSDVolHeaderFooter *header;
+
+  off_t recover_pos;
+  off_t prev_recover_pos;
+  uint32_t last_sync_serial;
+  uint32_t last_write_serial;
+  bool recover_wrapped;
+
   off_t scan_pos;
   off_t skip; // start of headers
   off_t start; // start of data
@@ -365,6 +395,9 @@ struct SSDVol: public Continuation
     io.aiocb.aio_fildes = AIO_NOT_IN_PROGRESS;
   }
 
+  int recover_data();
+  int handle_recover_from_data(int event, void *data);
+
   int aggWrite(int event, void *e);
   int aggWriteDone(int event, void *e);
   uint32_t round_to_approx_size (uint32_t l) {
@@ -372,7 +405,11 @@ struct SSDVol: public Continuation
     return INK_ALIGN(ll, disk->hw_sector_size);
   }
 
-  void init(off_t s, off_t l, CacheDisk *ssd, Vol *v) {
+  void init(off_t s, off_t l, CacheDisk *ssd, Vol *v, SSDVolHeaderFooter *hptr) {
+    const size_t hash_id_size = strlen(ssd->path) + 32;
+    hash_id = (char *)ats_malloc(hash_id_size);
+    snprintf(hash_id, hash_id_size, "%s %" PRIu64 ":%" PRIu64 "", ssd->path, s, l);
+
     skip = start = s;
     len = l;
     disk = ssd;
@@ -380,17 +417,7 @@ struct SSDVol: public Continuation
     vol = v;
     sync = false;
 
-    header = &hh;
-    header->magic = VOL_MAGIC;
-    header->version.ink_major = CACHE_DB_MAJOR_VERSION;
-    header->version.ink_minor = CACHE_DB_MINOR_VERSION;
-    header->agg_pos = header->write_pos = start;
-    header->last_write_pos = header->write_pos;
-    header->phase = 0;
-    header->cycle = 0;
-    header->create_time = time(NULL);
-    header->dirty = 0;
-    sector_size = header->sector_size = disk->hw_sector_size;
+    header = hptr;
 
     agg_todo_size = 0;
     agg_buf_pos = 0;
@@ -470,6 +497,7 @@ struct Vol: public Continuation
   AccessHistory history;
   uint32_t ssd_index;
   Queue<MigrateToSSD, MigrateToSSD::Link_hash_link> mig_hash[MIGRATE_BUCKETS];
+  volatile int ssd_done;
 
 
   bool migrate_probe(CacheKey *key, MigrateToSSD **result) {
@@ -502,6 +530,8 @@ struct Vol: public Continuation
 
   void cancel_trigger();
 
+  int recover_data();
+
   int open_write(CacheVC *cont, int allow_if_writers, int max_writers);
   int open_write_lock(CacheVC *cont, int allow_if_writers, int max_writers);
   int close_write(CacheVC *cont);
@@ -524,6 +554,10 @@ struct Vol: public Continuation
   int handle_recover_from_data(int event, void *data);
   int handle_recover_write_dir(int event, void *data);
   int handle_header_read(int event, void *data);
+
+#ifdef SSD_CACHE
+  int recover_ssd_vol();
+#endif
 
   int dir_init_done(int event, void *data);
 

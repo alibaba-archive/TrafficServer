@@ -375,6 +375,33 @@ dir_clean_vol(Vol *d)
 }
 
 #ifdef SSD_CACHE
+
+static inline void
+ssdvol_dir_clean_bucket(Dir *b, int s, Vol *vol, int offset)
+{
+  Dir *e = b, *p = NULL;
+  Dir *seg = dir_segment(s, vol);
+  do {
+    if (dir_inssd(e) && dir_get_index(e) == offset) {
+      e = dir_delete_entry(e, p, s, vol);
+      continue;
+    }
+    p = e;
+    e = next_dir(e, seg);
+  } while(e);
+}
+
+void
+clear_ssdvol_dir(Vol *v, int offset)
+{
+  for (int i = 0; i < v->segments; i++) {
+    Dir *seg = dir_segment(i, v);
+    for (int j = 0; j < v->buckets; j++) {
+      ssdvol_dir_clean_bucket(dir_bucket(j, seg), i, v, offset);
+    }
+  }
+}
+
 static inline void
 ssd_dir_clean_bucket(Dir *b, int s, Vol *vol)
 {
@@ -430,6 +457,7 @@ dir_clean_bucket(Dir *b, int s, SSDVol *d)
     e = next_dir(e, seg);
   } while (e);
 }
+
 void
 dir_clean_segment(int s, SSDVol *d)
 {
@@ -439,6 +467,7 @@ dir_clean_segment(int s, SSDVol *d)
     ink_assert(!dir_next(dir_bucket(i, seg)) || dir_offset(dir_bucket(i, seg)));
   }
 }
+
 void
 clean_ssdvol(SSDVol *d)
 {
@@ -447,6 +476,25 @@ clean_ssdvol(SSDVol *d)
     dir_clean_segment(i, d);
   CHECK_DIR(d);
 }
+
+void
+dir_clean_range_ssdvol(off_t start, off_t end, SSDVol *svol)
+{
+  Vol *vol = svol->vol;
+  int offset = svol - vol->ssd_vols;
+
+  for (int i = 0; i < vol->buckets * DIR_DEPTH * vol->segments; i++) {
+    Dir *e = dir_index(vol, i);
+    if (dir_inssd(e) && dir_get_index(e) == offset && !dir_token(e) && 
+            dir_offset(e) >= (int64_t)start && dir_offset(e) < (int64_t)end) {
+      CACHE_DEC_DIR_USED(vol->mutex);
+      dir_set_offset(e, 0);     // delete
+    }
+  }
+
+  clean_ssdvol(svol);
+}
+
 #endif
 
 void
@@ -1051,6 +1099,13 @@ sync_cache_dir_on_shutdown(void)
       Debug("cache_dir_sync", "Periodic dir sync in progress -- overwriting");
     }
     d->footer->sync_serial = d->header->sync_serial;
+
+#ifdef SSD_CACHE
+      for (int j = 0; j < d->num_ssd_vols; j++) {
+        d->ssd_vols[j].header->sync_serial = d->header->sync_serial;
+      }
+#endif
+
     CHECK_DIR(d);
     memcpy(buf, d->raw_dir, dirlen);
     size_t B = d->header->sync_serial & 1;
@@ -1158,6 +1213,13 @@ Lrestart:
       }
       d->header->sync_serial++;
       d->footer->sync_serial = d->header->sync_serial;
+
+#ifdef SSD_CACHE
+      for (int j = 0; j < d->num_ssd_vols; j++) {
+        d->ssd_vols[j].header->sync_serial = d->header->sync_serial;
+      }
+#endif
+
       CHECK_DIR(d);
       memcpy(buf, d->raw_dir, dirlen);
       d->dir_sync_in_progress = 1;

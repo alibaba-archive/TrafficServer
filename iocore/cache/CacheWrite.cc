@@ -1885,6 +1885,9 @@ Lagain:
     if (!mts->notMigrate) {
       old_off = dir_get_offset(&mts->dir);
       Dir old_dir = mts->dir;
+      doc->sync_serial = header->sync_serial;
+      doc->write_serial = header->write_serial;
+
       memcpy(agg_buffer + agg_buf_pos, doc, doc->len);
       off_t o = header->write_pos + agg_buf_pos;
       dir_set_offset(&mts->dir, offset_to_vol_offset(this, o));
