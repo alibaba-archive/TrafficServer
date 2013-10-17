@@ -200,7 +200,7 @@ delete_event_queue(LLQ * q)
  * note: None
  *********************************************************************/
 void
-apiEventCallback(alarm_t newAlarm, char *ip, char *desc)
+apiEventCallback(alarm_t newAlarm, const char *ip, const char *desc)
 {
   NOWARN_UNUSED(ip);
   // create an TSEvent
