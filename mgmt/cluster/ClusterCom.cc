@@ -794,7 +794,7 @@ ClusterCom::handleMultiCastMessage(char *message)
     lmgmt->alarm_keeper->signalAlarm(MGMT_ALARM_PROXY_SYSTEM_ERROR,
                                      "Received Multicast message from peer running mis-match"
                                      " Operating system, please investigate");
-    mgmt_elog(0, "[ClusterCom::handleMultiCastMessage] Received message from peer "
+    Debug("ccom", "[ClusterCom::handleMultiCastMessage] Received message from peer "
               "running different os/release '%s'(ours os: '%s' rel: '%s'\n", line, sys_name, sys_release);
   }
 
@@ -804,7 +804,7 @@ ClusterCom::handleMultiCastMessage(char *message)
     lmgmt->alarm_keeper->signalAlarm(MGMT_ALARM_PROXY_SYSTEM_ERROR,
                                      "Received Multicast message from peer running mis-match"
                                      " Operating system release, please investigate");
-    mgmt_elog(0, "[ClusterCom::handleMultiCastMessage] Received message from peer "
+    Debug("ccom", "[ClusterCom::handleMultiCastMessage] Received message from peer "
               "running different os/release '%s'(ours os: '%s' rel: '%s'\n", line, sys_name, sys_release);
   }
 
