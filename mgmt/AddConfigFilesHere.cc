@@ -37,7 +37,7 @@ static char INK_UNUSED rcsId__AddConfigFilesHere_cc[] = "@(#)  built on " __DATE
  ****************************************************************************/
 
 void
-testcall(char *foo)
+testcall(char *foo, bool /* incVersion */)
 {
   Debug("lm", "Received Callback that %s has changed\n", foo);
 }

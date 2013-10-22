@@ -770,6 +770,7 @@ LocalManager::sendMgmtMsgToProcesses(MgmtMessageHdr * mh)
     mgmt_log("[LocalManager::SendMgmtMsgsToProcesses]Event is being constructed .\n");
     break;
   case MGMT_EVENT_CONFIG_FILE_UPDATE:
+  case MGMT_EVENT_CONFIG_FILE_UPDATE_NO_INC_VERSION:
     bool found;
     char *fname;
     Rollback *rb;
@@ -857,9 +858,14 @@ LocalManager::sendMgmtMsgToProcesses(MgmtMessageHdr * mh)
 
 
 void
-LocalManager::signalFileChange(const char *var_name)
+LocalManager::signalFileChange(const char *var_name, bool incVersion)
 {
-  signalEvent(MGMT_EVENT_CONFIG_FILE_UPDATE, var_name);
+  if (incVersion) {
+    signalEvent(MGMT_EVENT_CONFIG_FILE_UPDATE, var_name);
+  }
+  else {
+    signalEvent(MGMT_EVENT_CONFIG_FILE_UPDATE_NO_INC_VERSION, var_name);
+  }
   return;
 }
 
@@ -905,10 +911,11 @@ LocalManager::processEventQueue()
     char *data_raw = (char *) mh + sizeof(MgmtMessageHdr);
 
     // check if we have a local file update
-    if (mh->msg_id == MGMT_EVENT_CONFIG_FILE_UPDATE) {
+    if (mh->msg_id == MGMT_EVENT_CONFIG_FILE_UPDATE || mh->msg_id == MGMT_EVENT_CONFIG_FILE_UPDATE_NO_INC_VERSION) {
       // records.config
       if (!(strcmp(data_raw, "records.config"))) {
-        if (RecReadConfigFile() != REC_ERR_OKAY) {
+        bool incVersion = mh->msg_id == MGMT_EVENT_CONFIG_FILE_UPDATE;
+        if (RecReadConfigFile(incVersion) != REC_ERR_OKAY) {
           mgmt_elog(stderr, 0, "[fileUpdated] Config update failed for records.config\n");
         }
         handled_by_mgmt = true;
