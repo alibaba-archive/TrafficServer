@@ -66,6 +66,22 @@ int RemapParser::loadFromFile(const char *filename, DirectiveParams *rootParams)
   return this->parse(rootParams, _content, _content + fileSize);
 }
 
+#define SKIP_COMMENT(p) \
+  do { \
+    lineCount++; \
+    p++; /* skip \n */ \
+    while ((p < contentEnd) && (*p == ' ' || *p == '\t')) { \
+      p++; /* skip space */ \
+    } \
+    if ((p < contentEnd) && *p == '#') {  /* comment start */ \
+      p++; /* skip # */   \
+      while (p < contentEnd && *p != '\n') { \
+        p++; \
+      } \
+    } \
+  } while (p < contentEnd && *p == '\n')
+
+
 int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
 {
   char *current;
@@ -118,8 +134,7 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
         }
         else if (*blockStart == '\n')
         {
-          blockStart++;
-          lineCount++;
+          SKIP_COMMENT(blockStart);
         }
         else {
           break;
@@ -142,25 +157,29 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
           }
           else if (notMatchBlocks < 0) {
             fprintf(stderr, "file: "__FILE__", line: %d, "
-                "unexpect }, config line: %.*s", __LINE__,
-                (int)(lineEnd - line), line);
+                "unexpect }, config line #%d: %.*s", __LINE__,
+                params->_lineInfo.lineNo + lineNo, (int)(lineEnd - line), line);
             return EINVAL;
           }
+
+          blockEnd++; //skip }
         }
         else if (*blockEnd == '{') {
           notMatchBlocks++;
+          blockEnd++; //skip {
         }
         else if (*blockEnd == '\n') {
-          lineCount++;
+          SKIP_COMMENT(blockEnd);
         }
-
-        blockEnd++; //skip }
+        else {
+          blockEnd++;
+        }
       }
 
       if (notMatchBlocks != 0) {
         fprintf(stderr, "file: "__FILE__", line: %d, "
-            "expect }, config line: %.*s", __LINE__,
-            (int)(lineEnd - line), line);
+            "expect }, config line #%d: %.*s", __LINE__,
+            params->_lineInfo.lineNo + lineNo, (int)(lineEnd - line), line);
         return EINVAL;
       }
     }
@@ -172,8 +191,8 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
     getToken(line, lineEnd, &tokenLen);
     if (tokenLen >= (int)sizeof(directiveName)) {
         fprintf(stderr, "file: "__FILE__", line: %d, "
-            "ignore too long directive: %.*s, config line: %.*s", __LINE__,
-            tokenLen, line, (int)(lineEnd - line), line);
+            "ignore too long directive: %.*s, config line #%d: %.*s", __LINE__,
+            tokenLen, line, params->_lineInfo.lineNo + lineNo, (int)(lineEnd - line), line);
         return EINVAL;
     }
 
@@ -182,8 +201,8 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
     pChildDirective = params->_directive->getChild(directiveName);
     if (pChildDirective == NULL) {
       fprintf(stderr, "file: "__FILE__", line: %d, "
-          "unkown directive: %s, config line: %.*s", __LINE__,
-          directiveName, (int)(lineEnd - line), line);
+          "unkown directive: %s, config line #%d: %.*s", __LINE__,
+          directiveName, params->_lineInfo.lineNo + lineNo, (int)(lineEnd - line), line);
       return EINVAL;
     }
 
