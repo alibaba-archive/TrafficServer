@@ -78,15 +78,17 @@ int RemapDirective::check(DirectiveParams *params, const bool bBlock)
 
   if (_type == DIRECTIVE_TYPE_BLOCK && !bBlock) {
     fprintf(stderr, "file: "__FILE__", line: %d, "
-        "expect block { and }! config line: %.*s\n", __LINE__,
-        params->_lineInfo.line.length, params->_lineInfo.line.str);
+        "expect block { and }! config line #%d: %.*s\n", __LINE__,
+        params->_lineInfo.lineNo, params->_lineInfo.line.length,
+        params->_lineInfo.line.str);
     return EINVAL;
   }
 
   if (_type == DIRECTIVE_TYPE_STATEMENT && bBlock) {
     fprintf(stderr, "file: "__FILE__", line: %d, "
-        "unexpect block { and }! config line: %.*s\n", __LINE__,
-        params->_lineInfo.line.length, params->_lineInfo.line.str);
+        "unexpect block { and }! config line #%d: %.*s\n", __LINE__,
+        params->_lineInfo.lineNo, params->_lineInfo.line.length,
+        params->_lineInfo.line.str);
     return EINVAL;
   }
 
@@ -96,17 +98,17 @@ int RemapDirective::check(DirectiveParams *params, const bool bBlock)
 
   if (params->_paramCount < _minParamCount) {
     fprintf(stderr, "file: "__FILE__", line: %d, "
-        "parameter count: %d < %d, config line: %.*s\n", __LINE__,
-        params->_paramCount, _minParamCount, params->_lineInfo.line.length,
-        params->_lineInfo.line.str);
+        "parameter count: %d < %d, config line #%d: %.*s\n", __LINE__,
+        params->_paramCount, _minParamCount, params->_lineInfo.lineNo,
+        params->_lineInfo.line.length, params->_lineInfo.line.str);
     return EINVAL;
   }
 
   if (_maxParamCount > 0 && params->_paramCount > _maxParamCount) {
     fprintf(stderr, "file: "__FILE__", line: %d, "
-        "parameter count: %d > %d, config line: %.*s\n", __LINE__,
-        params->_paramCount, _maxParamCount, params->_lineInfo.line.length,
-        params->_lineInfo.line.str);
+        "parameter count: %d > %d, config line #%d: %.*s\n", __LINE__,
+        params->_paramCount, _maxParamCount, params->_lineInfo.lineNo,
+        params->_lineInfo.line.length, params->_lineInfo.line.str);
     return EINVAL;
   }
 

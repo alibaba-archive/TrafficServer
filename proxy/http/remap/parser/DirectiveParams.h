@@ -105,7 +105,7 @@ class DirectiveParams {
 
     void toString(StringBuffer *sb);
 
-    virtual int parse(const char *blockStat, const char *blockEnd) {
+    virtual int parse(const char *blockStart, const char *blockEnd) {
       return 0;
     }
 

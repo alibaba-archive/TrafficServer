@@ -66,10 +66,8 @@ int RemapParser::loadFromFile(const char *filename, DirectiveParams *rootParams)
   return this->parse(rootParams, _content, _content + fileSize);
 }
 
-#define SKIP_COMMENT(p) \
-  do { \
-    lineCount++; \
-    p++; /* skip \n */ \
+#define SKIP_COMMENT(p, count) \
+  while (true) { \
     while ((p < contentEnd) && (*p == ' ' || *p == '\t')) { \
       p++; /* skip space */ \
     } \
@@ -78,8 +76,15 @@ int RemapParser::loadFromFile(const char *filename, DirectiveParams *rootParams)
       while (p < contentEnd && *p != '\n') { \
         p++; \
       } \
+      if (p < contentEnd && *p == '\n') { \
+        count++; \
+        p++; /* skip \n */ \
+        continue; \
+      } \
     } \
-  } while (p < contentEnd && *p == '\n')
+    \
+    break; \
+  }
 
 
 int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
@@ -102,6 +107,7 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
   int result;
   char directiveName[MAX_DIRECTIVE_NAME_SIZE];
   bool bBlock;
+  bool bAfterNewLine;
 
   lineNo = 0;
   current = content;
@@ -123,18 +129,20 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
       paramEnd = blockStart;
       blockStatementStart = lineEnd;
       bBlock = true;
+      bAfterNewLine = true;
     }
     else {
       paramEnd = newLineEnd;
       blockStart = lineEnd;
+      SKIP_COMMENT(blockStart, lineCount);
       while ((blockStart < contentEnd)) {
-        if (*blockStart == ' ' || *blockStart == '\t' || *blockStart == '\r')
-        {
+        if (*blockStart == ' ' || *blockStart == '\t' || *blockStart == '\r') {
           blockStart++;
         }
-        else if (*blockStart == '\n')
-        {
-          SKIP_COMMENT(blockStart);
+        else if (*blockStart == '\n') {
+          lineCount++;
+          blockStart++; // skip \n
+          SKIP_COMMENT(blockStart, lineCount);
         }
         else {
           break;
@@ -143,11 +151,19 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
 
       blockStatementStart = blockStart + 1;
       bBlock = (blockStart < contentEnd && *blockStart == '{');
+      if (bBlock) {
+        lineNo += lineCount;
+      }
+      lineCount = 0;  //reset
+      bAfterNewLine = false;
     }
 
     if (bBlock) {
-      notMatchBlocks = 1;
       blockEnd = blockStatementStart;
+      if (bAfterNewLine) {
+        SKIP_COMMENT(blockEnd, lineCount);
+      }
+      notMatchBlocks = 1;
       while (blockEnd < contentEnd) {
         if (*blockEnd == '}') {
           notMatchBlocks--;
@@ -169,7 +185,9 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
           blockEnd++; //skip {
         }
         else if (*blockEnd == '\n') {
-          SKIP_COMMENT(blockEnd);
+          lineCount++;
+          blockEnd++; // skip \n
+          SKIP_COMMENT(blockEnd, lineCount);
         }
         else {
           blockEnd++;

@@ -36,7 +36,7 @@ int ACLMethodParams::getMethodFlag(const StringValue *sv)
   return ACL_METHOD_FLAG_NONE;
 }
 
-int ACLMethodParams::parse(const char *blockStat, const char *blockEnd)
+int ACLMethodParams::parse(const char *blockStart, const char *blockEnd)
 {
   int methodCount;
   StringValue methods[ACL_METHOD_MAX_NUM];
@@ -125,7 +125,7 @@ ACLSrcIpParams::ACLSrcIpParams(const int lineNo, const char *lineStr,
 {
 }
 
-int ACLSrcIpParams::parse(const char *blockStat, const char *blockEnd)
+int ACLSrcIpParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_paramCount != 1) {
     fprintf(stderr, "file: "__FILE__", line: %d, " \
@@ -156,7 +156,7 @@ ACLRedirectUrlParams::ACLRedirectUrlParams(const int lineNo, const char *lineStr
   _primaryDirective = primaryDirective;
 }
 
-int ACLRedirectUrlParams::parse(const char *blockStat, const char *blockEnd)
+int ACLRedirectUrlParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_parent->getParent() == NULL) {
     fprintf(stderr, "file: "__FILE__", line: %d, " \
@@ -202,7 +202,7 @@ ACLRefererParams::ACLRefererParams(const int lineNo, const char *lineStr,
 {
 }
 
-int ACLRefererParams::parse(const char *blockStat, const char *blockEnd)
+int ACLRefererParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_paramCount == 0) {
     fprintf(stderr, "file: "__FILE__", line: %d, " \
@@ -327,7 +327,7 @@ ACLDefineParams::ACLDefineParams(const int lineNo, const char *lineStr,
 {
 }
 
-int ACLDefineParams::parse(const char *blockStat, const char *blockEnd)
+int ACLDefineParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_parent->getParent() != NULL) {
     fprintf(stderr, "file: "__FILE__", line: %d, " \
@@ -392,7 +392,7 @@ ACLCheckParams::ACLCheckParams(const int lineNo, const char *lineStr,
 {
 }
 
-int ACLCheckParams::parse(const char *blockStat, const char *blockEnd)
+int ACLCheckParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_parent->getParent() == NULL) {
     fprintf(stderr, "file: "__FILE__", line: %d, " \
@@ -441,7 +441,7 @@ ACLActionParams::ACLActionParams(const int lineNo, const char *lineStr,
 {
 }
 
-int ACLActionParams::parse(const char *blockStat, const char *blockEnd)
+int ACLActionParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_parent->getParent() == NULL) {
     fprintf(stderr, "file: "__FILE__", line: %d, " \
@@ -518,7 +518,7 @@ int ACLActionParams::parse(const char *blockStat, const char *blockEnd)
     }
 
     _actionParams->setParams(_params + 2, _paramCount - 2);
-    return _actionParams->parse(blockStat, blockEnd);
+    return _actionParams->parse(blockStart, blockEnd);
   }
   else {
     fprintf(stderr, "file: "__FILE__", line: %d, " \

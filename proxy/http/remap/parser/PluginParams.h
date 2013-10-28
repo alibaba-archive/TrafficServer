@@ -15,7 +15,7 @@ class PluginParams : public DirectiveParams {
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~PluginParams() {}
-    int parse(const char *blockStat, const char *blockEnd);
+    int parse(const char *blockStart, const char *blockEnd);
 
     int combineParams();
 
@@ -40,7 +40,7 @@ class PluginParamParams : public DirectiveParams {
       _paramValue.free();
     }
 
-    int parse(const char *blockStat, const char *blockEnd);
+    int parse(const char *blockStart, const char *blockEnd);
 
     bool isBase64() const {
       return _base64;

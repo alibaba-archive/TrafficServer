@@ -10,7 +10,7 @@ PluginParams::PluginParams(const int lineNo, const char *lineStr,
 {
 }
 
-int PluginParams::parse(const char *blockStat, const char *blockEnd)
+int PluginParams::parse(const char *blockStart, const char *blockEnd)
 {
   _pluginInfo.filename = _params[0];
   _pluginInfo.paramCount = _paramCount - 1;
@@ -52,8 +52,8 @@ int PluginParams::combineParams()
      if ((paramParams=dynamic_cast<const PluginParamParams *>(child)) != NULL) {
        if (_pluginInfo.paramCount >= MAX_PARAM_NUM - 1) {
          fprintf(stderr, "file: "__FILE__", line: %d, " \
-             "too many puglin parameters, exceeds: %d\n",
-             __LINE__, MAX_PARAM_NUM - 1);
+             "config line no: %d, too many puglin parameters, exceeds: %d\n",
+             __LINE__, _lineInfo.lineNo, MAX_PARAM_NUM - 1);
          return E2BIG;
        }
 
@@ -76,7 +76,7 @@ PluginParamParams::PluginParamParams(const int lineNo, const char *lineStr,
 {
 }
 
-int PluginParamParams::parse(const char *blockStat, const char *blockEnd)
+int PluginParamParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_paramCount == 0) {
     if (!_bBlock) {
@@ -89,7 +89,7 @@ int PluginParamParams::parse(const char *blockStat, const char *blockEnd)
 
     StringValue sbValue;
     _base64 = false;
-    sbValue.str = blockStat + 1;
+    sbValue.str = blockStart + 1;
     sbValue.length = blockEnd - 1 - sbValue.str;
     sbValue.strdup(&_paramValue);
     return 0;
@@ -119,7 +119,7 @@ int PluginParamParams::parse(const char *blockStat, const char *blockEnd)
       return EINVAL;
     }
 
-    _base64Value.str = blockStat + 1;
+    _base64Value.str = blockStart + 1;
     _base64Value.length = blockEnd - 1 - _base64Value.str;
   }
   else {  //_paramCount == 2
@@ -149,7 +149,7 @@ int PluginParamParams::parse(const char *blockStat, const char *blockEnd)
   szFormattedBase64 = (char *)malloc(_base64Value.length + 1);
   if (szFormattedBase64 == NULL) {
       fprintf(stderr, "file: "__FILE__", line: %d, " \
-          "malloc %d bytes fail", __LINE__, _base64Value.length + 1);
+          "malloc %d bytes fail\n", __LINE__, _base64Value.length + 1);
       return ENOMEM;
   }
 
@@ -171,7 +171,7 @@ int PluginParamParams::parse(const char *blockStat, const char *blockEnd)
   _paramValue.str = (const char *)malloc(buffSize);
   if (_paramValue.str == NULL) {
       fprintf(stderr, "file: "__FILE__", line: %d, " \
-          "malloc %d bytes fail", __LINE__, buffSize);
+          "malloc %d bytes fail\n", __LINE__, buffSize);
       free(szFormattedBase64);
       return ENOMEM;
   }
@@ -186,7 +186,7 @@ int PluginParamParams::parse(const char *blockStat, const char *blockEnd)
   free(szFormattedBase64);
   if (!decodeResult) {
       fprintf(stderr, "file: "__FILE__", line: %d, " \
-          "base64 decode fail", __LINE__);
+          "base64 decode fail, config line no: %d\n", __LINE__, _lineInfo.lineNo);
       return EINVAL;
   }
 

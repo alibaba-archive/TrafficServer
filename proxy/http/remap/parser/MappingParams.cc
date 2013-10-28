@@ -37,7 +37,7 @@ MapParams::MapParams(const int lineNo, const char *lineStr,
   _type = MAPPING_TYPE_MAP;
 }
 
-int MapParams::parse(const char *blockStat, const char *blockEnd)
+int MapParams::parse(const char *blockStart, const char *blockEnd)
 {
   int startIndex;
   if (_params[0].equals(MAP_OPTION_WITH_RECV_PORT,
@@ -79,7 +79,7 @@ RedirectParams::RedirectParams(const int lineNo, const char *lineStr,
   _type = MAPPING_TYPE_REDIRECT;
 }
 
-int RedirectParams::parse(const char *blockStat, const char *blockEnd)
+int RedirectParams::parse(const char *blockStart, const char *blockEnd)
 {
   int startIndex;
   if (_params[0].equals(REDIRECT_OPTION_TEMPORARY,

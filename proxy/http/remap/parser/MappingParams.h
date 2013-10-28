@@ -63,7 +63,7 @@ class MapParams : public MappingParams {
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~MapParams() {}
-    int parse(const char *blockStat, const char *blockEnd);
+    int parse(const char *blockStart, const char *blockEnd);
 };
 
 
@@ -74,7 +74,7 @@ class RedirectParams: public MappingParams {
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~RedirectParams() {}
-    int parse(const char *blockStat, const char *blockEnd);
+    int parse(const char *blockStart, const char *blockEnd);
 };
 
 #endif

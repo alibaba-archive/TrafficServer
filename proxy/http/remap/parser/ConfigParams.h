@@ -19,7 +19,7 @@ class ConfigSetParams : public DirectiveParams {
 
   public:
      ~ConfigSetParams() {}
-     virtual int parse(const char *blockStat, const char *blockEnd);
+     virtual int parse(const char *blockStart, const char *blockEnd);
 
      inline const ConfigKeyValue * getConfig() const {
        return &_config;
@@ -43,7 +43,7 @@ class ConfigParams : public ConfigSetParams {
   public:
      ~ConfigParams() {}
 
-     int parse(const char *blockStat, const char *blockEnd);
+     int parse(const char *blockStart, const char *blockEnd);
 
      inline int getConfigType() const {
        return _config_type;

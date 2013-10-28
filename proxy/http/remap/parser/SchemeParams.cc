@@ -9,7 +9,7 @@ SchemeParams::SchemeParams(const int lineNo, const char *lineStr,
 {
 }
 
-int SchemeParams::parse(const char *blockStat, const char *blockEnd)
+int SchemeParams::parse(const char *blockStart, const char *blockEnd)
 {
   _host = _params[0];
   return 0;
