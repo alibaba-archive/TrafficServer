@@ -13,7 +13,6 @@
 #include <sys/epoll.h>
 #include "Diags.h"
 #include "global.h"
-#include "machine.h"
 #include "nio.h"
 #include "clusterinterface.h"
 #include "session.h"
@@ -25,7 +24,7 @@
 #include "message.h"
 
 #ifndef USE_MULTI_ALLOCATOR
-Allocator out_message_allocator("OutMessage", sizeof(OutMessage), 1024);
+Allocator g_out_message_allocator("OutMessage", sizeof(OutMessage), 1024);
 #endif
 
 inline int64_t get_total_size(IOBufferBlock *blocks) {
@@ -39,7 +38,7 @@ inline int64_t get_total_size(IOBufferBlock *blocks) {
 }
 
 int cluster_send_message(ClusterSession session, const int func_id,
-    void *data, const int data_len, const MessagePriority priority)
+	void *data, const int data_len, const MessagePriority priority)
 {
   MachineSessions *pMachineSessions;
   SessionEntry *pSessionEntry;
@@ -61,12 +60,12 @@ int cluster_send_message(ClusterSession session, const int func_id,
 #ifdef USE_MULTI_ALLOCATOR
   pMessage = (OutMessage *)pSockContext->out_msg_allocator->alloc_void();
 #else
-  pMessage = (OutMessage *)out_message_allocator.alloc_void();
+  pMessage = (OutMessage *)g_out_message_allocator.alloc_void();
 #endif
 
   if (pMessage == NULL) {
-    Error("file: "__FILE__", line: %d, "
-        "malloc %d bytes fail, errno: %d, error info: %s",
+    Error("file: "__FILE__", line: %d, " \
+        "malloc %d bytes fail, errno: %d, error info: %s", \
         __LINE__, (int)sizeof(OutMessage), errno, strerror(errno));
     return errno != 0 ? errno : ENOMEM;
   }
@@ -76,7 +75,7 @@ int cluster_send_message(ClusterSession session, const int func_id,
   session_index = session.fields.seq % max_session_count_per_machine;
   SESSION_LOCK(pMachineSessions, session_index);
 
-  if (session.fields.ip == my_machine_ip) {  //request by me
+  if (session.fields.ip == g_my_machine_ip) {  //request by me
     if (pSessionEntry->client_start_time == 0) {
       pSessionEntry->client_start_time = CURRENT_NS();
     }
@@ -95,8 +94,8 @@ int cluster_send_message(ClusterSession session, const int func_id,
 #endif
     pMessage->header.func_id = func_id;
     pMessage->header.session_id = session;
-    pMessage->header.msg_seq = ink_atomic_increment(
-        &pSessionEntry->current_msg_seq, 1) + 1;
+    pMessage->header.msg_seq = __sync_add_and_fetch(
+        &pSessionEntry->current_msg_seq, 1);
     pMessage->in_queue_time = CURRENT_NS();
     pMessage->bytes_sent = 0;
     pMessage->blocks.m_ptr = NULL;
@@ -109,8 +108,8 @@ int cluster_send_message(ClusterSession session, const int func_id,
     }
     else {
       if (data_len > MINI_MESSAGE_SIZE) {
-        Error("file: "__FILE__", line: %d, "
-            "invalid data length: %d exceeds %d!",
+        Error("file: "__FILE__", line: %d, " \
+            "invalid data length: %d exceeds %d!", \
             __LINE__, data_len, MINI_MESSAGE_SIZE);
         result = errno != 0 ? errno : ENOMEM;
         break;
@@ -122,12 +121,12 @@ int cluster_send_message(ClusterSession session, const int func_id,
       memcpy(pMessage->mini_buff, data, data_len);
     }
 
-    pMessage->header.aligned_data_len = BYTE_ALIGN8(
+    pMessage->header.aligned_data_len = BYTE_ALIGN16(
         pMessage->header.data_len);
     result = push_to_send_queue(pSockContext,
         pMessage, priority);
   } while (0);
-
+ 
   if (result != 0) {
     release_out_message(pSockContext, pMessage);
   }
@@ -137,8 +136,8 @@ int cluster_send_message(ClusterSession session, const int func_id,
 
 int cluster_send_msg_internal_ex(const ClusterSession *session,
     SocketContext *pSockContext, const int func_id,
-    void *data, const int data_len, const MessagePriority priority,
-    push_to_send_queue_func push_to_queue_func)
+	void *data, const int data_len, const MessagePriority priority,
+  push_to_send_queue_func push_to_queue_func)
 {
   OutMessage *pMessage;
   int result;
@@ -150,12 +149,12 @@ int cluster_send_msg_internal_ex(const ClusterSession *session,
 #ifdef USE_MULTI_ALLOCATOR
   pMessage = (OutMessage *)pSockContext->out_msg_allocator->alloc_void();
 #else
-  pMessage = (OutMessage *)out_message_allocator.alloc_void();
+  pMessage = (OutMessage *)g_out_message_allocator.alloc_void();
 #endif
 
   if (pMessage == NULL) {
-    Error("file: "__FILE__", line: %d, "
-        "malloc %d bytes fail, errno: %d, error info: %s",
+    Error("file: "__FILE__", line: %d, " \
+        "malloc %d bytes fail, errno: %d, error info: %s", \
         __LINE__, (int)sizeof(OutMessage), errno, strerror(errno));
     return errno != 0 ? errno : ENOMEM;
   }
@@ -179,8 +178,8 @@ int cluster_send_msg_internal_ex(const ClusterSession *session,
     }
     else {
       if (data_len > MINI_MESSAGE_SIZE) {
-        Error("file: "__FILE__", line: %d, "
-            "invalid data length: %d exceeds %d!",
+        Error("file: "__FILE__", line: %d, " \
+            "invalid data length: %d exceeds %d!", \
             __LINE__, data_len, MINI_MESSAGE_SIZE);
         result = errno != 0 ? errno : ENOMEM;
         break;
@@ -194,11 +193,11 @@ int cluster_send_msg_internal_ex(const ClusterSession *session,
       }
     }
 
-    pMessage->header.aligned_data_len = BYTE_ALIGN8(
+    pMessage->header.aligned_data_len = BYTE_ALIGN16(
         pMessage->header.data_len);
     result = push_to_queue_func(pSockContext, pMessage, priority);
   } while (0);
-
+ 
   if (result != 0) {
     release_out_message(pSockContext, pMessage);
   }

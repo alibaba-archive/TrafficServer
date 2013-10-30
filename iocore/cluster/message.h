@@ -6,12 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include "types.h"
 
 struct HelloMessage
 {
-  uint32_t major;  //major version
-  uint32_t minor;  //minor version
+  uint32_t major;
+  uint32_t minor;
   uint32_t min_major;
   uint32_t min_minor;
 };
@@ -21,7 +22,7 @@ extern "C" {
 #endif
 
 #ifndef USE_MULTI_ALLOCATOR
-  extern Allocator out_message_allocator;
+  extern Allocator g_out_message_allocator;
 #endif
 
 typedef int (*push_to_send_queue_func)(SocketContext *pSockContext, OutMessage *pMessage,
@@ -41,7 +42,7 @@ inline void release_out_message(SocketContext *pSockContext,
 #ifdef USE_MULTI_ALLOCATOR
   pSockContext->out_msg_allocator->free_void(msg);
 #else
-  out_message_allocator.free_void(msg);
+  g_out_message_allocator.free_void(msg);
 #endif
 }
 

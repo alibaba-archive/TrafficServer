@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include "types.h"
 #include "clusterinterface.h"
 
@@ -14,7 +15,7 @@ typedef struct {
   bool init_done;
   bool is_myself;   //myself, the local host
   SessionEntry *sessions;
-  ink_mutex *locks;
+	pthread_mutex_t *locks;
   volatile SequenceType current_seq;
   volatile SessionStat session_stat;
 
@@ -30,11 +31,11 @@ typedef struct {
 } MachineSessions;
 
 #define SESSION_LOCK(pMachineSessions, session_index) \
-	ink_mutex_acquire((pMachineSessions)->locks + session_index % \
+	pthread_mutex_lock((pMachineSessions)->locks + session_index % \
       session_lock_count_per_machine)
 
 #define SESSION_UNLOCK(pMachineSessions, session_index) \
-	ink_mutex_release((pMachineSessions)->locks + session_index % \
+	pthread_mutex_unlock((pMachineSessions)->locks + session_index % \
       session_lock_count_per_machine)
 
 #ifdef __cplusplus
