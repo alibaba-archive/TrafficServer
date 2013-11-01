@@ -897,6 +897,8 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_CONFIG, "proxy.config.cluster.session_locks_per_machine", RECD_INT, "10949", RECU_RESTART_TS, RR_NULL, RECC_INT, "[1-100000]", RECA_NULL}
   ,
+  {RECT_CONFIG, "proxy.config.cluster.read_buffer_size", RECD_INT, "2097152", RECU_RESTART_TS, RR_NULL, RECC_INT, "[65536-2097152]", RECA_NULL}
+  ,
   {RECT_CONFIG, "proxy.config.cluster.cluster_configuration", RECD_STRING, "cluster.config", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.cluster.default_cluster_configuration", RECD_STRING, "default_cluster.config", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}

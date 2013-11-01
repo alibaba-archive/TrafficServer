@@ -31,6 +31,7 @@
 #include "nio.h"
 
 int g_worker_thread_count = 0;
+static int read_buffer_size = 2 * 1024 * 1024;
 
 struct worker_thread_context *g_worker_thread_contexts = NULL;
 
@@ -291,6 +292,10 @@ int nio_init()
 	struct worker_thread_context *pContextEnd;
 	pthread_t tid;
 
+  REC_EstablishStaticConfigInt32(read_buffer_size, "proxy.config.cluster.read_buffer_size");
+  Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
+      "read_buffer_size: %d", __LINE__, read_buffer_size);
+
 	if ((result=init_pthread_lock(&worker_thread_lock)) != 0) {
 		return result;
 	}
@@ -419,7 +424,7 @@ int cluster_global_init(message_deal_func deal_func,
     char *old_msg_header; \
     oldBuffer = pSockContext->reader.buffer; \
     old_msg_header = pSockContext->reader.msg_header; \
-    INIT_READER(pSockContext->reader, READ_BUFFER_SIZE); \
+    INIT_READER(pSockContext->reader, read_buffer_size); \
     memcpy(pSockContext->reader.current, old_msg_header, msg_bytes); \
     pSockContext->reader.current += msg_bytes; \
     oldBuffer = NULL; \
@@ -525,7 +530,7 @@ int nio_add_to_epoll(SocketContext *pSockContext)
   pSockContext->next_write_time = CURRENT_NS() + send_wait_time;
   pSockContext->next_ping_time = CURRENT_NS() + cluster_ping_send_interval;
 
-  INIT_READER(pSockContext->reader, READ_BUFFER_SIZE);
+  INIT_READER(pSockContext->reader, read_buffer_size);
   pSockContext->reader.recv_body_bytes = 0;
 
   set_socket_rw_buff_size(pSockContext->sock);
@@ -1204,7 +1209,7 @@ static int deal_read_event(SocketContext *pSockContext)
             MOVE_TO_NEW_BUFFER(pSockContext, msg_bytes);
           }
           else {
-            INIT_READER(pSockContext->reader, READ_BUFFER_SIZE);
+            INIT_READER(pSockContext->reader, read_buffer_size);
           }
         }
 
@@ -1280,7 +1285,7 @@ static int deal_read_event(SocketContext *pSockContext)
           Error("file: "__FILE__", line: %d, " \
               "func_id: %d, data length: %d too large exceeds %d",
               __LINE__, pHeader->func_id, pHeader->data_len,
-              (int)(READ_BUFFER_SIZE - MSG_HEADER_LENGTH));
+              (int)(read_buffer_size - MSG_HEADER_LENGTH));
           return EINVAL;
         }
 
@@ -1309,14 +1314,14 @@ static int deal_read_event(SocketContext *pSockContext)
 
       if (bFirstBlock) {
         if (current_true_body_bytes > 0) {  //should keep the msg_header
-          ALLOC_READER_BUFFER(pSockContext->reader, READ_BUFFER_SIZE);
+          ALLOC_READER_BUFFER(pSockContext->reader, read_buffer_size);
         }
         else { //no data yet!
           MOVE_TO_NEW_BUFFER(pSockContext, msg_bytes);
         }
       }
       else {  //should keep the msg_header
-        ALLOC_READER_BUFFER(pSockContext->reader, READ_BUFFER_SIZE);
+        ALLOC_READER_BUFFER(pSockContext->reader, read_buffer_size);
       }
 
       return result;

@@ -25,8 +25,6 @@
 
 #define MAX_MACHINE_COUNT        255   //IMPORTANT: can't be 256!!
 
-#define READ_BUFFER_SIZE    (2 * 1024 * 1024)
-
 //combine multi msg to call writev
 #define WRITEV_ARRAY_SIZE   128
 #define WRITEV_ITEM_ONCE    (WRITEV_ARRAY_SIZE / 2)
