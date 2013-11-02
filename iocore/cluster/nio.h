@@ -25,7 +25,7 @@ int nio_destroy();
 
 int nio_add_to_epoll(SocketContext *pSockContext);
 int push_to_send_queue(SocketContext *pSockContext, OutMessage *pMessage,
-    const MessagePriority priority);
+    const MessagePriority priority, const uint32_t sessionVersion);
 
 int insert_into_send_queue_head(SocketContext *pSockContext, OutMessage *pMessage,
     const MessagePriority priority);

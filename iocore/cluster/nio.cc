@@ -39,6 +39,7 @@ static pthread_mutex_t worker_thread_lock;
 //static char magic_buff[4];
 
 static void *work_thread_entrance(void* arg);
+static void clear_send_queue(SocketContext * pSockContext, const bool warning);
 
 message_deal_func g_msg_deal_func = NULL;
 machine_change_notify_func g_machine_change_notify = NULL;
@@ -145,6 +146,8 @@ static void init_nio_stats()
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.send_delayed_time", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.push_msg_count", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.push_msg_bytes", 0, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.fail_msg_count", 0, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.fail_msg_bytes", 0, RECP_NON_PERSISTENT);
 
 #ifdef DEBUG
   nio_records.max_write_loop_time_used = RecRegisterStat(RECT_PROCESS,
@@ -165,7 +168,7 @@ void log_nio_stats()
   RecData data;
 	struct worker_thread_context *pThreadContext;
 	struct worker_thread_context *pContextEnd;
-  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   static time_t last_calc_bps_time = CURRENT_TIME();
   static int64_t last_send_bytes = 0;
 
@@ -192,6 +195,8 @@ void log_nio_stats()
     sum.send_delayed_time += pThreadContext->stats.send_delayed_time;
     sum.push_msg_count += pThreadContext->stats.push_msg_count;
     sum.push_msg_bytes += pThreadContext->stats.push_msg_bytes;
+    sum.fail_msg_count += pThreadContext->stats.fail_msg_count;
+    sum.fail_msg_bytes += pThreadContext->stats.fail_msg_bytes;
   }
 
   data.rec_int = sum.send_msg_count;
@@ -218,6 +223,10 @@ void log_nio_stats()
   RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.push_msg_count", RECD_INT, &data, NULL);
   data.rec_int = sum.push_msg_bytes;
   RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.push_msg_bytes", RECD_INT, &data, NULL);
+  data.rec_int = sum.fail_msg_count;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.fail_msg_count", RECD_INT, &data, NULL);
+  data.rec_int = sum.fail_msg_bytes;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.fail_msg_bytes", RECD_INT, &data, NULL);
   data.rec_int = sum.call_writev_count;
   RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.call_writev_count", RECD_INT, &data, NULL);
   data.rec_int = sum.call_read_count;
@@ -511,7 +520,6 @@ static int remove_from_active_sockets(SocketContext *pSockContext)
 int nio_add_to_epoll(SocketContext *pSockContext)
 {
 	struct epoll_event event;
-  int i;
 
   /*
   Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
@@ -520,10 +528,8 @@ int nio_add_to_epoll(SocketContext *pSockContext)
   */
 
   pSockContext->connected_time = CURRENT_TIME();
-  for (i=0; i<PRIORITY_COUNT; i++) {
-    pSockContext->send_queues[i].head = NULL;
-    pSockContext->send_queues[i].tail = NULL;
-  }
+  clear_send_queue(pSockContext, true);
+
   pSockContext->queue_index = 0;
   pSockContext->ping_start_time = 0;
   pSockContext->ping_fail_count = 0;
@@ -566,7 +572,7 @@ static void pack_header(OutMessage *msg, char *buff)
 }
 */
 
-static void clear_send_queue(SocketContext * pSockContext)
+static void clear_send_queue(SocketContext * pSockContext, const bool warning)
 {
   int i;
   int count;
@@ -579,6 +585,7 @@ static void clear_send_queue(SocketContext * pSockContext)
   for (i=0; i<PRIORITY_COUNT; i++) {
     send_queue = pSockContext->send_queues + i;
     pthread_mutex_lock(&send_queue->lock);
+    pSockContext->version++;
     while (send_queue->head != NULL) {
       msg = send_queue->head;
       send_queue->head = send_queue->head->next;
@@ -586,14 +593,23 @@ static void clear_send_queue(SocketContext * pSockContext)
       release_out_message(pSockContext, msg);
       count++;
     }
+    send_queue->tail = NULL;
     pthread_mutex_unlock(&send_queue->lock);
   }
 
   if (count > 0) {
-    Debug(CLUSTER_DEBUG_TAG, "file: " __FILE__ ", line: %d, "
-        "release %s:%d #%d message count: %d",
+    char buff[256];
+    sprintf(buff, "file: " __FILE__ ", line: %d, "
+        "release %s:%d message count: %d",
         __LINE__, pSockContext->machine->hostname,
-        pSockContext->machine->cluster_port, pSockContext->sock, count);
+        pSockContext->machine->cluster_port, count);
+    if (warning) {
+      Warning("%s", buff);
+    }
+    else {
+      Debug(CLUSTER_DEBUG_TAG, "%s", buff);
+    }
+
     pSockContext->thread_context->stats.drop_msg_count += count;
     pSockContext->thread_context->stats.drop_bytes += drop_bytes;
   }
@@ -609,16 +625,17 @@ static int close_socket(SocketContext * pSockContext)
 			__LINE__, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
 	}
-  remove_from_active_sockets(pSockContext);
 
-  machine_remove_connection(pSockContext);
 	close(pSockContext->sock);
   pSockContext->sock = -1;
+
+  remove_from_active_sockets(pSockContext);
+  machine_remove_connection(pSockContext);
 
   pSockContext->reader.blocks = NULL;
   pSockContext->reader.buffer = NULL;
 
-  clear_send_queue(pSockContext);
+  clear_send_queue(pSockContext, false);
   notify_connection_closed(pSockContext);
 
   if (pSockContext->connect_type == CONNECT_TYPE_CLIENT) {
@@ -1610,9 +1627,36 @@ static void *work_thread_entrance(void* arg)
 }
 
 int push_to_send_queue(SocketContext *pSockContext, OutMessage *pMessage,
-    const MessagePriority priority)
+    const MessagePriority priority, const uint32_t sessionVersion)
 {
+  int result;
+
 	pthread_mutex_lock(&pSockContext->send_queues[priority].lock);
+  do {
+    if (pSockContext->version != sessionVersion) {
+      Debug(CLUSTER_DEBUG_TAG, "session version: %u != socket context version: %d!",
+          sessionVersion, pSockContext->version);
+      result = EINVAL;
+      break;
+    }
+
+    if (pSockContext->sock < 0) {
+      Debug(CLUSTER_DEBUG_TAG, "sock context is invalid");
+      result = EINVAL;
+      break;
+    }
+    result = 0;
+  } while (0);
+
+  if (result != 0) {
+    pthread_mutex_unlock(&pSockContext->send_queues[priority].lock);
+
+    __sync_fetch_and_add(&pSockContext->thread_context->stats.fail_msg_count, 1);
+    __sync_fetch_and_add(&pSockContext->thread_context->stats.fail_msg_bytes,
+        MSG_HEADER_LENGTH + pMessage->header.aligned_data_len);
+    return result;
+  }
+
 	if (pSockContext->send_queues[priority].head == NULL) {
 		pSockContext->send_queues[priority].head = pMessage;
 	}

@@ -88,8 +88,9 @@ typedef struct session_entry {
 	void *user_data;  //user data for callback
 	struct socket_context *sock_context;
   InMessage *messages;  //income messages
-  int response_events;  //response events
-  uint32_t current_msg_seq;  //current message sequence no
+  int16_t response_events;  //response events
+  uint16_t current_msg_seq;  //current message sequence no
+  uint32_t version;    //avoid CAS ABA
   struct session_entry *next;  //session chain, only for server session
 
 #ifdef TRIGGER_STAT_FLAG
@@ -143,6 +144,7 @@ typedef struct socket_context {
   int queue_index;  //current deal queue index
   int connect_type;       //client or server
   time_t connected_time;  //connection established timestamp
+  uint32_t version;    //avoid CAS ABA
 
   int ping_fail_count;    //ping fail counter
   int64_t next_ping_time; //next time to send ping message
@@ -167,6 +169,9 @@ struct SocketStats {
 
   volatile int64_t push_msg_count; //push to send queue msg count
   volatile int64_t push_msg_bytes; //push to send queue msg bytes
+
+  volatile int64_t fail_msg_count; //push to send queue fail msg count
+  volatile int64_t fail_msg_bytes; //push to send queue fail msg bytes
 
   int64_t recv_msg_count;  //recv msg count
   int64_t recv_bytes;

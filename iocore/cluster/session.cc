@@ -210,6 +210,7 @@ int cluster_create_session(ClusterSession *session,
   SocketContext *pSockContext;
 	int i;
   int session_index;
+  int version;
   SequenceType seq;
 
   pMachineSessions = all_sessions + g_my_machine_id;
@@ -219,6 +220,7 @@ int cluster_create_session(ClusterSession *session,
   if ((pSockContext=get_socket_context(machine)) == NULL) {
     return ENOENT;
   }
+  version = pSockContext->version;
 
   for (i=0; i<128; i++) {
     seq = __sync_fetch_and_add(&pMachineSessions->current_seq, 1);
@@ -234,6 +236,7 @@ int cluster_create_session(ClusterSession *session,
         pSessionEntry->user_data = arg;
         pSessionEntry->response_events = events;
         pSessionEntry->current_msg_seq = 0;
+        pSessionEntry->version = version;
 
         *session = pSessionEntry->session_id;
 
@@ -704,6 +707,7 @@ int get_response_session(const MsgHeader *pHeader,
       //first time, should create
       pSession->session_id = pHeader->session_id;  //set sessionEntry id
       pSession->sock_context = pSocketContext;
+      pSession->version = pSocketContext->version;
       pSession->response_events = 0;
       pSession->current_msg_seq = 0;
       if (pTail != NULL) {

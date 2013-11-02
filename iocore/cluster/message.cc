@@ -124,7 +124,7 @@ int cluster_send_message(ClusterSession session, const int func_id,
     pMessage->header.aligned_data_len = BYTE_ALIGN16(
         pMessage->header.data_len);
     result = push_to_send_queue(pSockContext,
-        pMessage, priority);
+        pMessage, priority, pSessionEntry->version);
   } while (0);
  
   if (result != 0) {
