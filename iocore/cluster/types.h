@@ -173,8 +173,13 @@ struct SocketStats {
   volatile int64_t fail_msg_count; //push to send queue fail msg count
   volatile int64_t fail_msg_bytes; //push to send queue fail msg bytes
 
-  int64_t recv_msg_count;  //recv msg count
+  int64_t recv_msg_count;     //recv msg count
+  int64_t enqueue_in_msg_count;  //push into in msg queue
+  int64_t dequeue_in_msg_count;  //pop from in msg queue
   int64_t recv_bytes;
+  int64_t enqueue_in_msg_bytes; //push into in msg queue
+  int64_t dequeue_in_msg_bytes; //pop from in msg queue
+
   int64_t call_read_count;
   int64_t epoll_wait_count;
   int64_t epoll_wait_time_used;

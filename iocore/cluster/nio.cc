@@ -121,6 +121,10 @@ static void init_nio_stats()
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.drop_bytes", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.recv_msg_count", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.recv_bytes", 0, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.enqueue_in_msg_count", 0, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.enqueue_in_msg_bytes", 0, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.dequeue_in_msg_count", 0, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.dequeue_in_msg_bytes", 0, RECP_NON_PERSISTENT);
 
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.call_writev_count", 0, RECP_NON_PERSISTENT);
   RecRegisterStatInt(RECT_PROCESS, "proxy.process.cluster.io.call_read_count", 0, RECP_NON_PERSISTENT);
@@ -168,7 +172,7 @@ void log_nio_stats()
   RecData data;
 	struct worker_thread_context *pThreadContext;
 	struct worker_thread_context *pContextEnd;
-  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  SocketStats sum = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   static time_t last_calc_bps_time = CURRENT_TIME();
   static int64_t last_send_bytes = 0;
 
@@ -184,6 +188,10 @@ void log_nio_stats()
     sum.send_retry_count += pThreadContext->stats.send_retry_count;
     sum.recv_msg_count += pThreadContext->stats.recv_msg_count;
     sum.recv_bytes += pThreadContext->stats.recv_bytes;
+    sum.enqueue_in_msg_count += pThreadContext->stats.enqueue_in_msg_count;
+    sum.enqueue_in_msg_bytes += pThreadContext->stats.enqueue_in_msg_bytes;
+    sum.dequeue_in_msg_count += pThreadContext->stats.dequeue_in_msg_count;
+    sum.dequeue_in_msg_bytes += pThreadContext->stats.dequeue_in_msg_bytes;
     sum.call_read_count += pThreadContext->stats.call_read_count;
     sum.epoll_wait_count += pThreadContext->stats.epoll_wait_count;
     sum.epoll_wait_time_used += pThreadContext->stats.epoll_wait_time_used;
@@ -211,6 +219,14 @@ void log_nio_stats()
   RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.recv_msg_count", RECD_INT, &data, NULL);
   data.rec_int = sum.recv_bytes;
   RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.recv_bytes", RECD_INT, &data, NULL);
+  data.rec_int = sum.enqueue_in_msg_count;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.enqueue_in_msg_count", RECD_INT, &data, NULL);
+  data.rec_int = sum.enqueue_in_msg_bytes;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.enqueue_in_msg_bytes", RECD_INT, &data, NULL);
+  data.rec_int = sum.dequeue_in_msg_count;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.dequeue_in_msg_count", RECD_INT, &data, NULL);
+  data.rec_int = sum.dequeue_in_msg_bytes;
+  RecSetRecord(RECT_PROCESS, "proxy.process.cluster.io.dequeue_in_msg_bytes", RECD_INT, &data, NULL);
   data.rec_int = sum.ping_total_count;
   RecSetRecord(RECT_PROCESS, "proxy.process.cluster.ping_total_count", RECD_INT, &data, NULL);
   data.rec_int = sum.ping_success_count;

@@ -98,11 +98,16 @@ static int alloc_session_machine_index(const unsigned int ip)
 inline static void release_in_message(SocketContext *pSockContext,
     InMessage *pMessage)
 {
-    pMessage->blocks = NULL;  //free pointer
+  __sync_fetch_and_add(&pSockContext->thread_context->stats.
+      dequeue_in_msg_count, 1);
+  __sync_fetch_and_add(&pSockContext->thread_context->stats.
+      dequeue_in_msg_bytes, MSG_HEADER_LENGTH + pMessage->data_len);
+
+  pMessage->blocks = NULL;  //free pointer
 #ifdef USE_MULTI_ALLOCATOR
-    pSockContext->in_msg_allocator->free_void(pMessage);
+  pSockContext->in_msg_allocator->free_void(pMessage);
 #else
-    g_in_message_allocator.free_void(pMessage);
+  g_in_message_allocator.free_void(pMessage);
 #endif
 }
 
@@ -921,6 +926,10 @@ int push_in_message(const SessionId session,
   }
 #endif
   SESSION_UNLOCK(pMachineSessions, session_index);
+
+  pSockContext->thread_context->stats.enqueue_in_msg_count++;
+  pSockContext->thread_context->stats.enqueue_in_msg_bytes +=
+    MSG_HEADER_LENGTH + data_len;
 
   if (call_func) {
     g_msg_deal_func(session, user_data, pMessage->func_id,
