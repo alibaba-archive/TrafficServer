@@ -3301,6 +3301,9 @@ HttpSM::tunnel_handler_cache_write(int event, HttpTunnelConsumer * c)
     c->vc->do_io_close(EHTTP_ERROR);
 
     HTTP_INCREMENT_TRANS_STAT(http_cache_write_errors);
+    if (c->producer->alive && c->producer->num_consumers == 1)
+      tunnel.chain_abort_all(c->producer);
+
     DebugSM("http", "[%" PRId64 "] aborting cache write due %s event from cache", sm_id, HttpDebugNames::get_event_name(event));
     break;
   case VC_EVENT_WRITE_COMPLETE:
