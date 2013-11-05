@@ -34,7 +34,7 @@ ClassAllocator<ClusterCacheVC> clusterCacheVCAllocator("custerCacheVCAllocator")
 
 int ClusterCacheVC::size_to_init = -1;
 
-#define CLUSTER_WRITE_MIN_SIZE (1 << 14)
+#define CLUSTER_WRITE_MIN_SIZE (1 << 16)
 
 #define CLUSTER_CACHE_VC_CLOSE_SESSION \
 { \

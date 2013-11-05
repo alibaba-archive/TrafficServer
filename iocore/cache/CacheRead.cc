@@ -319,16 +319,6 @@ CacheVC::openReadFromWriterHead(int event, Event * e)
     return free_CacheVC(this);
   }
 
-  if (!cache_config_read_while_writer) {
-    cw = NULL;
-    SET_HANDLER(&CacheVC::openReadStartHead);
-    if (params && params->max_rww_delay > 0)
-      VC_SCHED_RWW_WAIT_TIMEOUT(this, params->max_rww_delay);
-    else
-      VC_SCHED_RWW_WAIT_TIMEOUT(this, 100);
-    return EVENT_CONT;
-  }
-
   bool header_only = false;
   int result = cw->get_writer_meta(this, &header_only);
 

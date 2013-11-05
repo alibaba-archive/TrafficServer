@@ -1417,7 +1417,7 @@ CacheVC::openWriteMain(int event, Event *e)
     offset = vio.buffer.reader()->start_offset;
   }
   if (avail > 0) {
-    cw->add_writer_data(vio.buffer.reader(), avail);
+    if (!cw->not_rww)  cw->add_writer_data(vio.buffer.reader(), avail);
     vio.buffer.reader()->consume(avail);
     vio.ndone += avail;
     total_len += avail;

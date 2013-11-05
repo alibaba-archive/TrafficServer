@@ -79,6 +79,8 @@ int cache_config_read_while_writer = 0;
 char cache_system_config_directory[PATH_NAME_MAX + 1];
 int cache_config_mutex_retry_delay = 2;
 int cache_config_rww_max_delay = 100;
+int cache_rww_max_doc_size = (1 << 21);
+
 #ifdef HTTP_CACHE
 int enable_cache_empty_http_doc = 0;
 #endif
@@ -3493,6 +3495,9 @@ ink_cache_init(ModuleVersion v)
   IOCORE_RegisterConfigUpdateFunc("proxy.config.cache.enable_read_while_writer", update_cache_config, NULL);
   Debug("cache_init", "proxy.config.cache.enable_read_while_writer = %d", cache_config_read_while_writer);
 
+  IOCORE_EstablishStaticConfigInt32(cache_rww_max_doc_size, "proxy.config.cache.cache_rww_max_doc_size");
+  Debug("cache_init", "proxy.config.cache.cache_rww_max_doc_size = %d", cache_rww_max_doc_size);
+
   register_cache_stats(cache_rsb, "proxy.process.cache");
 
   const char *err = NULL;
@@ -3659,10 +3664,14 @@ CacheWriterEntry::set_writer_meta(CacheVC *vc)
 //      return;
 //    }
 //  } else
-  doc_len = vc->vio.nbytes;
-  if (vc->frag_type == CACHE_FRAG_TYPE_HTTP) {
-    alternate.copy(&vc->alternate);
-    alternate.object_size_set(doc_len);
+  if (vc->vio.nbytes > cache_rww_max_doc_size) {
+    not_rww = true;
+  } else {
+    doc_len = vc->vio.nbytes;
+    if (vc->frag_type == CACHE_FRAG_TYPE_HTTP) {
+      alternate.copy(&vc->alternate);
+      alternate.object_size_set(doc_len);
+    }
   }
   signal_reader(WRITER_META);
   ink_mutex_release(mutex);
@@ -3676,6 +3685,12 @@ CacheWriterEntry::get_writer_meta(CacheVC *vc, bool *header_only)
   CacheHTTPInfo tmp_alt;
   int64_t nbytes = 0;
   ink_mutex_acquire(mutex);
+
+  if (not_rww) {
+    vc->cw = NULL;
+    ink_mutex_release(mutex);
+    return -1;
+  }
 
   if (vc->frag_type == CACHE_FRAG_TYPE_HTTP) {
     if (alternate.valid()) {
@@ -3720,7 +3735,7 @@ CacheWriterEntry::get_writer_meta(CacheVC *vc, bool *header_only)
     }
   } else {
     *header_only = false;
-    if (writer_closed < 0 || !cache_config_read_while_writer) {
+    if (writer_closed < 0) {
       ink_mutex_release(mutex);
       vc->cw = NULL;
       return -1;
@@ -3780,7 +3795,7 @@ Lreturn:
 }
 CacheWriterEntry::CacheWriterEntry():
     mutex(0), r(0), writer(0), doc_len(-1), total_len(0),
-    writer_closed(0), header_only_update(false) {
+    writer_closed(0), header_only_update(false), not_rww(!cache_config_read_while_writer) {
   key = zero_key;
 }
 

@@ -1038,6 +1038,8 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_CONFIG, "proxy.config.cache.read_while_writer.max_delay", RECD_INT, "100", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
+  {RECT_CONFIG, "proxy.config.cache.cache_rww_max_doc_size", RECD_INT, "2097152", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
 
   //##############################################################################
   //  #

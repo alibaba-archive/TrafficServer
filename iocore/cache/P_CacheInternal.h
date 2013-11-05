@@ -237,6 +237,7 @@ extern int cache_config_force_sector_size;
 extern int cache_config_target_fragment_size;
 extern int cache_config_mutex_retry_delay;
 extern int cache_config_rww_max_delay;
+extern int cache_rww_max_doc_size;
 
 #ifdef HTTP_CACHE
 extern int enable_cache_empty_http_doc;
@@ -585,6 +586,7 @@ struct CacheWriterEntry: public RefCountObj
   int64_t total_len;
   int writer_closed;
   bool header_only_update;
+  bool not_rww;
   Ptr<IOBufferData> first_buf;
   Queue<CacheVC, CacheVC::Link_signal_link> sq_readers; // reader for signal
   enum WriterSignalType {
