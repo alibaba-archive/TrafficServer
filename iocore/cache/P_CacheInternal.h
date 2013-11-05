@@ -111,7 +111,7 @@ struct EvacuationBlock;
   } while (0)
 
 #define VC_SCHED_RWW_WAIT_TIMEOUT(vc, v) \
-  vc->trigger = vc->mutex->thread_holding->schedule_in_local(vc, v)
+  vc->trigger = vc->mutex->thread_holding->schedule_in_local(vc, HRTIME_MSECONDS(v))
   // cache stats definitions
 enum
 {
