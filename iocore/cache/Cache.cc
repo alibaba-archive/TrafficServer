@@ -2475,6 +2475,10 @@ CacheVC::handleReadDone(int event, Event *e) {
   else
     if (is_io_in_progress())
       return EVENT_CONT;
+
+  if (_action.cancelled)
+    return free_CacheVC(this);
+
   int okay = 0;
   bool unmarshal_success = true;
   Doc *doc;
