@@ -3684,13 +3684,13 @@ CacheWriterEntry::get_writer_meta(CacheVC *vc, bool *header_only)
 
   CacheHTTPInfo tmp_alt;
   int64_t nbytes = 0;
-  ink_mutex_acquire(mutex);
 
   if (not_rww) {
     vc->cw = NULL;
-    ink_mutex_release(mutex);
     return -1;
   }
+
+  ink_mutex_acquire(mutex);
 
   if (vc->frag_type == CACHE_FRAG_TYPE_HTTP) {
     if (alternate.valid()) {
