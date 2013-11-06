@@ -352,6 +352,7 @@ enum
 };
 
 extern RecRawStatBlock *http_rsb;
+extern int g_max_active_client_connections;
 
 /* Stats should only be accessed using these macros */
 #define HTTP_INCREMENT_DYN_STAT(x) RecIncrRawStat(http_rsb, mutex->thread_holding, (int) x, 1)

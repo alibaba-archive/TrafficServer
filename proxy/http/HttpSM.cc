@@ -764,6 +764,7 @@ HttpSM::state_read_client_request_header(int event, void *data)
     if (ua_session->m_active == false) {
       ua_session->m_active = true;
       HTTP_INCREMENT_DYN_STAT(http_current_active_client_connections_stat);
+      ink_atomic_increment(&g_max_active_client_connections, 1);
     }
     if (t_state.hdr_info.client_request.method_get_wksidx() == HTTP_WKSIDX_GET) {
       // Enable further IO to watch for client aborts

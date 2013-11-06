@@ -68,6 +68,7 @@ do { \
 
 
 static bool reload_remap_config = false;  //reload remap config by overridable records.config parameters
+int g_max_active_client_connections = 0;
 
 class HttpConfigCont:public Continuation
 {

@@ -289,6 +289,7 @@ HttpClientSession::do_io_close(int alerrno)
     if (m_active) {
       m_active = false;
       HTTP_DECREMENT_DYN_STAT(http_current_active_client_connections_stat);
+      ink_atomic_increment(&g_max_active_client_connections, -1);
     }
   }
   // Prevent double closing
@@ -562,6 +563,7 @@ HttpClientSession::attach_server_session(HttpServerSession * ssession, bool tran
     if (m_active) {
       m_active = false;
       HTTP_DECREMENT_DYN_STAT(http_current_active_client_connections_stat);
+      ink_atomic_increment(&g_max_active_client_connections, -1);
     }
     // Since this our slave, issue an IO to detect a close and
     //  have it call the client session back.  This IO also prevent
@@ -603,6 +605,7 @@ HttpClientSession::release(IOBufferReader * r)
   if (m_active) {
     m_active = false;
     HTTP_DECREMENT_DYN_STAT(http_current_active_client_connections_stat);
+    ink_atomic_increment(&g_max_active_client_connections, -1);
   }
   // Make sure that the state machine is returning
   //  correct buffer reader
