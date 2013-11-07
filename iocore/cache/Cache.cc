@@ -3695,7 +3695,11 @@ CacheWriterEntry::get_writer_meta(CacheVC *vc, bool *header_only)
   }
 
   ink_mutex_acquire(mutex);
-
+  if (not_rww) {
+    ink_mutex_release(mutex);
+    vc->cw = NULL;
+    return -1;
+  }
   if (vc->frag_type == CACHE_FRAG_TYPE_HTTP) {
     if (alternate.valid()) {
       ink_debug_assert(doc_len >= 0);
