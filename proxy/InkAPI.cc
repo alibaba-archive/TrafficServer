@@ -8427,9 +8427,12 @@ TSMgmtIntCreate(TSRecordType rec_type, const char *name, TSMgmtInt data_default,
   return TS_SUCCESS;
 }
 
-TSReturnCode TSCacheUrlGet(const char *in_url, const int in_url_len, char *out_url, const int out_size, int *out_url_len)
+TSReturnCode TSCacheUrlGet(const char *in_url, const int in_url_len,
+    char *out_url, const int out_size, int *out_url_len, int *flags)
 {
-  if (RemapProcessor::convert_cache_url(in_url, in_url_len, out_url, out_size, out_url_len)) {
+  if (RemapProcessor::convert_cache_url(in_url, in_url_len,
+        out_url, out_size, out_url_len, flags))
+  {
     return TS_SUCCESS;
   }
   else {

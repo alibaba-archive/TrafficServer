@@ -60,7 +60,7 @@ public:
   typedef void _tsremap_delete_instance(void*);
   typedef TSRemapStatus _tsremap_do_remap(void* ih, TSHttpTxn rh, TSRemapRequestInfo* rri);
   typedef void _tsremap_os_response(void* ih, TSHttpTxn rh, int os_response_type);
-  typedef TSRemapStatus _tsremap_convert_cache_url(void* ih, RemapUrlInfo *url_info);
+  typedef TSRemapStatus _tsremap_convert_cache_url(void* ih, RemapUrlInfo *url_info, int *flags);
 
   remap_plugin_info *next;
   char *path;

@@ -78,6 +78,9 @@ extern "C"
     TSREMAP_ERROR = -1		/* Some error, that should generate an error page */
   } TSRemapStatus;
 
+#define URL_CONVERT_FLAG_MUST_USE_PURGE       1  //must send PURGE request
+#define URL_CONVERT_FLAG_CLUSTER_CACHE_LOCAL  2  //the URL cache in local
+
   typedef struct {
     char *str;   //buffer
     int length;  //string length
@@ -122,7 +125,7 @@ extern "C"
              TSREMAP_NO_REMAP_STOP - No remapping was done, and stop plugin chain evaluation
              TSREMAP_DID_REMAP_STOP -  Remapping was done, but stop plugin chain evaluation
   */
-  TSRemapStatus TSRemapConvertCacheUrl(void* ih, RemapUrlInfo *url_info);
+  TSRemapStatus TSRemapConvertCacheUrl(void* ih, RemapUrlInfo *url_info, int *flags);
 
 
   /* Plugin shutdown, called when plugin is unloaded.

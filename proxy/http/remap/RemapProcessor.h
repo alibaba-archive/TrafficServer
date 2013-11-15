@@ -64,7 +64,7 @@ public:
   static bool copyFromUrl(URL *srcUrl, RemapUrlInfo *destUrl);
   static bool findMapping(URL *request_url, UrlMappingContainer &url_map);
   static bool convert_cache_url(const char *in_url, const int in_url_len,
-      char *out_url, const int out_url_size, int *out_url_len);
+      char *out_url, const int out_url_size, int *out_url_len, int *flags);
 private:
   EventType ET_REMAP;
   bool _use_separate_remap_thread;

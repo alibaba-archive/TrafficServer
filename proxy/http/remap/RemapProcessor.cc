@@ -506,7 +506,7 @@ bool RemapProcessor::copyFromUrl(URL *srcUrl, RemapUrlInfo *destUrl)
 }
 
 bool RemapProcessor::convert_cache_url(const char *in_url, const int in_url_len,
-      char *out_url, const int out_url_size, int *out_url_len)
+      char *out_url, const int out_url_size, int *out_url_len, int *flags)
 {
   bool found;
   bool maintain_pristine_host_hdr;
@@ -514,7 +514,9 @@ bool RemapProcessor::convert_cache_url(const char *in_url, const int in_url_len,
   HdrHeap *hdrHeap = new_HdrHeap();
   UrlMappingContainer url_map(hdrHeap);
   URL old_url;
+  int tmp_flags;
 
+  *flags = 0;
   old_url.create(hdrHeap);
   do {
     if (old_url.parse(in_url, in_url_len) == PARSE_ERROR) {
@@ -560,7 +562,11 @@ bool RemapProcessor::convert_cache_url(const char *in_url, const int in_url_len,
     remap_plugin_info **plugins = mapping->get_plugins();
     for (unsigned int i=0; i<mapping->plugin_count; i++) {
        if (plugins[i]->fp_tsremap_convert_cache_url != NULL) {
-         status = plugins[i]->fp_tsremap_convert_cache_url(mapping->get_instance(i), inURL);
+         tmp_flags = 0;
+         status = plugins[i]->fp_tsremap_convert_cache_url(mapping->get_instance(i), inURL, &tmp_flags);
+         if (status != TSREMAP_ERROR && tmp_flags != 0) {
+           *flags |= tmp_flags;
+         }
          if (status == TSREMAP_NO_REMAP_STOP || status == TSREMAP_DID_REMAP_STOP || status == TSREMAP_ERROR) {
            break;
          }

@@ -466,7 +466,8 @@ extern "C"
    *	Return == 0 Success
    *	Return != 0 Failure
    ****************************************************************************/
-  tsapi TSReturnCode TSCacheUrlGet(const char *in_url, const int in_url_len, char *out_url, const int out_size, int *out_url_len);
+  tsapi TSReturnCode TSCacheUrlGet(const char *in_url, const int in_url_len,
+      char *out_url, const int out_size, int *out_url_len, int *flags);
 
 #ifdef __cplusplus
 }
