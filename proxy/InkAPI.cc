@@ -6707,7 +6707,8 @@ TSCacheRemove(TSCont contp, TSCacheKey key)
   CacheInfo *info = (CacheInfo *) key;
   INKContInternal *i = (INKContInternal *) contp;
 
-  return (TSAction)cacheProcessor.remove(i, &info->cache_key, true, info->frag_type, true, false, info->hostname, info->len);
+  return (TSAction)cacheProcessor.remove(i, &info->cache_key, info->cluster_cache_local, 
+                        info->frag_type, true, false, info->hostname, info->len);
 }
 
 TSAction
