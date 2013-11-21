@@ -1394,6 +1394,10 @@ HttpTunnel::chain_abort_cache_write(HttpTunnelProducer * p)
         c->vc->do_io_close(EHTTP_ERROR);
         c->alive = false;
         HTTP_DECREMENT_DYN_STAT(http_current_cache_connections_stat);
+        if (sm->background_fill == BACKGROUND_FILL_STARTED) {
+          sm->background_fill = BACKGROUND_FILL_ABORTED;
+          HTTP_DECREMENT_DYN_STAT(http_background_fill_current_count_stat);
+        }
       } else if (c->self_producer) {
         chain_abort_cache_write(c->self_producer);
       }

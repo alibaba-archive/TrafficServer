@@ -221,6 +221,7 @@ public:
   bool is_tunnel_active() { return active; }
   bool is_tunnel_alive();
   bool is_there_cache_write();
+  bool no_consumer_alive(HttpTunnelProducer *p);
 
   // YTS Team, yamsat Plugin
   void copy_partial_post_data();
@@ -420,5 +421,15 @@ HttpTunnel::is_there_cache_write()
     }
   }
   return false;
+}
+
+inline bool
+HttpTunnel::no_consumer_alive(HttpTunnelProducer * p)
+{
+  forl_LL(HttpTunnelConsumer, c, p->consumer_list) {
+    if (c->alive)
+      return false;
+  }
+  return true;
 }
 #endif

@@ -2964,11 +2964,6 @@ HttpSM::tunnel_handler_server(int event, HttpTunnelProducer * p)
   if (t_state.negative_caching)
     t_state.negative_caching = false;
 
-  // If we had a ground fill, check update our status
-  if (background_fill == BACKGROUND_FILL_STARTED) {
-    background_fill = p->read_success ? BACKGROUND_FILL_COMPLETED : BACKGROUND_FILL_ABORTED;
-    HTTP_DECREMENT_DYN_STAT(http_background_fill_current_count_stat);
-  }
   // We handled the event.  Now either shutdown the connection or
   //   setup it up for keep-alive
   ink_assert(server_entry->vc == p->vc);
@@ -3043,9 +3038,8 @@ HttpSM::is_bg_fill_necessary(HttpTunnelConsumer * c)
 
   // There must be another consumer for it to worthwhile to
   //  set up a background fill
-  if (c->producer->num_consumers > 1 &&
-      (c->producer->vc_type == HT_HTTP_SERVER  || c->producer->vc_type == HT_TRANSFORM) &&
-      c->producer->alive == true) {
+  if ((c->producer->vc_type == HT_HTTP_SERVER  || c->producer->vc_type == HT_TRANSFORM) &&
+      c->producer->alive == true && !tunnel.no_consumer_alive(c->producer)) {
     // If threshold is 0.0 or negative then do background
     //   fill regardless of the content length.  Since this
     //   is floating point just make sure the number is near zero
@@ -3305,7 +3299,7 @@ HttpSM::tunnel_handler_cache_write(int event, HttpTunnelConsumer * c)
     c->vc->do_io_close(EHTTP_ERROR);
 
     HTTP_INCREMENT_TRANS_STAT(http_cache_write_errors);
-    if (c->producer->alive && c->producer->num_consumers == 1)
+    if (c->producer->alive && tunnel.no_consumer_alive(c->producer))
       tunnel.chain_abort_all(c->producer);
 
     DebugSM("http", "[%" PRId64 "] aborting cache write due %s event from cache", sm_id, HttpDebugNames::get_event_name(event));
@@ -3333,6 +3327,10 @@ HttpSM::tunnel_handler_cache_write(int event, HttpTunnelConsumer * c)
   }
 
   HTTP_DECREMENT_DYN_STAT(http_current_cache_connections_stat);
+  if (background_fill == BACKGROUND_FILL_STARTED) {
+    background_fill = c->write_success ? BACKGROUND_FILL_COMPLETED : BACKGROUND_FILL_ABORTED;
+    HTTP_DECREMENT_DYN_STAT(http_background_fill_current_count_stat);
+  }
   return 0;
 }
 
