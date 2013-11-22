@@ -277,6 +277,9 @@ public:
   bool post_failed;             //Added to identify post failure
   bool debug_on;              //Transaction specific debug flag
 
+  //Taobao, for t-ts-slice Plugin
+  bool is_first_slice;
+
   // Tunneling request to plugin
   HttpPluginTunnel_t plugin_tunnel_type;
   PluginVCCore *plugin_tunnel;

@@ -511,7 +511,11 @@ int
 LogAccessHttp::marshal_proxy_resp_squid_len(char *buf)
 {
   if (buf) {
-    int64_t val = m_http_sm->client_response_hdr_bytes + m_http_sm->client_response_body_bytes;
+    int64_t val = m_http_sm->client_response_body_bytes;
+
+    if (m_http_sm->is_first_slice)
+      val += m_http_sm->client_response_hdr_bytes;
+
     marshal_int(buf, val);
   }
   return INK_MIN_ALIGN;

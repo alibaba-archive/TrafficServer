@@ -7456,6 +7456,13 @@ TSRedirectUrlGet(TSHttpTxn txnp, int *url_len_ptr)
   return (const char*)sm->redirect_url;
 }
 
+void
+TSHttpTxnFirstSliceSet(TSHttpTxn txnp, int on)
+{
+  sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
+  ((HttpSM *)txnp)->is_first_slice = on;
+}
+
 char*
 TSFetchRespGet(TSHttpTxn txnp, int *length)
 {

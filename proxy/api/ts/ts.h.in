@@ -3194,6 +3194,9 @@ extern "C"
   tsapi void TSRedirectUrlSet(TSHttpTxn txnp, const char* url, const int url_len);
   tsapi const char* TSRedirectUrlGet(TSHttpTxn txnp, int* url_len_ptr);
 
+  /* Set the first slice flag for t-ts-slice plugin */
+  tsapi void TSHttpTxnFirstSliceSet(TSHttpTxn txnp, int on);
+
   /* Get current HTTP connection stats */
   tsapi int TSHttpCurrentClientConnectionsGet(void);
   tsapi int TSHttpCurrentActiveClientConnectionsGet(void);
