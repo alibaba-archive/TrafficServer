@@ -2970,6 +2970,8 @@ HttpSM::tunnel_handler_server(int event, HttpTunnelProducer * p)
   ink_assert(p->vc_type == HT_HTTP_SERVER);
   ink_assert(p->vc == server_session);
 
+  server_response_body_bytes = p->bytes_read;
+
   if (close_connection) {
     p->vc->do_io_close();
     p->read_vio = NULL;
@@ -3150,29 +3152,6 @@ HttpSM::tunnel_handler_ua(int event, HttpTunnelConsumer * c)
   if (client_response_body_bytes < 0)
     client_response_body_bytes = 0;
 
-  // attribute the size written to the client from various sources
-  // NOTE: responses that go through a range transform are attributed
-  // to their original sources
-  // all other transforms attribute the total number of input bytes
-  // to a source in HttpSM::tunnel_handler_transform_write
-  //
-  HttpTransact::Source_t original_source = t_state.source;
-  if (HttpTransact::SOURCE_TRANSFORM == original_source &&
-      t_state.range_setup == HttpTransact::RANGE_TRANSFORM) {
-    original_source = t_state.pre_transform_source;
-  }
-
-  switch (original_source) {
-  case HttpTransact::SOURCE_HTTP_ORIGIN_SERVER:
-    server_response_body_bytes = client_response_body_bytes;
-    break;
-  case HttpTransact::SOURCE_CACHE:
-    cache_response_body_bytes = client_response_body_bytes;
-    break;
-  default:
-    break;
-  }
-
   ink_assert(ua_entry->vc == c->vc);
   if (close_connection) {
     // If the client could be pipelining or is doing a POST, we need to
@@ -3275,6 +3254,8 @@ HttpSM::tunnel_handler_cache_read(int event, HttpTunnelProducer * p)
     ink_release_assert(0);
     break;
   }
+
+  cache_response_body_bytes = p->bytes_read;
 
   HTTP_DECREMENT_DYN_STAT(http_current_cache_connections_stat);
   return 0;
