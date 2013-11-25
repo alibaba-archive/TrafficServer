@@ -33,7 +33,7 @@ extern int64_t cache_config_ram_cache_cutoff;
 #define UINT_WRAP_GTE(_x, _y) (((_x)-(_y)) < INT_MAX) // exploit overflow
 #define UINT_WRAP_LT(_x, _y) (((_x)-(_y)) >= INT_MAX) // exploit overflow
 
-static inline uint32 target_fragment_size() {
+static inline uint32_t target_fragment_size() {
   return cache_config_target_fragment_size - sizeofDoc;
 }
 
@@ -191,13 +191,9 @@ CacheVC::handleWrite(int event, Event *e)
 
   // plain write case
   ink_assert(!trigger);
-  if (f.use_first_key && fragment) {
-    frag_len = (fragment-1) * sizeof(Frag);
-  } else
-    frag_len = 0;
   set_agg_write_in_progress();
   POP_HANDLER;
-  agg_len = vol->round_to_approx_size(write_len + header_len + frag_len + sizeofDoc);
+  agg_len = vol->round_to_approx_size(write_len + header_len + sizeofDoc);
   vol->agg_todo_size += agg_len;
   bool agg_error =
     (agg_len > AGG_SIZE || header_len + sizeofDoc > MAX_FRAG_SIZE ||
@@ -755,7 +751,7 @@ agg_copy(char *p, CacheVC *vc)
     Doc *doc = (Doc *) p;
     IOBufferBlock *res_alt_blk = 0;
 
-    uint32_t len = vc->write_len + vc->header_len + vc->frag_len + sizeofDoc;
+    uint32_t len = vc->write_len + vc->header_len + sizeofDoc;
     ink_assert(vc->frag_type != CACHE_FRAG_TYPE_HTTP || len != sizeofDoc);
     ink_debug_assert(vol->round_to_approx_size(len) == vc->agg_len);
     // update copy of directory entry for this document
@@ -798,8 +794,6 @@ agg_copy(char *p, CacheVC *vc)
       doc->key = vc->key;
       dir_set_head(&vc->dir, !vc->fragment);
     }
-    if (doc->flen)
-      memcpy(doc->frags(), &vc->frag[0], doc->flen);
 
 #ifdef HTTP_CACHE
     if (vc->f.rewrite_resident_alt) {
@@ -1252,20 +1246,8 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
     if (!fragment) {
       ink_assert(key == earliest_key);
       earliest_dir = dir;
-    } else {
-      if (!frag)
-        frag = &integral_frags[0];
-      else {
-        if (fragment-1 >= INTEGRAL_FRAGS && IS_POWER_2((uint32)(fragment-1))) {
-          Frag *t = frag;
-          frag = (Frag*)ats_malloc(sizeof(Frag) * (fragment-1)*2);
-          memcpy(frag, t, sizeof(Frag) * (fragment-1));
-          if (t != integral_frags)
-            ats_free(t);
-        }
-      }
-      frag[fragment-1].offset = write_pos;
     }
+
     fragment++;
     write_pos += write_len;
     dir_insert(&key, vol, &dir);
@@ -1273,8 +1255,8 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
     next_CacheKey(&key, &key);
     if (length) {
       write_len = length;
-      if (write_len > target_fragment_size() + target_fragment_size() / 4)
-        write_len = target_fragment_size();
+      if (write_len > frag_len)
+        write_len = frag_len;
       if ((ret = do_write_call()) == EVENT_RETURN)
         goto Lcallreturn;
       return ret;
@@ -1318,11 +1300,11 @@ CacheVC::openWriteClose(int event, Event *e)
       return openWriteCloseDir(event, e);
 #endif
     }
-    if (length && (fragment || length > target_fragment_size() + target_fragment_size() / 4)) {
+    if (length && (fragment || length > frag_len)) {
       SET_HANDLER(&CacheVC::openWriteCloseDataDone);
       write_len = length;
-      if (write_len > target_fragment_size())
-        write_len = target_fragment_size();
+      if (write_len > frag_len)
+        write_len = frag_len;
       return do_write_lock_call();
     } else
       return openWriteCloseHead(event, e);
@@ -1359,20 +1341,8 @@ CacheVC::openWriteWriteDone(int event, Event *e)
     if (!fragment) {
       ink_assert(key == earliest_key);
       earliest_dir = dir;
-    } else {
-      if (!frag)
-        frag = &integral_frags[0];
-      else {
-        if (fragment-1 >= INTEGRAL_FRAGS && IS_POWER_2((uint32_t)(fragment-1))) {
-          Frag *t = frag;
-          frag = (Frag*)ats_malloc(sizeof(Frag) * (fragment-1)*2);
-          memcpy(frag, t, sizeof(Frag) * (fragment-1));
-          if (t != integral_frags)
-            ats_free(t);
-        }
-      }
-      frag[fragment-1].offset = write_pos;
     }
+
     fragment++;
     write_pos += write_len;
     dir_insert(&key, vol, &dir);
@@ -1423,11 +1393,8 @@ CacheVC::openWriteMain(int event, Event *e)
     total_len += avail;
   }
   length = (uint64_t)towrite;
-  if (length < target_fragment_size() + target_fragment_size() / 4)
-    write_len = length;
-  else
-    write_len = target_fragment_size();
-  bool not_writing = towrite != ntodo && towrite < target_fragment_size();
+  write_len = frag_len;
+  bool not_writing = towrite != ntodo && towrite < frag_len;
 
   if (not_writing) {
     if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
@@ -1691,6 +1658,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheFragType frag_type,
   c->f.close_complete = (options & CACHE_WRITE_OPT_CLOSE_COMPLETE) != 0;
   c->f.sync = (options & CACHE_WRITE_OPT_SYNC) == CACHE_WRITE_OPT_SYNC;
   c->pin_in_cache = (uint32_t) apin_in_cache;
+  c->frag_len = target_fragment_size();;
 
   if ((res = c->add_entry(&writerTable) ? 0 : ECACHE_DOC_BUSY) > 0
       || ((res = c->vol->open_write_lock(c, false, 1)) > 0)) {
@@ -1751,6 +1719,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
   while (DIR_MASK_TAG(c->key.word(2)) == DIR_MASK_TAG(c->first_key.word(2)));
   c->earliest_key = c->key;
   c->frag_type = CACHE_FRAG_TYPE_HTTP;
+  c->frag_len = target_fragment_size();
   c->vol = key_to_vol(key, hostname, host_len);
   Vol *vol = c->vol;
   c->info = info;
@@ -2092,7 +2061,7 @@ SSDVol::aggWriteDone(int event, void *e)
 //    avail = vio.ntodo();
 //
 //
-//  int flen = target_fragment_size();
+//  int flen = cache_config_target_fragment_size;
 //  bool not_writing = (avail < flen && avail < vio.ntodo());
 //
 //  if (!called_user) {

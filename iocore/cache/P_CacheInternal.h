@@ -392,6 +392,9 @@ struct CacheVC: public CacheVConnection
   virtual bool is_read_from_writer() {
     return f.read_from_writer_called;
   }
+  virtual bool is_pread_capable() {
+    return !f.read_from_writer_called;
+  }
 
   // offsets from the base stat
 #define CACHE_STAT_ACTIVE  0
@@ -455,12 +458,10 @@ struct CacheVC: public CacheVConnection
   CacheLookupHttpConfig *params;
 #endif
   int header_len;       // for communicating with agg_copy
-  int frag_len;         // for communicating with agg_copy
+  uint32_t frag_len;         //
   uint32_t write_len;     // for communicating with agg_copy
   uint32_t agg_len;       // for communicating with aggWrite
   uint32_t write_serial;  // serial of the final write for SYNC
-  Frag *frag;           // arraylist of fragment offset
-  Frag integral_frags[INTEGRAL_FRAGS];
   Vol *vol;
   Dir *last_collision;
   Event *trigger;
@@ -788,8 +789,6 @@ free_CacheVC(CacheVC *cont)
   cont->blocks.clear();
   cont->writer_buf.clear();
   cont->alternate_index = CACHE_ALT_INDEX_DEFAULT;
-  if (cont->frag && cont->frag != cont->integral_frags)
-    ats_free(cont->frag);
   if (cont->scan_vol_map)
     ats_free(cont->scan_vol_map);
   memset((char *) &cont->vio, 0, cont->size_to_init);

@@ -4039,7 +4039,7 @@ void
 HttpSM::do_range_setup_if_necessary()
 {
   MIMEField *field;
-  INKVConnInternal *range_trans;
+  RangeTransform *range_trans;
   bool res = false;
 
   ink_assert(t_state.cache_info.object_read != NULL);
@@ -4055,6 +4055,14 @@ HttpSM::do_range_setup_if_necessary()
                                                        t_state.cache_info.object_read,
                                                        &t_state.hdr_info.transform_response, res);
       if (range_trans != NULL) {
+        // special case for single range
+        if (range_trans->m_num_range_fields == 1 && cache_sm.cache_read_vc->is_pread_capable()) {
+          t_state.range_setup = HttpTransact::RANGE_HANDLED_NO_TRANSFORM;
+          t_state.single_range._start = range_trans->m_ranges[0]._start;
+          t_state.single_range._end = range_trans->m_ranges[0]._end;
+          delete range_trans;
+          return;
+        }
         api_hooks.append(TS_HTTP_RESPONSE_TRANSFORM_HOOK, range_trans);
         t_state.range_setup = HttpTransact::RANGE_TRANSFORM;
       } else if (res)
@@ -5493,7 +5501,11 @@ HttpSM::setup_cache_read_transfer()
 
   ink_assert(cache_sm.cache_read_vc != NULL);
 
-  doc_size = t_state.cache_info.object_read->object_size_get();
+  if (t_state.range_setup == HttpTransact::RANGE_HANDLED_NO_TRANSFORM) {
+    doc_size = t_state.single_range._end - t_state.single_range._start + 1;
+  } else
+    doc_size = t_state.cache_info.object_read->object_size_get();
+
   if (doc_size == INT64_MAX)
     alloc_index = buffer_size_to_index(doc_size);
   else

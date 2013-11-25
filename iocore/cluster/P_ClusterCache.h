@@ -635,6 +635,7 @@ struct ClusterVConnection: public ClusterVConnectionBase
   virtual int set_header(void *ptr, int len);
   virtual int get_single_data(void **ptr, int *len);
   virtual void reenable(VIO *);
+  virtual bool is_pread_capable();
 };
 
 //
@@ -1384,6 +1385,10 @@ struct ClusterCacheVC: public CacheVConnection
   virtual bool is_read_from_writer()
   {
     return f.read_from_writer_called;
+  }
+  virtual bool is_pread_capable()
+  {
+    return !f.read_from_writer_called;
   }
   void
   cancel_trigger()

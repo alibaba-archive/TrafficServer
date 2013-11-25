@@ -114,7 +114,7 @@ TransformProcessor::null_transform(ProxyMutex *mutex)
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-INKVConnInternal *
+RangeTransform *
 TransformProcessor::range_transform(ProxyMutex *mut, MIMEField *range_field, HTTPInfo *cache_obj, HTTPHdr *transform_resp, bool & b)
 {
   RangeTransform *range_transform = NEW(new RangeTransform(mut, range_field, cache_obj, transform_resp));

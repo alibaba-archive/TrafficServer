@@ -2047,7 +2047,7 @@ CacheContinuation::setupVCdataRead(int event, void *data)
     } else
       doc_size = cache_vc->get_object_size();
 
-    if (doc_size > 0 && doc_size < SIZE_OF_FRAGEMENT
+    if (doc_size > 0 && doc_size <= cache_vc->frag_len
         && !cache_vc->is_read_from_writer() && !request_conditional) {
       SET_HANDLER((CacheContHandler) & CacheContinuation::VCSmallDataRead);
       mbuf = new_empty_MIOBuffer();

@@ -2244,7 +2244,7 @@ HttpTransact::issue_revalidate(State* s)
     //   (or is method that we don't conditionalize but lookup the
     //    cache on like DELETE)
     if (c_resp->get_last_modified() > 0 &&
-        s->hdr_info.server_request.method_get_wksidx() == HTTP_WKSIDX_GET && s->range_setup == RANGE_NONE) {
+        s->hdr_info.server_request.method_get_wksidx() == HTTP_WKSIDX_GET) {
       // make this a conditional request
       int length;
       const char *str = c_resp->value_get(MIME_FIELD_LAST_MODIFIED, MIME_LEN_LAST_MODIFIED, &length);
@@ -6899,6 +6899,24 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
 
       }
     }
+
+    if (s->range_setup == RANGE_HANDLED_NO_TRANSFORM) {
+      ink_assert(s->hdr_info.trust_response_cl == true);
+      MIMEField *content_range_field = header->field_find(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
+      char numbers[60];
+      snprintf(numbers, sizeof(numbers), "bytes %" PRId64 "-%" PRId64 "/%" PRId64 "",
+          s->single_range._start, s->single_range._end, cl);
+
+      if (content_range_field) {
+        mime_field_value_set(header->m_heap, header->m_mime, content_range_field, numbers, strlen(numbers), true);
+      } else {
+        content_range_field = header->field_create(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
+        content_range_field->value_append(header->m_heap, header->m_mime, numbers, strlen(numbers));
+        header->field_attach(content_range_field);
+      }
+
+      header->set_content_length(s->single_range._end - s->single_range._start + 1);
+    }
   } else if (header->type_get() == HTTP_TYPE_REQUEST) {
     int method = header->method_get_wksidx();
 
@@ -8051,7 +8069,11 @@ HttpTransact::build_response(State* s, HTTPHdr* base_response, HTTPHdr* outgoing
     if ((status_code == HTTP_STATUS_NONE) || (status_code == base_response->status_get())) {
       HttpTransactHeaders::copy_header_fields(base_response, outgoing_response, s->txn_conf->fwd_proxy_auth_to_parent);
       HttpTransactHeaders::process_connection_headers(base_response, outgoing_response);
-
+      if (s->range_setup == RANGE_HANDLED_NO_TRANSFORM) {
+        outgoing_response->status_set(HTTP_STATUS_PARTIAL_CONTENT);
+        char *reason_phrase = (char *) (HttpMessageBody::StatusCodeName(HTTP_STATUS_PARTIAL_CONTENT));
+        outgoing_response->reason_set(reason_phrase, strlen(reason_phrase));
+      }
       if (s->http_config_param->insert_age_in_response)
         HttpTransactHeaders::insert_time_and_age_headers_in_response(s->request_sent_time, s->response_received_time,
                                                                      s->current.now, base_response, outgoing_response);

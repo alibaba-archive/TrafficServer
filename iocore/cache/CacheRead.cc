@@ -683,7 +683,7 @@ CacheVC::openReadReadDone(int event, Event * e)
   cancel_trigger();
   if (event == EVENT_IMMEDIATE)
     return EVENT_CONT;
-  set_io_not_in_progress();
+  ink_assert(!is_io_in_progress());
   {
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock)
@@ -712,12 +712,6 @@ CacheVC::openReadReadDone(int event, Event * e)
       }
       if (doc->key == key)
         goto LreadMain;
-#ifdef SSD_CACHE
-      else if (dir_inssd(&dir)) {
-          dir_delete(&key, vol, &dir);
-          last_collision = NULL;
-        }
-#endif
     }
     if (last_collision && dir_get_offset(&dir) != dir_get_offset(last_collision))
       last_collision = 0;       // object has been/is being overwritten
@@ -774,45 +768,31 @@ CacheVC::openReadMain(int event, Event * e)
   int64_t ntodo = vio.ntodo();
   int64_t bytes = doc->len - doc_pos;
   IOBufferBlock *b = NULL;
-  if (seek_to) { // handle do_io_pread
+  int i = 0;
+
+  if (seek_to) {
     if (seek_to >= (int64_t)doc_len) {
       vio.ndone = doc_len;
       return calluser(VC_EVENT_EOS);
     }
-    Doc *first_doc = (Doc*)first_buf->data();
-    Frag *first_frag = first_doc->frags();
+
     if (!f.single_fragment) {
-      // find the target fragment
-      int i = 0;
-      for (; i < (int)first_doc->nfrags(); i++)
-        if (seek_to < (int64_t)first_frag[i].offset) break;
-      if (i >= (int)first_doc->nfrags()) {
-        Warning("bad fragment header");
-        return calluser(VC_EVENT_ERROR);
-      }
-      // fragment is the current fragment
-      // key is the next key (fragment + 1)
-      if (i != fragment) {
-        i--; // read will increment the key and fragment
-        while (i > fragment) {
+      ink_assert(frag_len);
+      i = seek_to / frag_len;
+      if (i > 0) {
+        while (i > 1) {
           next_CacheKey(&key, &key);
-          fragment++;
+          --i;
         }
-        while (i < fragment) {
-          prev_CacheKey(&key, &key);
-          fragment--;
-        }
+        seek_to %= frag_len;
         goto Lread;
       }
     }
-    if (fragment)
-      doc_pos = doc->prefix_len() + seek_to - (int64_t)first_frag[fragment-1].offset;
-    else
-      doc_pos = doc->prefix_len() + seek_to; 
-    vio.ndone = 0;
+    doc_pos = doc->prefix_len() + seek_to;
+    bytes = doc->len - doc_pos;
     seek_to = 0;
-    ntodo = vio.ntodo();
   }
+
   if (ntodo <= 0)
     return EVENT_CONT;
   if (vio.buffer.mbuf->max_read_avail() > vio.buffer.writer()->water_mark && vio.ndone) // initiate read of first block
@@ -959,6 +939,7 @@ Lcont:
 #endif
     earliest_key = key;
     doc_pos = doc->prefix_len();
+    frag_len = doc->flen;
     next_CacheKey(&key, &doc->key);
     vol->begin_read(this);
 #ifdef HIT_EVACUATE
@@ -1290,6 +1271,7 @@ CacheVC::openReadStartHead(int event, Event * e)
     }
 #endif
 
+    frag_len = doc->flen;
     first_buf = buf;
     vol->begin_read(this);
 

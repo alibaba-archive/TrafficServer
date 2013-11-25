@@ -644,7 +644,11 @@ ClusterVConnection::reenable(VIO * vio)
   }
 }
 
-
+bool
+ClusterVConnection::is_pread_capable() {
+  ink_assert(!"not impelemented");
+  return false;
+}
 
 ClusterCacheVC::ClusterCacheVC() {
   size_to_init = sizeof(ClusterCacheVC) - (size_t) & ((ClusterCacheVC *) 0)->vio;
@@ -660,6 +664,7 @@ ClusterCacheVC::handleRead(int event, void *data)
     SetIOReadMessage msg;
     msg.nbytes = vio.nbytes;
     msg.offset = seek_to;
+    seek_to = 0;
     if (!cluster_send_message(cs, -CLUSTER_CACHE_DATA_READ_BEGIN, (char *) &msg,
         sizeof(msg), PRIORITY_HIGH)) {
       in_progress = true;
@@ -780,6 +785,30 @@ ClusterCacheVC::openReadMain(int event, void *e)
   int64_t ntodo = vio.ntodo();
   if (ntodo <= 0)
     return EVENT_CONT;
+
+  if (seek_to) {
+    if (seek_to >= (int64_t) doc_len) {
+      vio.ndone = doc_len;
+      if (!remote_closed)
+        cluster_send_message(cs, CLUSTER_CACHE_DATA_ABORT, NULL, 0, PRIORITY_HIGH);
+      CLUSTER_CACHE_VC_CLOSE_SESSION;
+      return calluser(VC_EVENT_EOS);
+    }
+
+    if (total_len >= doc_len) {
+      // already got all data
+      bytes -= seek_to;
+      while (blocks && seek_to >= blocks->read_avail()) {
+        seek_to -= blocks->read_avail();
+        blocks = blocks->next;
+      }
+      ink_assert(blocks);
+      blocks->consume(seek_to);
+
+      seek_to = 0;
+    }
+  }
+
   if (vio.buffer.mbuf->max_read_avail() > vio.buffer.writer()->water_mark && vio.ndone) // initiate read of first block
     return EVENT_CONT;
   if (!blocks && vio.ntodo() > 0)

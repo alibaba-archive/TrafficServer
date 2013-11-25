@@ -657,6 +657,7 @@ public:
     RANGE_TRANSFORM,
     RANGE_NOT_SATISFIABLE,
     RANGE_NOT_HANDLED,
+    RANGE_HANDLED_NO_TRANSFORM,
     RANGE_REVALIDATE
   };
 
@@ -1000,6 +1001,7 @@ public:
 
     // for Range: to avoid write transfomed Range response into cache
     RangeSetup_t range_setup;
+    RangeRecord single_range;
 
     // for authenticated content caching
     CacheAuth_t www_auth_content;

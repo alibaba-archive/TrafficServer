@@ -184,6 +184,7 @@ struct CacheVConnection:public VConnection
   virtual bool set_pin_in_cache(time_t t) = 0;
   virtual time_t get_pin_in_cache() = 0;
   virtual int64_t get_object_size() = 0;
+  virtual bool is_pread_capable() = 0;
 
   CacheVConnection();
 };

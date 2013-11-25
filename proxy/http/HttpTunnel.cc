@@ -927,7 +927,11 @@ HttpTunnel::producer_run(HttpTunnelProducer * p)
       Debug("http_tunnel", "[%" PRId64 "] [tunnel_run] producer already done", sm->sm_id);
       producer_handler(HTTP_TUNNEL_EVENT_PRECOMPLETE, p);
     } else {
-      p->read_vio = p->vc->do_io_read(this, producer_n, p->read_buffer);
+      if (p->vc_type == HT_CACHE_READ && sm->t_state.range_setup == HttpTransact::RANGE_HANDLED_NO_TRANSFORM) {
+        p->read_vio = ((CacheVConnection*) p->vc)->do_io_pread(this, producer_n, p->read_buffer,
+            sm->t_state.single_range._start);
+      } else
+        p->read_vio = p->vc->do_io_read(this, producer_n, p->read_buffer);
     }
 
     // Now that the tunnel has started, we must remove producer's reader so
