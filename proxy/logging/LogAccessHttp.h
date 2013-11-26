@@ -56,6 +56,8 @@ public:
   //
   // client -> proxy fields
   //
+  virtual int marshal_file_slice_index(char *); // INT
+  virtual int marshal_file_global_index(char *); // INT
   virtual int marshal_client_host_ip(char *);   // STR
   virtual int marshal_client_host_port(char *); // INT
   virtual int marshal_client_auth_user_name(char *);    // STR

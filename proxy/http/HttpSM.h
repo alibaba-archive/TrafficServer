@@ -278,7 +278,8 @@ public:
   bool debug_on;              //Transaction specific debug flag
 
   //Taobao, for t-ts-slice Plugin
-  bool is_first_slice;
+  short slice_idx;
+  uint64_t global_idx;
 
   // Tunneling request to plugin
   HttpPluginTunnel_t plugin_tunnel_type;

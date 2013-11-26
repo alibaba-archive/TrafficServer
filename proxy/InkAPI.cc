@@ -7469,10 +7469,12 @@ TSRedirectUrlGet(TSHttpTxn txnp, int *url_len_ptr)
 }
 
 void
-TSHttpTxnFirstSliceSet(TSHttpTxn txnp, int on)
+TSHttpTxnSliceInfoSet(TSHttpTxn txnp, uint64_t global_idx, short slice_idx)
 {
   sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
-  ((HttpSM *)txnp)->is_first_slice = on;
+
+  ((HttpSM *)txnp)->slice_idx = slice_idx;
+  ((HttpSM *)txnp)->global_idx = global_idx;
 }
 
 char*

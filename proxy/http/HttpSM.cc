@@ -313,7 +313,7 @@ HttpSM::HttpSM()
   : Continuation(NULL), sm_id(-1), magic(HTTP_SM_MAGIC_DEAD),
     //YTS Team, yamsat Plugin
     enable_redirection(false), api_enable_redirection(true), redirect_url(NULL), redirect_url_len(0), redirection_tries(0), transfered_bytes(0),
-    post_failed(false), debug_on(false), is_first_slice(true),
+    post_failed(false), debug_on(false), slice_idx(0), global_idx(0),
     plugin_tunnel_type(HTTP_NO_PLUGIN_TUNNEL),
     plugin_tunnel(NULL), reentrancy_count(0),
     history_pos(0), tunnel(), ua_entry(NULL),

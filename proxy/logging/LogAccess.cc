@@ -78,6 +78,18 @@ LogAccess::init()
   -------------------------------------------------------------------------*/
 
 int
+LogAccess::marshal_file_slice_index(char *buf)
+{
+  DEFAULT_INT_FIELD;
+}
+
+int
+LogAccess::marshal_file_global_index(char *buf)
+{
+  DEFAULT_INT_FIELD;
+}
+
+int
 LogAccess::marshal_client_host_ip(char *buf)
 {
   DEFAULT_IP_FIELD;

@@ -142,6 +142,24 @@ LogAccessHttp::init()
   -------------------------------------------------------------------------*/
 
 int
+LogAccessHttp::marshal_file_slice_index(char *buf)
+{
+  if (buf) {
+    marshal_int(buf, m_http_sm->slice_idx);
+  }
+  return INK_MIN_ALIGN;
+}
+
+int
+LogAccessHttp::marshal_file_global_index(char *buf)
+{
+  if (buf) {
+    marshal_int(buf, m_http_sm->global_idx);
+  }
+  return INK_MIN_ALIGN;
+}
+
+int
 LogAccessHttp::marshal_client_host_ip(char *buf)
 {
   return marshal_ip(buf, &m_http_sm->t_state.client_info.addr.sa);
@@ -513,7 +531,9 @@ LogAccessHttp::marshal_proxy_resp_squid_len(char *buf)
   if (buf) {
     int64_t val = m_http_sm->client_response_body_bytes;
 
-    if (m_http_sm->is_first_slice)
+    // slice idx 0: indicates a normal single file.
+    // slice idx 1: indicates the first slice of slicing-file.
+    if (m_http_sm->slice_idx <= 1)
       val += m_http_sm->client_response_hdr_bytes;
 
     marshal_int(buf, val);

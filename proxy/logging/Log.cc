@@ -397,6 +397,20 @@ Log::init_fields()
   global_field_list.add(field, false);
   ink_hash_table_insert(field_symbol_hash, "chih", field);
 
+  field = NEW(new LogField("file_slice_index", "fsi",
+                           LogField::sINT,
+                           &LogAccess::marshal_file_slice_index,
+                           &LogAccess::unmarshal_int_to_str));
+  global_field_list.add(field, false);
+  ink_hash_table_insert(field_symbol_hash, "fsi", field);
+
+  field = NEW(new LogField("file_global_index", "fgi",
+                           LogField::sINT,
+                           &LogAccess::marshal_file_global_index,
+                           &LogAccess::unmarshal_int_to_str));
+  global_field_list.add(field, false);
+  ink_hash_table_insert(field_symbol_hash, "fgi", field);
+
   field = NEW (new LogField ("client_auth_user_name", "caun",
                              LogField::STRING,
                              &LogAccess::marshal_client_auth_user_name,
