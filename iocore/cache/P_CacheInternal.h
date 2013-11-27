@@ -529,7 +529,6 @@ struct CacheVC: public CacheVConnection
       unsigned int ram_fixup:1;
       unsigned int transistor:1;
 #endif
-      unsigned int cluster:1;
     } f;
   };
   // BTF optimization used to skip reading stuff in cache partition that doesn't contain any

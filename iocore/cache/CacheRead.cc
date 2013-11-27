@@ -813,7 +813,7 @@ CacheVC::openReadMain(int event, Event * e)
       return EVENT_DONE;
     // we have to keep reading until we give the user all the
     // bytes it wanted or we hit the watermark.
-    if (!f.cluster && vio.ntodo() > 0 && !vio.buffer.writer()->high_water())
+    if (vio.ntodo() > 0 && !vio.buffer.writer()->high_water())
       goto Lread;
     return EVENT_CONT;
   }

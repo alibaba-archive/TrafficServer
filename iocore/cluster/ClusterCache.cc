@@ -2239,55 +2239,85 @@ CacheContinuation::VCdataRead(int event, void *data)
     mbuf = new_empty_MIOBuffer();
     reader = mbuf->alloc_reader();
     vio = cache_vc->do_io_pread(this, msg->nbytes, mbuf, msg->offset);
-    // set cluster type read
-    cache_vc->f.cluster = 1;
     ink_assert(expect_next);
     expect_next = false;
     return EVENT_CONT;
   }
   case CLUSTER_CACHE_DATA_READ_REENABLE:
   {
-    ink_assert(vio);
-    vio->reenable();
     ink_assert(expect_next);
     expect_next = false;
-    return EVENT_CONT;
-  }
-  case VC_EVENT_READ_READY:
-  case VC_EVENT_READ_COMPLETE:
-  {
-    ink_assert(data == vio && !expect_next);
-    // move and the data
-    int64_t read_bytes = reader->read_avail();
-    total_length += read_bytes;
-    IOBufferBlock *ret = clone_IOBufferBlockList(reader->get_current_block(),
-        reader->start_offset, read_bytes);
-    reader->consume(read_bytes);
-    if (cluster_send_message(cs, CLUSTER_CACHE_DATA_READ_DONE, ret, -1,
-              PRIORITY_LOW)) {
-      Warning("data send failed for cluster internel error");
-      goto free_exit;
+    if (reader->read_avail()) {
+      int64_t read_bytes = reader->read_avail();
+
+      total_length += read_bytes;
+      IOBufferBlock *ret = clone_IOBufferBlockList(reader->get_current_block(),
+          reader->start_offset, read_bytes);
+      reader->consume(read_bytes);
+      if (cluster_send_message(cs, CLUSTER_CACHE_DATA_READ_DONE, ret, -1,
+          PRIORITY_LOW)) {
+        Warning("data send failed for cluster internel error");
+        goto free_exit;
+      }
+
+      Debug("data_send", "current read %"PRId64", total_read %"PRId64"", read_bytes, total_length);
+      if (total_length >= vio->nbytes)
+        goto free_exit;
+
+      expect_next = true;
+      cluster_set_events(cs, RESPONSE_EVENT_NOTIFY_DEALER);
     }
 
-    Debug("data_send", "current read %"PRId64", total_read %"PRId64"", read_bytes, total_length);
-    if (total_length >= vio->nbytes)
-      goto free_exit;
+    if (cache_vc) {
+      vio->reenable();
+      return EVENT_CONT;
+    }
 
-    expect_next = true;
-    cluster_set_events(cs, RESPONSE_EVENT_NOTIFY_DEALER);
-    return EVENT_CONT;
+    ink_assert(result == VC_EVENT_EOS || result == VC_EVENT_ERROR);
+    cluster_send_message(cs, -CLUSTER_CACHE_DATA_ERROR, &result, sizeof result, PRIORITY_HIGH);
+    goto free_exit;
+
   }
   case VC_EVENT_EOS:
   case VC_EVENT_ERROR:
-    ink_assert(!expect_next);
-    break;
+  case VC_EVENT_READ_COMPLETE:
+    result = event;
+    cache_vc->do_io_close();
+    cache_vc = NULL;
+  case VC_EVENT_READ_READY:
+  {
+    if (!expect_next) {
+      int64_t read_bytes = reader->read_avail();
+      if (read_bytes > 0) {
+        total_length += read_bytes;
+        IOBufferBlock *ret = clone_IOBufferBlockList(
+            reader->get_current_block(), reader->start_offset, read_bytes);
+        reader->consume(read_bytes);
+        if (cluster_send_message(cs, CLUSTER_CACHE_DATA_READ_DONE, ret, -1,
+            PRIORITY_LOW)) {
+          Warning("data send failed for cluster internel error");
+          goto free_exit;
+        }
+        Debug("data_send", "current read %"PRId64", total_read %"PRId64"", read_bytes, total_length);
+        if (total_length >= vio->nbytes)
+          goto free_exit;
+
+        expect_next = true;
+        cluster_set_events(cs, RESPONSE_EVENT_NOTIFY_DEALER);
+      } else if (cache_vc == NULL) {
+        ink_assert(result == VC_EVENT_EOS || result == VC_EVENT_ERROR);
+        cluster_send_message(cs, -CLUSTER_CACHE_DATA_ERROR, &result, sizeof result, PRIORITY_HIGH);
+        goto free_exit;
+      } else
+        vio->reenable();
+    }
+    return EVENT_CONT;
+  }
   default:
-    ink_assert(!"unexpected event");
+    ink_release_assert(!"unexpected event");
   } // End of switch
-  cluster_send_message(cs, -CLUSTER_CACHE_DATA_ERROR, &event, sizeof event, PRIORITY_HIGH);
+
 free_exit:
-  cache_vc->do_io_close();
-  cache_vc = NULL;
   ink_assert(cluster_close_session(cs));
   free_CacheCont(this);
   return EVENT_DONE;
