@@ -8,15 +8,17 @@
 
 #define CONFIG_TYPE_NONE              0
 #define CONFIG_TYPE_RECORDS_INT       1
-#define CONFIG_TYPE_HOSTING_INT       2
-#define CONFIG_TYPE_CACHE_CONTROL_INT 3
+#define CONFIG_TYPE_CACHE_INT         2
+#define CONFIG_TYPE_HOSTING_INT       3
 #define CONFIG_TYPE_CONGESTION_INT    4
 
 #define MAPPING_FLAG_NONE        0
-#define MAPPING_FLAG_REGEX       1
-#define MAP_FLAG_WITH_RECV_PORT  2
-#define MAP_FLAG_REVERSE         4
-#define REDIRECT_FALG_TEMPORARY  8
+#define MAPPING_FLAG_HOST_REGEX  1
+#define MAPPING_FLAG_PATH_REGEX  2
+#define MAPPING_FLAG_FULL_REGEX  4  //whole url regex
+#define MAP_FLAG_WITH_RECV_PORT  8
+#define MAP_FLAG_REVERSE        16
+#define REDIRECT_FALG_TEMPORARY 32
 
 #define MAPPING_TYPE_NONE       0
 #define MAPPING_TYPE_MAP       'm'

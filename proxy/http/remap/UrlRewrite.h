@@ -25,7 +25,8 @@
 #define _URL_REWRITE_H_
 
 #include "UrlMapping.h"
-#include "UrlMappingPathIndex.h"
+#include "UrlMappingRegexMatcher.h"
+#include "UrlMappingPathContainer.h"
 #include "MappingTypes.h"
 #include "HostnameTrie.h"
 #include "HttpTransact.h"
@@ -77,36 +78,10 @@ public:
 
   static const int MAX_REGEX_SUBS = 10;
 
-  struct RegexMapping
-  {
-    url_mapping *url_map;
-    pcre *re;
-    pcre_extra *re_extra;
-
-    // we store the host-string-to-substitute here; if a match is found,
-    // the substitutions are made and the resulting url is stored
-    // directly in toURL's host field
-    char *to_url_host_template;
-    int to_url_host_template_len;
-
-    // stores the number of substitutions
-    int n_substitutions;
-
-    // these two together point to template string places where
-    // substitutions need to be made and the matching substring
-    // to use
-    int substitution_markers[MAX_REGEX_SUBS];
-    int substitution_ids[MAX_REGEX_SUBS];
-
-    LINK(RegexMapping, link);
-  };
-
-  typedef Queue<RegexMapping> RegexMappingList;
-
   //such as: http://(.*).taobao.com/ or http://(.*)/
   struct SuffixMappings
   {
-    UrlMappingPathIndex mapping_paths;
+    UrlMappingPathContainer mapping_paths;
     char *to_url_host_template;
     int to_url_host_template_len;
     int from_hostname_tail_len; //from hostname remain length after regex
@@ -117,7 +92,7 @@ public:
   {
     InkHashTable *hash_lookup; //key format is hostname:port:scheme
     HostnameTrie<SuffixMappings> *suffix_trie;  //key format is hostname:port:scheme
-    RegexMappingList regex_list;
+    UrlMappingRegexList regex_list;
     int suffix_trie_min_rank;
     int regex_list_min_rank;
 
@@ -193,8 +168,6 @@ public:
                           request_host_len, mapping_container);
   }
 
-  int UrlWhack(char *toWhack, int *origLength);
-
   int load_remap_plugin(const PluginInfo *plugin, const MappingEntry *mappingEntry,
       url_mapping *mp, char *errbuf, int errbufsize);
 
@@ -228,30 +201,29 @@ private:
       int request_host_len, UrlMappingContainer &mapping_container);
 
   url_mapping *_tableLookup(InkHashTable * h_table, URL * request_url,
-    char *request_host_key);
+    char *request_host_key, UrlMappingContainer &mapping_container);
 
   bool _suffixMappingLookup(HostnameTrie<SuffixMappings> *suffix_trie,
     URL *request_url, const char *request_host, const int request_host_len,
-    const char *request_host_key, int host_key_len, int rank_ceiling,
+    const char *request_host_key, int host_key_len,
     UrlMappingContainer &mapping_container);
 
 
-  bool _regexMappingLookup(RegexMappingList &regex_mappings,
+  bool _regexMappingLookup(UrlMappingRegexList &regex_mappings,
       URL * request_url, int request_port, const char *request_host,
       int request_host_len, int rank_ceiling,
       UrlMappingContainer &mapping_container);
 
-  int _expandSubstitutions(int *matches_info, const RegexMapping *reg_map,
-      const char *matched_string, char *dest_buf, int dest_buf_size);
+  bool _processUrlMappingHostRegex(const char *from_host_lower,
+      UrlMappingRegexMatcher *reg_map);
 
-  bool _processRegexMappingConfig(const char *from_host_lower,
-      url_mapping *new_mapping, RegexMapping *reg_map);
+  bool _processUrlMappingFullRegex(UrlMappingRegexMatcher *reg_map);
 
   void _destroyTable(InkHashTable *h_table);
-  void _destroyList(RegexMappingList &regexes);
+  void _destroyList(UrlMappingRegexList &regexes);
 
   inline bool _addToStore(MappingsStore &store, url_mapping *new_mapping, char *src_host,
-                          bool is_cur_mapping_regex, int &count);
+                          int &count);
 
   SuffixMappings *_getSuffixMappings(url_mapping *new_mapping,
       const char *src_host, const int src_host_len,
@@ -268,8 +240,13 @@ private:
       const DynamicArray<ConfigKeyValue> *configs,
       HttpConfigParams *httpConfig);
 
+  bool _getCacheConfig(url_mapping *new_mapping,
+      const DynamicArray<ConfigKeyValue> *configs);
+
   inline int _getHostnameKey(URL *url, const char *src_host,
       char *buff, const int buffSize, int request_port = 0);
+
+  void convertPath(UrlMappingContainer &mapping_container, URL *request_url);
 };
 
 #endif

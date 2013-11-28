@@ -4,9 +4,10 @@
 
 void MappingEntry::print()
 {
+  char optionStr[256];
   printf("%03d. %s %s %s %s", _lineNo, (_type == MAPPING_TYPE_MAP) ?
       DIRECTVIE_NAME_MAP : DIRECTVIE_NAME_REDIRECT,
-      MappingParams::getOptionStr(_flags & (~MAPPING_FLAG_REGEX)),
+      MappingParams::getOptionStr(_flags & (~MAPPING_FLAG_HOST_REGEX), optionStr),
       _fromUrl.str, _toUrl.str);
 
   if (!this->hasChildren()) {
@@ -46,8 +47,8 @@ void MappingEntry::print()
       case CONFIG_TYPE_HOSTING_INDEX:
         configTypeCaption = CONFIG_TYPE_HOSTING_STR;
         break;
-      case CONFIG_TYPE_CACHE_CONTROL_INDEX:
-        configTypeCaption = CONFIG_TYPE_CACHE_CONTROL_STR;
+      case CONFIG_TYPE_CACHE_INDEX:
+        configTypeCaption = CONFIG_TYPE_CACHE_STR;
         break;
       case CONFIG_TYPE_CONGESTION_INDEX:
         configTypeCaption = CONFIG_TYPE_CONGESTION_STR;

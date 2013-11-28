@@ -7,7 +7,7 @@
 
 #define CONFIG_TYPE_RECORDS_INDEX       0
 #define CONFIG_TYPE_HOSTING_INDEX       1
-#define CONFIG_TYPE_CACHE_CONTROL_INDEX 2
+#define CONFIG_TYPE_CACHE_INDEX 2
 #define CONFIG_TYPE_CONGESTION_INDEX    3
 #define CONFIG_TYPE_COUNT               4
 
@@ -16,14 +16,16 @@ class MappingEntry {
   friend class MappingManager;
 
   public:
-    MappingEntry(const int lineNo, const int type, const int flags) :
-      _needFree(true), _simpleRegexRange(false),
-      _lineNo(lineNo), _type(type), _flags(flags)
+    MappingEntry(const int rank, const char *filename, const int lineNo,
+        const int type, const int flags) :
+      _needFree(true), _simpleRegexRange(false), _rank(rank),
+      _lineNo(lineNo), _type(type), _flags(flags), _filename(filename)
     {
     }
 
     MappingEntry(const MappingEntry &src) : _needFree(false)
     {
+      this->_rank = src._rank;
       this->_lineNo = src._lineNo;
       this->_type = src._type;
       this->_flags = src._flags;
@@ -57,6 +59,14 @@ class MappingEntry {
           }
         }
       }
+    }
+
+    inline const char *getFilename() const {
+      return _filename;
+    }
+
+    inline int getRank() const {
+      return _rank;
     }
 
     inline int getLineNo() const {
@@ -128,9 +138,11 @@ class MappingEntry {
   protected:
     bool _needFree;
     bool _simpleRegexRange;  //if include simple regex range such as: [0-9]
+    int _rank;
     int _lineNo; //line no
     int _type;  //map or redirect
     int _flags; //regex, reverse etc
+    const char *_filename;   //config filename
 
     StringValue _fromUrl;
     StringValue _toUrl;

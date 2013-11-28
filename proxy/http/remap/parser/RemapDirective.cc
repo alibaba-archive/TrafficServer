@@ -37,11 +37,12 @@ RemapDirective::~RemapDirective()
   }
 }
 
-DirectiveParams *RemapDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *RemapDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-  return new DirectiveParams(lineNo, lineStr, lineLen, parent,
+  return new DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent,
       this, paramStr, paramLen, bBlock);
 }
 
@@ -77,18 +78,18 @@ int RemapDirective::check(DirectiveParams *params, const bool bBlock)
   int result;
 
   if (_type == DIRECTIVE_TYPE_BLOCK && !bBlock) {
-    fprintf(stderr, "file: "__FILE__", line: %d, "
-        "expect block { and }! config line #%d: %.*s\n", __LINE__,
-        params->_lineInfo.lineNo, params->_lineInfo.line.length,
-        params->_lineInfo.line.str);
+    fprintf(stderr, "config file: %s, "
+        "expect block { and }! config line #%d: %.*s\n",
+        params->_lineInfo.filename, params->_lineInfo.lineNo,
+        params->_lineInfo.line.length, params->_lineInfo.line.str);
     return EINVAL;
   }
 
   if (_type == DIRECTIVE_TYPE_STATEMENT && bBlock) {
-    fprintf(stderr, "file: "__FILE__", line: %d, "
-        "unexpect block { and }! config line #%d: %.*s\n", __LINE__,
-        params->_lineInfo.lineNo, params->_lineInfo.line.length,
-        params->_lineInfo.line.str);
+    fprintf(stderr, "config file: %s, "
+        "unexpect block { and }! config line #%d: %.*s\n",
+        params->_lineInfo.filename, params->_lineInfo.lineNo,
+        params->_lineInfo.line.length, params->_lineInfo.line.str);
     return EINVAL;
   }
 
@@ -97,18 +98,20 @@ int RemapDirective::check(DirectiveParams *params, const bool bBlock)
   }
 
   if (params->_paramCount < _minParamCount) {
-    fprintf(stderr, "file: "__FILE__", line: %d, "
-        "parameter count: %d < %d, config line #%d: %.*s\n", __LINE__,
-        params->_paramCount, _minParamCount, params->_lineInfo.lineNo,
+    fprintf(stderr, "config file: %s, "
+        "parameter count: %d < %d, config line #%d: %.*s\n",
+        params->_lineInfo.filename, params->_paramCount,
+        _minParamCount, params->_lineInfo.lineNo,
         params->_lineInfo.line.length, params->_lineInfo.line.str);
     return EINVAL;
   }
 
   if (_maxParamCount > 0 && params->_paramCount > _maxParamCount) {
-    fprintf(stderr, "file: "__FILE__", line: %d, "
-        "parameter count: %d > %d, config line #%d: %.*s\n", __LINE__,
-        params->_paramCount, _maxParamCount, params->_lineInfo.lineNo,
-        params->_lineInfo.line.length, params->_lineInfo.line.str);
+    fprintf(stderr, "config file: %s, "
+        "parameter count: %d > %d, config line #%d: %.*s\n",
+        params->_lineInfo.filename, params->_paramCount, _maxParamCount,
+        params->_lineInfo.lineNo, params->_lineInfo.line.length,
+        params->_lineInfo.line.str);
     return EINVAL;
   }
 

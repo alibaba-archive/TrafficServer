@@ -39,6 +39,11 @@ static const unsigned int MAX_REMAP_PLUGIN_CHAIN = 10;
 
 #define MAX_ACL_CHECKLIST_COUNT   2
 
+#define REGEX_TYPE_NONE  0
+#define REGEX_TYPE_HOST  1
+#define REGEX_TYPE_PATH  2
+#define REGEX_TYPE_FULL  4
+
 /**
  *
 **/
@@ -68,6 +73,28 @@ struct ACLContext;
 class ACLMethodIpCheckList;
 class ACLRefererCheckList;
 struct OverridableHttpConfigParams;
+
+
+class CacheControlConfig
+{
+  public:
+    CacheControlConfig() : revalidate_after(-1),
+    pin_in_cache_for(-1),
+    ttl_in_cache(-1),
+    never_cache(false)
+  {
+  }
+
+  public:
+    // Data for external use
+    //
+    //   Describes the cache-control for a specific URL
+    //
+    int revalidate_after;
+    int pin_in_cache_for;
+    int ttl_in_cache;
+    bool never_cache;
+};
 
 /**
  * Used to store the mapping for class UrlRewrite
@@ -105,6 +132,15 @@ public:
     return _needCheckRefererHost;
   }
 
+  inline bool needConvertPath() const {
+    return !(isFullRegex() || ((regex_type & REGEX_TYPE_PATH)
+          == REGEX_TYPE_PATH));
+  }
+
+  inline bool isFullRegex() const {
+    return ((regex_type & REGEX_TYPE_FULL) == REGEX_TYPE_FULL);
+  }
+
   int checkMethodIp(const ACLContext & context);
   int checkReferer(const ACLContext & context);
 
@@ -113,6 +149,36 @@ public:
 
   int setRefererCheckLists(ACLRefererCheckList **checkLists,
       const int count);
+
+  void setFromUrl(const char *url_str, const int url_len);
+
+  void setToUrl(const char *url_str, const int url_len);
+
+  inline const char *getRawFromUrl(int *length) {
+    *length = _rawFromUrlLen;
+    return _rawFromUrlStr;
+  }
+
+  inline const char *getRawToUrl(int *length) {
+    *length = _rawToUrlLen;
+    return _rawToUrlStr;
+  }
+
+  inline void setRawFromUrl(const char *url_str, const int url_len) {
+    ats_free(_rawFromUrlStr);
+    _rawFromUrlLen = url_len;
+    _rawFromUrlStr = (char *)ats_malloc(url_len + 1);
+    memcpy(_rawFromUrlStr, url_str, url_len);
+    *(_rawFromUrlStr + url_len) = '\0';
+  }
+
+  inline void setRawToUrl(const char *url_str, const int url_len) {
+    ats_free(_rawToUrlStr);
+    _rawToUrlLen = url_len;
+    _rawToUrlStr = (char *)ats_malloc(url_len + 1);
+    memcpy(_rawToUrlStr, url_str, url_len);
+    *(_rawToUrlStr + url_len) = '\0';
+  }
 
   URL fromURL;
   URL toUrl; // Default TO-URL (from remap.config)
@@ -124,10 +190,14 @@ public:
   redirect_tag_str *redir_chunk_list;
   unsigned int plugin_count;
   unsigned int cache_url_convert_plugin_count;
+  int regex_type;
   LINK(url_mapping, link); // For use with the main Queue linked list holding all the mapping
   OverridableHttpConfigParams *overridableHttpConfig;
+  CacheControlConfig *cacheControlConfig;
 
 private:
+  int urlWhack(char *toWhack, const int url_len);
+
   bool _needCheckRefererHost;
   int _aclMethodIpCheckListCount;
   int _aclRefererCheckListCount;
@@ -136,9 +206,12 @@ private:
 
   remap_plugin_info* _plugin_list[MAX_REMAP_PLUGIN_CHAIN];
   void* _instance_data[MAX_REMAP_PLUGIN_CHAIN];
+  char *_rawFromUrlStr;
+  char *_rawToUrlStr;
+  int _rawFromUrlLen;
+  int _rawToUrlLen;
   int _rank;
 };
-
 
 class UrlMappingContainer {
 public:

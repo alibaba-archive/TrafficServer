@@ -6,14 +6,14 @@
 
 #define CONFIG_TYPE_UNKOWN_STR        "UNKOWN"
 #define CONFIG_TYPE_RECORDS_STR       "records"
+#define CONFIG_TYPE_CACHE_STR         "cache"
 #define CONFIG_TYPE_HOSTING_STR       "hosting"
-#define CONFIG_TYPE_CACHE_CONTROL_STR "cache-control"
 #define CONFIG_TYPE_CONGESTION_STR    "congestion"
 
 class ConfigSetParams : public DirectiveParams {
   public:
-    ConfigSetParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ConfigSetParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
 
@@ -35,8 +35,8 @@ class ConfigSetParams : public DirectiveParams {
 
 class ConfigParams : public ConfigSetParams {
   public:
-    ConfigParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ConfigParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
 
@@ -60,10 +60,10 @@ class ConfigParams : public ConfigSetParams {
        {
          return CONFIG_TYPE_HOSTING_INT;
        }
-       if (sv->equals(CONFIG_TYPE_CACHE_CONTROL_STR,
-             sizeof(CONFIG_TYPE_CACHE_CONTROL_STR) - 1))
+       if (sv->equals(CONFIG_TYPE_CACHE_STR,
+             sizeof(CONFIG_TYPE_CACHE_STR) - 1))
        {
-         return CONFIG_TYPE_CACHE_CONTROL_INT;
+         return CONFIG_TYPE_CACHE_INT;
        }
        if (sv->equals(CONFIG_TYPE_CONGESTION_STR,
              sizeof(CONFIG_TYPE_CONGESTION_STR) - 1))
@@ -80,8 +80,8 @@ class ConfigParams : public ConfigSetParams {
            return CONFIG_TYPE_RECORDS_STR;
          case CONFIG_TYPE_HOSTING_INT:
            return CONFIG_TYPE_HOSTING_STR;
-         case CONFIG_TYPE_CACHE_CONTROL_INT:
-           return CONFIG_TYPE_CACHE_CONTROL_STR;
+         case CONFIG_TYPE_CACHE_INT:
+           return CONFIG_TYPE_CACHE_STR;
          case CONFIG_TYPE_CONGESTION_INT:
            return CONFIG_TYPE_CONGESTION_STR;
          default:

@@ -17,11 +17,12 @@ SchemeDirective::~SchemeDirective()
 {
 }
 
-DirectiveParams *SchemeDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *SchemeDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-  return new SchemeParams(lineNo, lineStr, lineLen, parent,
+  return new SchemeParams(rank, filename, lineNo, lineStr, lineLen, parent,
       this, paramStr, paramLen, bBlock);
 }
 

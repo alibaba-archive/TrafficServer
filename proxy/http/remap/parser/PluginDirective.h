@@ -9,9 +9,10 @@ class PluginDirective : public RemapDirective {
     PluginDirective();
     ~PluginDirective();
 
-    DirectiveParams *newDirectiveParams(const int lineNo,
-        const char *lineStr, const int lineLen, DirectiveParams *parent,
-        const char *paramStr, const int paramLen, const bool bBlock);
+    DirectiveParams *newDirectiveParams(const int rank, const char *filename,
+        const int lineNo, const char *lineStr, const int lineLen,
+        DirectiveParams *parent, const char *paramStr, const int paramLen,
+        const bool bBlock);
 };
 
 class PluginParamDirective : public RemapDirective {
@@ -19,9 +20,10 @@ class PluginParamDirective : public RemapDirective {
     PluginParamDirective();
     ~PluginParamDirective();
 
-    DirectiveParams *newDirectiveParams(const int lineNo,
-        const char *lineStr, const int lineLen, DirectiveParams *parent,
-        const char *paramStr, const int paramLen, const bool bBlock);
+    DirectiveParams *newDirectiveParams(const int rank, const char *filename,
+        const int lineNo, const char *lineStr, const int lineLen,
+        DirectiveParams *parent, const char *paramStr, const int paramLen,
+        const bool bBlock);
 };
 
 #endif

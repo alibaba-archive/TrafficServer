@@ -34,10 +34,15 @@ url_mapping::url_mapping(int rank /* = 0 */)
   : fromURL(), toUrl(), homePageRedirect(false),
     unique(false), default_redirect_url(false),
     wildcard_from_scheme(false),
-    filter_redirect_url(NULL),
-    redir_chunk_list(0), plugin_count(0), cache_url_convert_plugin_count(0),
-    overridableHttpConfig(NULL), _needCheckRefererHost(false),
-    _aclMethodIpCheckListCount(0), _aclRefererCheckListCount(0), _rank(rank)
+    filter_redirect_url(NULL), redir_chunk_list(0), plugin_count(0),
+    cache_url_convert_plugin_count(0),
+    regex_type(REGEX_TYPE_NONE),
+    overridableHttpConfig(NULL), cacheControlConfig(NULL),
+    _needCheckRefererHost(false),
+    _aclMethodIpCheckListCount(0), _aclRefererCheckListCount(0),
+    _rawFromUrlStr(NULL), _rawToUrlStr(NULL),
+    _rawFromUrlLen(0), _rawToUrlLen(0),
+    _rank(rank)
 {
   memset(_plugin_list, 0, sizeof(_plugin_list));
   memset(_instance_data, 0, sizeof(_instance_data));
@@ -69,9 +74,17 @@ url_mapping::~url_mapping()
   fromURL.destroy();
   toUrl.destroy();
 
+  ats_free(_rawFromUrlStr);
+  ats_free(_rawToUrlStr);
+
   if (overridableHttpConfig != NULL) {
     delete overridableHttpConfig;
     overridableHttpConfig = NULL;
+  }
+
+  if (cacheControlConfig != NULL) {
+    delete cacheControlConfig;
+    cacheControlConfig = NULL;
   }
 }
 
@@ -203,14 +216,96 @@ url_mapping::delete_instance(unsigned int index)
 void
 url_mapping::Print()
 {
+  char *to_url;
   char from_url_buf[131072], to_url_buf[131072];
 
+  if (isFullRegex()) {
+    to_url = _rawToUrlStr;
+  }
+  else {
+    toUrl.string_get_buf(to_url_buf, (int) sizeof(to_url_buf));
+    to_url = to_url_buf;
+  }
+
   fromURL.string_get_buf(from_url_buf, (int) sizeof(from_url_buf));
-  toUrl.string_get_buf(to_url_buf, (int) sizeof(to_url_buf));
-  printf("\t %s %s=> %s %s [plugins %s enabled; running with %u plugins]\n",
-      from_url_buf, unique ? "(unique)" : "", to_url_buf,
+  printf("\t #%d %s %s=> %s %s [plugins %s enabled; running with %u plugins]\n",
+      _rank, from_url_buf, unique ? "(unique)" : "", to_url,
       homePageRedirect ? "(R)" : "", plugin_count > 0 ? "are" : "not",
       plugin_count);
+}
+
+/**
+  Returns the length of the URL.
+
+  Will replace the terminator with a '/' if this is a full URL and
+  there are no '/' in it after the the host.  This ensures that class
+  URL parses the URL correctly.
+
+*/
+int
+url_mapping::urlWhack(char *toWhack, const int url_len)
+{
+  int length = url_len;
+  char *tmp;
+
+  // Check to see if this a full URL
+  tmp = strstr(toWhack, "://");
+  if (tmp != NULL) {
+    if (strchr(tmp + 3, '/') == NULL) {
+      toWhack[length] = '/';
+      length++;
+    }
+  }
+  return length;
+}
+
+void
+url_mapping::setFromUrl(const char *url_str, const int url_len)
+{
+  int length;
+  char *new_url;
+ 
+  _rawFromUrlStr = (char *)ats_malloc(url_len + 1);
+  _rawFromUrlLen = url_len;
+  memcpy(_rawFromUrlStr, url_str, url_len);
+  *(_rawFromUrlStr + url_len) = '\0';
+
+  new_url = (char *)alloca(url_len + 1);
+  memcpy(new_url, url_str, url_len);
+  *(new_url + url_len) = '\0';
+  length = urlWhack(new_url, url_len);
+
+  // FIX --- what does this comment mean?
+  //
+  // URL::create modified url so keep a point to
+  //   the beginning of the string
+  if (length > 2 && new_url[length - 1] == '/' && new_url[length - 2] == '/') {
+    unique = true;
+    length -= 2;
+  }
+
+  fromURL.create(NULL);
+  fromURL.parse_no_path_component_breakdown(new_url, length);
+}
+
+void
+url_mapping::setToUrl(const char *url_str, const int url_len)
+{
+  int length;
+  char *new_url;
+
+  _rawToUrlStr = (char *)ats_malloc(url_len + 1);
+  _rawToUrlLen = url_len;
+  memcpy(_rawToUrlStr, url_str, url_len);
+  *(_rawToUrlStr + url_len) = '\0';
+
+  new_url = (char *)alloca(url_len + 1);
+  memcpy(new_url, url_str, url_len);
+  *(new_url + url_len) = '\0';
+  length = urlWhack(new_url, url_len);
+
+  toUrl.create(NULL);
+  toUrl.parse_no_path_component_breakdown(new_url, length);
 }
 
 /**
@@ -255,4 +350,3 @@ redirect_tag_str::parse_format_redirect_url(char *url)
   }
   return list;
 }
-

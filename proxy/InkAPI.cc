@@ -8119,6 +8119,9 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
     if (!strncmp(name, "proxy.config.net.sock_packet_tos_out", length))
       cnf = TS_CONFIG_NET_SOCK_PACKET_TOS_OUT;
     break;
+    if (!strncmp(name, "proxy.config.http.cache.force_in_ram", length))
+      cnf = TS_CONFIG_HTTP_CACHE_FORCE_IN_RAM;
+    break;
 
   case 37:
     switch (name[length-1]) {
@@ -8258,6 +8261,10 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
       if (!strncmp(name, "proxy.config.http.cache.heuristic_lm_factor", length))
         cnf = TS_CONFIG_HTTP_CACHE_HEURISTIC_LM_FACTOR;
       break;
+    case 'l':
+      if (!strncmp(name, "proxy.config.http.cache.cluster_cache_local", length))
+        cnf = TS_CONFIG_HTTP_CACHE_CLUSTER_CACHE_LOCAL;
+      break;
     }
     break;
 
@@ -8292,8 +8299,6 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
   case 46:
     switch (name[length-1]) {
     case 'e':
-      if (!strncmp(name, "proxy.config.http.cache.cluster_cache_local", length))
-        cnf = TS_CONFIG_HTTP_CACHE_CLUSTER_CACHE_LOCAL;
       if (!strncmp(name, "proxy.config.http.cache.ignore_client_no_cache", length))
         cnf = TS_CONFIG_HTTP_CACHE_IGNORE_CLIENT_NO_CACHE;
       else if (!strncmp(name, "proxy.config.http.cache.ims_on_client_no_cache", length))

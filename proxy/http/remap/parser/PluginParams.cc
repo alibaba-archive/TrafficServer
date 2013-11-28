@@ -1,11 +1,11 @@
 #include "PluginParams.h"
 #include "ts/ink_base64.h"
 
-PluginParams::PluginParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  DirectiveParams(lineNo, lineStr, lineLen, parent, directive,
+PluginParams::PluginParams(const int rank, const char *filename, const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
+    RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock), _paramsCombined(false)
 {
 }
@@ -51,9 +51,9 @@ int PluginParams::combineParams()
   while (child != NULL) {
      if ((paramParams=dynamic_cast<const PluginParamParams *>(child)) != NULL) {
        if (_pluginInfo.paramCount >= MAX_PARAM_NUM - 1) {
-         fprintf(stderr, "file: "__FILE__", line: %d, " \
+         fprintf(stderr, "config file: %s, " \
              "config line no: %d, too many puglin parameters, exceeds: %d\n",
-             __LINE__, _lineInfo.lineNo, MAX_PARAM_NUM - 1);
+             _lineInfo.filename, _lineInfo.lineNo, MAX_PARAM_NUM - 1);
          return E2BIG;
        }
 
@@ -67,11 +67,11 @@ int PluginParams::combineParams()
   return 0;
 }
 
-PluginParamParams::PluginParamParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  DirectiveParams(lineNo, lineStr, lineLen, parent, directive,
+PluginParamParams::PluginParamParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock), _base64(false)
 {
 }
@@ -80,9 +80,9 @@ int PluginParamParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_paramCount == 0) {
     if (!_bBlock) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "expect block statement! config line no: %d, line: %.*s\n",
-          __LINE__, _lineInfo.lineNo, _lineInfo.line.length,
+          _lineInfo.filename, _lineInfo.lineNo, _lineInfo.line.length,
           _lineInfo.line.str);
       return EINVAL;
     }
@@ -99,10 +99,10 @@ int PluginParamParams::parse(const char *blockStart, const char *blockEnd)
   if (_paramCount == 1) {
     if (!_base64) {
       if (_bBlock) {
-        fprintf(stderr, "file: "__FILE__", line: %d, " \
+        fprintf(stderr, "config file: %s, " \
             "invalid block statement without base64 encode! " \
             "config line no: %d, line: %.*s\n",
-            __LINE__, _lineInfo.lineNo,
+            _lineInfo.filename, _lineInfo.lineNo,
             _lineInfo.line.length, _lineInfo.line.str);
         return EINVAL;
       }
@@ -112,9 +112,9 @@ int PluginParamParams::parse(const char *blockStart, const char *blockEnd)
     }
 
     if (!_bBlock) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "expect base64 encoded value! config line no: %d, line: %.*s\n",
-          __LINE__, _lineInfo.lineNo, _lineInfo.line.length,
+          _lineInfo.filename, _lineInfo.lineNo, _lineInfo.line.length,
           _lineInfo.line.str);
       return EINVAL;
     }
@@ -124,19 +124,19 @@ int PluginParamParams::parse(const char *blockStart, const char *blockEnd)
   }
   else {  //_paramCount == 2
     if (_bBlock) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "invalid parameter count: %d with block statement! " \
           "config line no: %d, line: %.*s\n",
-          __LINE__, _paramCount, _lineInfo.lineNo,
+          _lineInfo.filename, _paramCount, _lineInfo.lineNo,
           _lineInfo.line.length, _lineInfo.line.str);
       return EINVAL;
     }
 
     if (!_base64) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "invalid parameter 1: %.*s, expect: %s! " \
           "config line no: %d, line: %.*s\n",
-          __LINE__, _params[0].length, _params[0].str,
+          _lineInfo.filename, _params[0].length, _params[0].str,
           BASE64_DIRECTIVE_STR, _lineInfo.lineNo,
           _lineInfo.line.length, _lineInfo.line.str);
       return EINVAL;
@@ -148,8 +148,8 @@ int PluginParamParams::parse(const char *blockStart, const char *blockEnd)
   char *szFormattedBase64;
   szFormattedBase64 = (char *)malloc(_base64Value.length + 1);
   if (szFormattedBase64 == NULL) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
-          "malloc %d bytes fail\n", __LINE__, _base64Value.length + 1);
+      fprintf(stderr, "config file: %s, " \
+          "malloc %d bytes fail\n", _lineInfo.filename, _base64Value.length + 1);
       return ENOMEM;
   }
 
@@ -170,8 +170,8 @@ int PluginParamParams::parse(const char *blockStart, const char *blockEnd)
   int buffSize = ATS_BASE64_DECODE_DSTLEN(nFormattedBase64);
   _paramValue.str = (const char *)malloc(buffSize);
   if (_paramValue.str == NULL) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
-          "malloc %d bytes fail\n", __LINE__, buffSize);
+      fprintf(stderr, "config file: %s, " \
+          "malloc %d bytes fail\n", _lineInfo.filename, buffSize);
       free(szFormattedBase64);
       return ENOMEM;
   }
@@ -185,8 +185,8 @@ int PluginParamParams::parse(const char *blockStart, const char *blockEnd)
       (unsigned char *)_paramValue.str, buffSize, (size_t *)&_paramValue.length);
   free(szFormattedBase64);
   if (!decodeResult) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
-          "base64 decode fail, config line no: %d\n", __LINE__, _lineInfo.lineNo);
+      fprintf(stderr, "config file: %s, " \
+          "base64 decode fail, config line no: %d\n", _lineInfo.filename, _lineInfo.lineNo);
       return EINVAL;
   }
 

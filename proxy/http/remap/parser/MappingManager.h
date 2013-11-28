@@ -55,6 +55,16 @@ class MappingManager {
           left, right, start, end);
     }
 
+    static bool getRegexCaptures(const char *pattern, const int length,
+        int *captures);
+
+    static int replaceRegexReferenceIds(char *str,
+        const int length, const int sub);
+
+    static int getHostname(const StringValue *url,
+        const char **start, const char **end);
+
+    static int getPath(const StringValue *url, StringValue *path);
 
   protected:
     int loadMapping(const MappingParams *mappingParams,
@@ -85,8 +95,11 @@ class MappingManager {
 
     bool isRegexSimpleRange(const StringValue *sv);
 
-   int getHostname(const StringValue *url,
-        const char **start, const char **end);
+    void checkFullRegex(MappingEntry *mappingEntry);
+    bool haveRegexReference(const char *str, const int length);
+    bool isCrossReference(MappingEntry *mappingEntry);
+    bool getRegexReferenceIds(const char *str, const int length,
+        int *minId, int *maxId);
 
     DynamicArray<MappingEntry *> _mappings;
 };

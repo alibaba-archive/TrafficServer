@@ -1,13 +1,13 @@
-#ifndef _SCHEME_DIRECTIVE_H
-#define _SCHEME_DIRECTIVE_H
+#ifndef _INCLUDE_DIRECTIVE_H
+#define _INCLUDE_DIRECTIVE_H
 
 #include <string.h>
 #include "RemapDirective.h"
 
-class SchemeDirective : public RemapDirective {
+class IncludeDirective : public RemapDirective {
   public:
-    SchemeDirective(const char *name);
-    ~SchemeDirective();
+    IncludeDirective();
+    ~IncludeDirective();
 
     DirectiveParams *newDirectiveParams(const int rank, const char *filename,
         const int lineNo, const char *lineStr, const int lineLen,

@@ -15,17 +15,18 @@
 #include "PluginDirective.h"
 #include "ACLDirective.h"
 #include "MappingDirective.h"
+#include "IncludeDirective.h"
+#include "IncludeParams.h"
 
-RemapParser::RemapParser() : _content(NULL)
+RemapParser::RemapParser()
 {
   this->init();
 }
 
 RemapParser::~RemapParser()
 {
-  if (_content != NULL) {
-    free(_content);
-    _content = NULL;
+  for (int i=0; i<_fileContents.count; i++) {
+    free(_fileContents.items[i]);
   }
 
   if (_rootDirective != NULL) {
@@ -46,6 +47,7 @@ void RemapParser::init()
   _rootDirective->_children[index++] = new MapDirective();
   _rootDirective->_children[index++] = new RegexMapDirective();  //for backward compatibility
   _rootDirective->_children[index++] = new RedirectDirective();
+  _rootDirective->_children[index++] = new IncludeDirective();
   _rootDirective->_childrenCount = index;
 }
 
@@ -53,17 +55,16 @@ int RemapParser::loadFromFile(const char *filename, DirectiveParams *rootParams)
 {
   int result;
   int fileSize;
+  char *content;
 
-  if (_content != NULL) {
-    free(_content);
-  }
-  result = this->getFileContent(filename, _content, &fileSize);
+  result = this->getFileContent(filename, content, &fileSize);
   if (result != 0) {
     return result;
   }
 
+  _fileContents.add(content);
   rootParams->_directive = _rootDirective;
-  return this->parse(rootParams, _content, _content + fileSize);
+  return this->parse(rootParams, content, content + fileSize, true);
 }
 
 #define SKIP_COMMENT(p, count) \
@@ -87,7 +88,36 @@ int RemapParser::loadFromFile(const char *filename, DirectiveParams *rootParams)
   }
 
 
-int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
+int RemapParser::dealInclude(DirectiveParams *parentParams,
+    IncludeParams *includeParams)
+{
+  char *content;
+  int result;
+  int fileSize;
+  int i;
+  const DynamicArray<char *> *filenames;
+ 
+  parentParams->setLineNo(0);
+  filenames = includeParams->getFilenames();
+  for (i=0; i<filenames->count; i++) {
+    result = this->getFileContent(filenames->items[i], content, &fileSize);
+    if (result != 0) {
+      return result;
+    }
+
+    _fileContents.add(content);
+    parentParams->setFilename(filenames->items[i]);
+    result = this->parse(parentParams, content, content + fileSize, false);
+    if (result != 0) {
+      return result;
+    }
+  }
+
+  return 0;
+}
+
+int RemapParser::parse(DirectiveParams *params, char *content,
+    char *contentEnd, const bool canInclude)
 {
   char *current;
   char *line;
@@ -104,17 +134,21 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
   int tokenLen;
   int lineNo;
   int lineCount;
+  int incRank;
+  int rank;
   int result;
   char directiveName[MAX_DIRECTIVE_NAME_SIZE];
   bool bBlock;
   bool bAfterNewLine;
 
   lineNo = 0;
+  incRank = 0;
   current = content;
   while (current < contentEnd) {
     line = current;
     getLine(current, contentEnd, lineEnd);
     lineNo++;
+    incRank++;
 
     newLineEnd = lineEnd;
     trim(line, newLineEnd);
@@ -172,9 +206,10 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
             break;
           }
           else if (notMatchBlocks < 0) {
-            fprintf(stderr, "file: "__FILE__", line: %d, "
-                "unexpect }, config line #%d: %.*s", __LINE__,
-                params->_lineInfo.lineNo + lineNo, (int)(lineEnd - line), line);
+            fprintf(stderr, "config file: %s, unexpect }, "
+                "config line #%d: %.*s", params->_lineInfo.filename,
+                params->_lineInfo.lineNo + lineNo,
+                (int)(lineEnd - line), line);
             return EINVAL;
           }
 
@@ -195,8 +230,8 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
       }
 
       if (notMatchBlocks != 0) {
-        fprintf(stderr, "file: "__FILE__", line: %d, "
-            "expect }, config line #%d: %.*s", __LINE__,
+        fprintf(stderr, "config file: %s, "
+            "expect }, config line #%d: %.*s", params->_lineInfo.filename,
             params->_lineInfo.lineNo + lineNo, (int)(lineEnd - line), line);
         return EINVAL;
       }
@@ -208,9 +243,10 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
 
     getToken(line, lineEnd, &tokenLen);
     if (tokenLen >= (int)sizeof(directiveName)) {
-        fprintf(stderr, "file: "__FILE__", line: %d, "
-            "ignore too long directive: %.*s, config line #%d: %.*s", __LINE__,
-            tokenLen, line, params->_lineInfo.lineNo + lineNo, (int)(lineEnd - line), line);
+        fprintf(stderr, "config file: %s, "
+            "ignore too long directive: %.*s, config line #%d: %.*s",
+            params->_lineInfo.filename, tokenLen, line,
+            params->_lineInfo.lineNo + lineNo, (int)(lineEnd - line), line);
         return EINVAL;
     }
 
@@ -218,9 +254,10 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
     *(directiveName + tokenLen) = '\0';
     pChildDirective = params->_directive->getChild(directiveName);
     if (pChildDirective == NULL) {
-      fprintf(stderr, "file: "__FILE__", line: %d, "
-          "unkown directive: %s, config line #%d: %.*s", __LINE__,
-          directiveName, params->_lineInfo.lineNo + lineNo, (int)(lineEnd - line), line);
+      fprintf(stderr, "config file: %s, unkown directive: %s, "
+          "config line #%d: %.*s", params->_lineInfo.filename,
+          directiveName, params->_lineInfo.lineNo + lineNo,
+          (int)(lineEnd - line), line);
       return EINVAL;
     }
 
@@ -233,8 +270,15 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
     while ((paramStr < paramEnd) && (*paramStr == ' ' || *paramStr == '\t')) {
       paramStr++;
     }
-    pChildParams = pChildDirective->newDirectiveParams(
-        params->_lineInfo.lineNo + lineNo, line,
+
+    if (params->getParent() == NULL) { //root
+      rank = params->getRank() + incRank;
+    }
+    else {
+      rank = params->getRank() + lineNo;
+    }
+    pChildParams = pChildDirective->newDirectiveParams(rank,
+        params->getFilename(), params->getLineNo() + lineNo, line,
         lineEnd - line, params, paramStr,
         paramEnd - paramStr, bBlock);
     if (pChildParams == NULL) {
@@ -253,7 +297,36 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
 
     params->addChild(pChildParams);
     if (bBlock && pChildDirective->getChildrenCount() > 0) {
-      if ((result=parse(pChildParams, blockStatementStart, blockEnd - 1)) != 0) {
+      if ((result=parse(pChildParams, blockStatementStart, blockEnd - 1,
+              false)) != 0)
+      {
+        return result;
+      }
+    }
+
+    if (params->getParent() == NULL) { //root
+      params->incRank(incRank + lineCount);
+      incRank = 0;
+    }
+
+    if (strcmp(pChildDirective->getName(), DIRECTVIE_NAME_INCLUDE) == 0) {
+      const char *oldConfigFilename;
+      int oldLineNo;
+
+      if (!canInclude) {
+        fprintf(stderr, "config file: %s, directive: %s can't occur here!"
+            "config line #%d: %.*s", params->_lineInfo.filename,
+            directiveName, params->_lineInfo.lineNo + lineNo,
+            (int)(lineEnd - line), line);
+        return EINVAL;
+      }
+
+      oldConfigFilename = params->getFilename();
+      oldLineNo = params->getLineNo();
+      result = this->dealInclude(params, (IncludeParams *)pChildParams);
+      params->setFilename(oldConfigFilename);
+      params->setLineNo(oldLineNo);
+      if (result != 0) {
         return result;
       }
     }
@@ -270,6 +343,10 @@ int RemapParser::parse(DirectiveParams *params, char *content, char *contentEnd)
     }
   }
 
+  if (params->getParent() == NULL && incRank > 0) { //root
+    params->incRank(incRank);
+  }
+
   return 0;
 }
 
@@ -281,9 +358,8 @@ int RemapParser::getFileContent(const char *filename, char *&content, int *fileS
   if (fd < 0) {
     content = NULL;
     *fileSize = 0;
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
-        "open file %s fail, " \
-        "errno: %d, error info: %s", __LINE__, \
+    fprintf(stderr, "open file %s fail, "
+        "errno: %d, error info: %s",
         filename, errno, strerror(errno));
     return errno != 0 ? errno : ENOENT;
   }
@@ -292,9 +368,8 @@ int RemapParser::getFileContent(const char *filename, char *&content, int *fileS
     content = NULL;
     *fileSize = 0;
     close(fd);
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
-        "lseek file %s fail, " \
-        "errno: %d, error info: %s", __LINE__, \
+    fprintf(stderr, "call lseek file %s fail, "
+        "errno: %d, error info: %s",
         filename, errno, strerror(errno));
     return errno != 0 ? errno : EIO;
   }
@@ -304,8 +379,7 @@ int RemapParser::getFileContent(const char *filename, char *&content, int *fileS
     *fileSize = 0;
     close(fd);
 
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
-        "malloc %d bytes fail", __LINE__, \
+    fprintf(stderr, "malloc %d bytes fail",
         (int)(*fileSize + 1));
     return errno != 0 ? errno : ENOMEM;
   }
@@ -314,9 +388,8 @@ int RemapParser::getFileContent(const char *filename, char *&content, int *fileS
     content = NULL;
     *fileSize = 0;
     close(fd);
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
-        "lseek file %s fail, " \
-        "errno: %d, error info: %s", __LINE__, \
+    fprintf(stderr, "call lseek file %s fail, "
+        "errno: %d, error info: %s",
         filename, errno, strerror(errno));
     return errno != 0 ? errno : EIO;
   }
@@ -325,9 +398,8 @@ int RemapParser::getFileContent(const char *filename, char *&content, int *fileS
     content = NULL;
     *fileSize = 0;
     close(fd);
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
-        "read from file %s fail, " \
-        "errno: %d, error info: %s", __LINE__, \
+    fprintf(stderr, "read from file %s fail, "
+        "errno: %d, error info: %s",
         filename, errno, strerror(errno));
     return errno != 0 ? errno : EIO;
   }

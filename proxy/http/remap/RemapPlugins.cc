@@ -106,8 +106,7 @@ RemapPlugins::run_single_remap()
   int requestPathLen;
   url_mapping *map = _s->url_map.getMapping();
   URL *map_from = &(map->fromURL);
-  URL *map_to = _s->url_map.getToURL();
-
+  int fromPathLen;
   int redirect_host_len;
 
   // Debugging vars
@@ -145,99 +144,16 @@ RemapPlugins::run_single_remap()
 
     Debug("url_rewrite", "plugin did not change host, port or path, copying from mapping rule");
 
-    int fromPathLen;
-    const char *toHost;
-    const char *toPath;
-    int toPathLen;
-    int toHostLen;
-
-    toHost = map_to->host_get(&toHostLen);
-    toPath = map_to->path_get(&toPathLen);
-
-    _request_url->host_set(toHost, toHostLen);
-
-    int to_port = map_to->port_get_raw();
-
-    if (to_port != _request_url->port_get_raw())
-      _request_url->port_set(to_port);
-
-    int to_scheme_len, from_scheme_len;
-    const char *to_scheme = map_to->scheme_get(&to_scheme_len);
-
-    if (to_scheme != map_from->scheme_get(&from_scheme_len))
-      _request_url->scheme_set(to_scheme, to_scheme_len);
-
     map_from->path_get(&fromPathLen);
     requestPath = _request_url->path_get(&requestPathLen);
-    // Extra byte is potentially needed for prefix path '/'.
-    // Added an extra 3 so that TS wouldn't crash in the field.
-    // Allocate a large buffer to avoid problems.
-    char newPathTmp[2048];
-    char *newPath;
-    char *newPathAlloc = NULL;
-    unsigned int newPathLen = 0;
-    unsigned int newPathLenNeed = (requestPathLen - fromPathLen) + toPathLen + 8; // 3 + some padding
-
-    if (newPathLenNeed > sizeof(newPathTmp)) {
-      newPath = (newPathAlloc = (char *)ats_malloc(newPathLenNeed));
-      if (debug_on) {
-        memset(newPath, 0, newPathLenNeed);
-      }
-    } else {
-      newPath = &newPathTmp[0];
-      if (debug_on) {
-        memset(newPath, 0, sizeof(newPathTmp));
-      }
-    }
-
-    *newPath = 0;
-
-    // Purify load run with QT in a reverse proxy indicated
-    // a UMR/ABR/MSE in the line where we do a *newPath == '/' and the ink_strlcpy
-    // that follows it.  The problem occurs if
-    // requestPathLen,fromPathLen,toPathLen are all 0; in this case, we never
-    // initialize newPath, but still de-ref it in *newPath == '/' comparison.
-    // The memset fixes that problem.
-    if (toPath) {
-      memcpy(newPath, toPath, toPathLen);
-      newPathLen += toPathLen;
-    }
-    // We might need to insert a trailing slash in the new portion of the path
-    // if more will be added and none is present and one will be needed.
-    if (!fromPathLen && requestPathLen && toPathLen && *(newPath + newPathLen - 1) != '/') {
-      *(newPath + newPathLen) = '/';
-      newPathLen++;
-    }
-
-    if (requestPath) {
-      //avoid adding another trailing slash if the requestPath already had one and so does the toPath
-      if (requestPathLen < fromPathLen) {
-        if (toPathLen && requestPath[requestPathLen - 1] == '/' && toPath[toPathLen - 1] == '/') {
-          fromPathLen++;
-        }
-      } else {
-        if (toPathLen && requestPath[fromPathLen] == '/' && toPath[toPathLen - 1] == '/') {
-          fromPathLen++;
-        }
-      }
-      // copy the end of the path past what has been mapped
-      if ((requestPathLen - fromPathLen) > 0) {
-        memcpy(newPath + newPathLen, requestPath + fromPathLen, requestPathLen - fromPathLen);
-        newPathLen += (requestPathLen - fromPathLen);
-      }
-    }
-    // We need to remove the leading slash in newPath if one is
-    // present.
-    if (*newPath == '/') {
-      memmove(newPath, newPath + 1, --newPathLen);
-    }
-
-    _request_url->path_set(newPath, newPathLen);
+    rewrite_table->doRemap(_s->url_map, _request_url, false);
 
     // TODO: This is horribly wrong and broken, when can this trigger??? Check
     // above, we already return on _s->remap_redirect ... XXX.
     if (map->homePageRedirect && fromPathLen == requestPathLen && _s->remap_redirect) {
       URL redirect_url;
+      int newPathLen = 0;
+      const char *newPath = _request_url->path_get(&newPathLen);
 
       redirect_url.create(NULL);
       redirect_url.copy(_request_url);
@@ -246,9 +162,10 @@ RemapPlugins::run_single_remap()
 
       // Extra byte for trailing '/' in redirect
       if (newPathLen > 0 && newPath[newPathLen - 1] != '/') {
-        newPath[newPathLen] = '/';
-        newPath[++newPathLen] = '\0';
-        redirect_url.path_set(newPath, newPathLen);
+        char *paddingPath = (char *)alloca(newPathLen + 1);
+        memcpy(paddingPath, newPath, newPathLen);
+        paddingPath[newPathLen++] = '/';
+        redirect_url.path_set(paddingPath, newPathLen);
       }
       // If we have host header information,
       //   put it back into redirect URL
@@ -261,16 +178,16 @@ RemapPlugins::run_single_remap()
       }
       // If request came in without a host, send back
       //  the redirect with the name the proxy is known by
-      if (redirect_url.host_get(&redirect_host_len) == NULL)
+      if (redirect_url.host_get(&redirect_host_len) == NULL) {
         redirect_url.host_set(rewrite_table->ts_name, strlen(rewrite_table->ts_name));
+      }
 
-      if ((_s->remap_redirect = redirect_url.string_get(NULL)) != NULL)
+      if ((_s->remap_redirect = redirect_url.string_get(NULL)) != NULL) {
         retcode = strlen(_s->remap_redirect);
+      }
       Debug("url_rewrite", "Redirected %.*s to %.*s", requestPathLen, requestPath, retcode, _s->remap_redirect);
       redirect_url.destroy();
     }
-
-    ats_free(newPathAlloc);
   }
 
 done:

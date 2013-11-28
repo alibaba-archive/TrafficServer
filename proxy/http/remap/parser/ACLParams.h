@@ -75,7 +75,7 @@ class ACLSubKeyParams : public DirectiveParams {
 
 class ACLRedirectUrlParams : public DirectiveParams {
   public:
-    ACLRedirectUrlParams(const int lineNo, const char *lineStr,
+    ACLRedirectUrlParams(const int rank, const char *filename, const int lineNo, const char *lineStr,
         const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock, const bool primaryDirective);
@@ -96,8 +96,8 @@ class ACLRedirectUrlParams : public DirectiveParams {
 
 class ACLMethodParams : public DirectiveParams {
   public:
-    ACLMethodParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ACLMethodParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
      ~ACLMethodParams() {}
@@ -121,8 +121,8 @@ class ACLMethodParams : public DirectiveParams {
 
 class ACLSrcIpParams : public DirectiveParams {
   public:
-    ACLSrcIpParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ACLSrcIpParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
 
@@ -141,8 +141,8 @@ class ACLSrcIpParams : public DirectiveParams {
 
 class ACLRefererParams : public DirectiveParams {
   public:
-    ACLRefererParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ACLRefererParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
      ~ACLRefererParams() {}
@@ -249,8 +249,8 @@ class ACLParams : public DirectiveParams {
 //acl define <acl-name> <allow | deny>
 class ACLDefineParams : public DirectiveParams {
   public:
-    ACLDefineParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ACLDefineParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~ACLDefineParams() {}
@@ -286,8 +286,8 @@ class ACLDefineParams : public DirectiveParams {
 //acl check xxx
 class ACLCheckParams : public DirectiveParams {
   public:
-    ACLCheckParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ACLCheckParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~ACLCheckParams() {}
@@ -306,8 +306,8 @@ class ACLCheckParams : public DirectiveParams {
 
 class ACLActionParams : public DirectiveParams {
   protected:
-    ACLActionParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ACLActionParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
 
@@ -351,8 +351,8 @@ class ACLActionParams : public DirectiveParams {
 //acl allow xxx
 class ACLAllowParams : public ACLActionParams {
   public:
-    ACLAllowParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ACLAllowParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~ACLAllowParams() {}
@@ -361,8 +361,8 @@ class ACLAllowParams : public ACLActionParams {
 //acl deny xxx
 class ACLDenyParams : public ACLActionParams {
   public:
-    ACLDenyParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    ACLDenyParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~ACLDenyParams() {}

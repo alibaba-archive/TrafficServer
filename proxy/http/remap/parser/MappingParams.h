@@ -7,28 +7,38 @@
 #define MAP_OPTION_WITH_RECV_PORT  "with_recv_port"
 #define MAP_OPTION_REVERSE         "reverse"
 #define REDIRECT_OPTION_TEMPORARY  "temporary"
+#define MAPPING_OPTION_PATH_REGEX  "regex"
 
 class MappingParams : public DirectiveParams {
   public:
-    MappingParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    MappingParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
 
   public:
     virtual ~MappingParams() {}
 
-    static inline const char *getOptionStr(const int flags) {
-      switch(flags) {
+    static inline const char *getOptionStr(const int flags, char *optionStr) {
+      switch(flags & (~MAPPING_FLAG_PATH_REGEX)) {
         case MAP_FLAG_WITH_RECV_PORT:
-          return MAP_OPTION_WITH_RECV_PORT;
+          strcpy(optionStr, MAP_OPTION_WITH_RECV_PORT);
+          break;
         case MAP_FLAG_REVERSE:
-          return MAP_OPTION_REVERSE;
+          strcpy(optionStr, MAP_OPTION_REVERSE);
+          break;
         case REDIRECT_FALG_TEMPORARY:
-          return REDIRECT_OPTION_TEMPORARY;
+          strcpy(optionStr, REDIRECT_OPTION_TEMPORARY);
+          break;
         default:
-          return "";
+          strcpy(optionStr, "");
+          break;
       }
+      if (flags & MAPPING_FLAG_PATH_REGEX) {
+        sprintf(optionStr + strlen(optionStr), " %s", MAPPING_OPTION_PATH_REGEX);
+      }
+
+      return optionStr;
     }
 
     inline int getType() const {
@@ -58,8 +68,8 @@ class MappingParams : public DirectiveParams {
 
 class MapParams : public MappingParams {
   public:
-    MapParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    MapParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~MapParams() {}
@@ -69,8 +79,8 @@ class MapParams : public MappingParams {
 
 class RedirectParams: public MappingParams {
   public:
-    RedirectParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    RedirectParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~RedirectParams() {}

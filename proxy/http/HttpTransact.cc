@@ -175,7 +175,29 @@ is_port_in_range(int port, HttpConfigPortRange *pr)
 inline static void
 update_cache_control_information_from_config(HttpTransact::State* s)
 {
-  getCacheControl(&s->cache_control, &s->request_data, s->txn_conf);
+  if (!s->cacheControlByRemap) {
+    getCacheControl(&s->cache_control, &s->request_data);
+  }
+
+  if (s->txn_conf->cache_force_in_ram) {
+   s->cache_control.force_in_ram = true;
+  }
+
+  if (s->txn_conf->cache_cluster_cache_local) {
+   s->cache_control.cluster_cache_local = true;
+  }
+
+  if (s->txn_conf->cache_ignore_client_no_cache) {
+   s->cache_control.ignore_client_no_cache = true;
+  }
+
+  if (s->txn_conf->cache_ignore_server_no_cache) {
+   s->cache_control.ignore_server_no_cache = true;
+  }
+
+  if (!s->txn_conf->cache_ignore_client_cc_max_age) {
+   s->cache_control.ignore_client_cc_max_age = false;
+  }
 
   s->cache_info.config.cache_force_in_ram = s->cache_control.force_in_ram;
   s->cache_info.directives.does_config_permit_lookup &= (s->cache_control.never_cache == false);

@@ -139,6 +139,16 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
       s->txn_conf = map->overridableHttpConfig;
       Debug("url_rewrite", "use mapping's overridableHttpConfig");
     }
+
+    if (map->cacheControlConfig != NULL) {
+      s->cacheControlByRemap = true;
+      s->cache_control.revalidate_after = map->cacheControlConfig->revalidate_after;
+      s->cache_control.pin_in_cache_for = map->cacheControlConfig->pin_in_cache_for;
+      s->cache_control.ttl_in_cache = map->cacheControlConfig->ttl_in_cache;
+      s->cache_control.never_cache = map->cacheControlConfig->never_cache;
+
+      Debug("url_rewrite", "cache control use mapping's config");
+    }
   } else {
     Debug("url_rewrite", "RemapProcessor::setup_for_remap did not find a mapping");
   }
@@ -535,6 +545,21 @@ bool RemapProcessor::convert_cache_url(const char *in_url, const int in_url_len,
     }
     else {
       maintain_pristine_host_hdr = mapping->overridableHttpConfig->maintain_pristine_host_hdr;
+    }
+
+    if (mapping->overridableHttpConfig) {
+      if (mapping->overridableHttpConfig->cache_cluster_cache_local) {
+        *flags = URL_CONVERT_FLAG_CLUSTER_CACHE_LOCAL;
+      }
+    }
+    else if (CacheProcessor::IsCacheClustering()) {
+      HttpConfigParams *httpConfig = HttpConfig::acquire();
+      if (httpConfig != NULL) {
+        if (httpConfig->oride.cache_cluster_cache_local) {
+          *flags = URL_CONVERT_FLAG_CLUSTER_CACHE_LOCAL;
+        }
+        HttpConfig::release(httpConfig);
+      }
     }
 
     newURL = &old_url;

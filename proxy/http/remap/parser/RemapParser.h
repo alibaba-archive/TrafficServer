@@ -5,6 +5,7 @@
 
 class RemapDirective;
 class DirectiveParams;
+class IncludeParams;
 
 class RemapParser {
   public:
@@ -13,7 +14,7 @@ class RemapParser {
     int loadFromFile(const char *filename, DirectiveParams *rootParams);
   private:
     RemapDirective *_rootDirective;
-    char *_content;  //the content of config file
+    DynamicArray<char *> _fileContents;  //for delay free
 
     void init();
     int getFileContent(const char *filename, char *&content, int *fileSize);
@@ -64,7 +65,11 @@ class RemapParser {
       *tokenLen = p - str;
     }
 
-    int parse(DirectiveParams *params, char *content, char *contentEnd);
+    int parse(DirectiveParams *params, char *content, char *contentEnd,
+        const bool canInclude);
+
+    int dealInclude(DirectiveParams *parentParams,
+        IncludeParams *includeParams);
 };
 
 #endif

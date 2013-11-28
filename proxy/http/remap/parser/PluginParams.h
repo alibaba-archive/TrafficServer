@@ -10,8 +10,8 @@
 
 class PluginParams : public DirectiveParams {
   public:
-    PluginParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    PluginParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~PluginParams() {}
@@ -31,8 +31,8 @@ class PluginParams : public DirectiveParams {
 
 class PluginParamParams : public DirectiveParams {
   public:
-    PluginParamParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    PluginParamParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
 

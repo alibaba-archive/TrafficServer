@@ -329,7 +329,7 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
 
   if (fromHost.length > 0 && isRegex(&fromHost)) {
     //printf("%.*s is REGEX!\n", mappingEntry->_fromUrl.length, mappingEntry->_fromUrl.str);
-    mappingEntry->_flags |= MAPPING_FLAG_REGEX;
+    mappingEntry->_flags |= MAPPING_FLAG_HOST_REGEX;
     mappingEntry->_simpleRegexRange = this->isRegexSimpleRange(&fromHost);
     if (*(fromHost.str + fromHost.length - 1) == '$') {
       const char *pColon = (const char *)memchr(fromHost.str, ':', fromHost.length);
@@ -350,6 +350,12 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
         mappingEntry->_fromUrl.length = urlLength;
       }
     }
+  }
+
+  if ((mappingEntry->_flags & MAPPING_FLAG_HOST_REGEX) != 0 ||
+      (mappingEntry->_flags & MAPPING_FLAG_PATH_REGEX) != 0)
+  {
+    checkFullRegex(mappingEntry);
   }
 
   return 0;
@@ -413,8 +419,8 @@ int MappingManager::loadConfig(MappingEntry *mappingEntry,
     case CONFIG_TYPE_HOSTING_INT:
       index = CONFIG_TYPE_HOSTING_INDEX;
       break;
-    case CONFIG_TYPE_CACHE_CONTROL_INT:
-      index = CONFIG_TYPE_CACHE_CONTROL_INDEX;
+    case CONFIG_TYPE_CACHE_INT:
+      index = CONFIG_TYPE_CACHE_INDEX;
       break;
     case CONFIG_TYPE_CONGESTION_INT:
       index = CONFIG_TYPE_CONGESTION_INDEX;
@@ -489,9 +495,9 @@ int MappingManager::loadMapping(const MappingParams *mappingParams,
     return result;
   }
 
-  MappingEntry *mappingEntry = new MappingEntry(
-      mappingParams->getLineInfo()->lineNo, mappingParams->getType(),
-      mappingParams->getFlags());
+  MappingEntry *mappingEntry = new MappingEntry(mappingParams->getRank(),
+      mappingParams->getFilename(), mappingParams->getLineNo(),
+      mappingParams->getType(), mappingParams->getFlags());
   if (mappingEntry == NULL) {
     return ENOMEM;
   }
@@ -544,6 +550,28 @@ int MappingManager::getHostname(const StringValue *url,
     return 0;
 }
 
+int MappingManager::getPath(const StringValue *url, StringValue *path)
+{
+  const char *host_start;
+  const char *host_end;
+  int result;
+
+  if ((result=getHostname(url, &host_start, &host_end)) != 0) {
+    path->str = NULL;
+    path->length = 0;
+    return result;
+  }
+
+  path->str = host_end;
+  path->length = (url->str + url->length) - host_end;
+  if (path->length > 0) {  //skip /
+    path->str++;
+    path->length--;
+  }
+
+  return 0;
+}
+
 int MappingManager::expand()
 {
   if (_mappings.count == 0) {
@@ -555,7 +583,9 @@ int MappingManager::expand()
 
   mappingEnd = _mappings.items + _mappings.count;
   for (mappingEntry=_mappings.items; mappingEntry<mappingEnd; mappingEntry++) {
-    if ((*mappingEntry)->_simpleRegexRange) {
+    if (((*mappingEntry)->_flags & MAPPING_FLAG_FULL_REGEX) == 0 &&
+        (*mappingEntry)->_simpleRegexRange)
+    {
       break;
     }
   }
@@ -579,7 +609,9 @@ int MappingManager::expand()
   _mappings.reset(2 * oldMappings.count);
 
   for (mappingEntry=oldMappings.items; mappingEntry<mappingEnd; mappingEntry++) {
-    if (!(*mappingEntry)->_simpleRegexRange) {
+    if (((*mappingEntry)->_flags & MAPPING_FLAG_FULL_REGEX) != 0 ||
+        !(*mappingEntry)->_simpleRegexRange)
+    {
       result = _mappings.add(*mappingEntry) ?  0 : ENOMEM;
       if (result != 0) {
         return result;
@@ -686,7 +718,11 @@ int MappingManager::expand()
       continue;
     }
 
-    (*mappingEntry)->_flags &= ~MAPPING_FLAG_REGEX;  //remove the regex flag
+    if (haveGroup && ((*mappingEntry)->_flags & MAPPING_FLAG_PATH_REGEX) != 0) {
+      replaceRegexReferenceIds((char *)toHostEnd, (toUrl.str + toUrl.length) - toHostEnd, 1);
+    }
+
+    (*mappingEntry)->_flags &= ~MAPPING_FLAG_HOST_REGEX;  //remove the regex flag
 
     int frontLen = rangeStart - fromUrl.str;
     int tailLen = (fromUrl.str + fromUrl.length) - rangeEnd;
@@ -785,5 +821,210 @@ int MappingManager::expand()
   }
 
   return 0;
+}
+
+bool MappingManager::haveRegexReference(const char *str, const int length)
+{
+  const char *end;
+  const char *p;
+
+  end = str + length;
+  p = str;
+  while (p < end) {
+    if (*p == '$') {
+      p++;
+      if (p < end && (*p >= '0' && *p <= '9')) {
+        return true;
+      }
+    }
+    else {
+      p++;
+    }
+  }
+
+  return false;
+}
+
+int MappingManager::replaceRegexReferenceIds(char *str,
+    const int length, const int sub)
+{
+  char *end;
+  char *p;
+  int count;
+
+  count = 0;
+  end = str + length;
+  p = str;
+  while (p < end) {
+    if (*p == '$') {
+      p++;
+      if (p < end && (*p >= '0' && *p <= '9')) {
+        *p -= sub;
+        count++;
+        p++;
+      }
+    }
+    else {
+      p++;
+    }
+  }
+
+  return count;
+}
+
+bool MappingManager::getRegexReferenceIds(const char *str, const int length,
+    int *minId, int *maxId)
+{
+  const char *end;
+  const char *p;
+  int id;
+  int count;
+
+  *minId = 100;
+  *maxId = 0;
+  count = 0;
+
+  end = str + length;
+  p = str;
+  while (p < end) {
+    if (*p == '$') {
+      p++;
+      if (p < end && (*p >= '0' && *p <= '9')) {
+        id = *p - '0';
+        if (id < *minId) {
+          *minId = id;
+        }
+        if (id > *maxId) {
+          *maxId = id;
+        }
+        count++;
+        p++;
+      }
+    }
+    else {
+      p++;
+    }
+  }
+
+  return count > 0;
+}
+
+bool MappingManager::getRegexCaptures(const char *pattern, const int length,
+    int *captures)
+{
+  pcre *re;
+  pcre_extra *re_extra;
+  char *input;
+  const char *str;
+  int str_index;
+  bool result;
+
+  *captures = 0;
+  input = (char *)alloca(length + 1);
+  memcpy(input, pattern, length);
+  *(input + length) = '\0';
+  re = pcre_compile(input, 0, &str, &str_index, NULL);
+  if (re == NULL) {
+    return false;
+  }
+
+  re_extra = pcre_study(re, 0, &str);
+  if ((re_extra == NULL) && (str != NULL)) {
+    pcre_free(re);
+    return false;
+  }
+
+  if (pcre_fullinfo(re, re_extra, PCRE_INFO_CAPTURECOUNT, captures) == 0) {
+    result = true;
+  }
+  else {
+    result = false;
+  }
+
+  pcre_free(re);
+  pcre_free(re_extra);
+  return result;
+}
+
+bool MappingManager::isCrossReference(MappingEntry *mappingEntry)
+{
+  const char *host_start;
+  const char *host_end;
+  StringValue path;
+  int host_captures;
+  int path_captures;
+  int host_min_id;
+  int host_max_id;
+  int path_min_id;
+  int path_max_id;
+
+  if (getHostname(&mappingEntry->_fromUrl, &host_start, &host_end) != 0) {
+    return false;
+  }
+  if (getPath(&mappingEntry->_fromUrl, &path) != 0) {
+    return false;
+  }
+  if (!getRegexCaptures(host_start, host_end - host_start,
+        &host_captures))
+  {
+    return true;
+  }
+  if (!getRegexCaptures(path.str, path.length, &path_captures))
+  {
+    return true;
+  }
+
+  if (getHostname(&mappingEntry->_toUrl, &host_start, &host_end) != 0) {
+    return false;
+  }
+  if (getPath(&mappingEntry->_toUrl, &path) != 0) {
+    return false;
+  }
+  if (getRegexReferenceIds(host_start, host_end - host_start,
+        &host_min_id, &host_max_id))
+  {
+    if (host_min_id == 0 || host_max_id > host_captures) {
+      return true;
+    }
+  }
+
+  if (getRegexReferenceIds(path.str, path.length,
+        &path_min_id, &path_max_id))
+  {
+    if ((path_min_id == 0) || (host_captures > 0 &&
+          path_min_id <= host_captures))
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void MappingManager::checkFullRegex(MappingEntry *mappingEntry)
+{
+  if ((mappingEntry->_flags & MAPPING_FLAG_PATH_REGEX) == 0) {  //host regex
+    StringValue path;
+    if (getPath(&mappingEntry->_toUrl, &path) == 0) {
+      if (haveRegexReference(path.str, path.length)) {
+        mappingEntry->_flags |= MAPPING_FLAG_FULL_REGEX;
+      }
+    }
+  }
+  else if ((mappingEntry->_flags & MAPPING_FLAG_HOST_REGEX) == 0) {//path regex
+    const char *host_start;
+    const char *host_end;
+
+    if (getHostname(&mappingEntry->_toUrl, &host_start, &host_end) == 0) {
+      if (haveRegexReference(host_start, host_end - host_start)) {
+        mappingEntry->_flags |= MAPPING_FLAG_FULL_REGEX;
+      }
+    }
+  }
+  else { //both
+    if (isCrossReference(mappingEntry)) {
+      mappingEntry->_flags |= MAPPING_FLAG_FULL_REGEX;
+    }
+  }
 }
 

@@ -180,30 +180,10 @@ reloadCacheControl()
 }
 
 void
-getCacheControl(CacheControlResult *result, HttpRequestData *rdata, OverridableHttpConfigParams *h_txn_conf, char *tag)
+getCacheControl(CacheControlResult *result, HttpRequestData *rdata, char *tag)
 {
   rdata->tag = tag;
   CacheControlTable->Match(rdata, result);
-
-  if (h_txn_conf->cache_force_in_ram) {
-    result->force_in_ram = true;
-  }
-
-  if (h_txn_conf->cache_cluster_cache_local) {
-    result->cluster_cache_local = true;
-  }
-
-  if (h_txn_conf->cache_ignore_client_no_cache) {
-    result->ignore_client_no_cache = true;
-  }
-
-  if (h_txn_conf->cache_ignore_server_no_cache) {
-    result->ignore_server_no_cache = true;
-  }
-
-  if (!h_txn_conf->cache_ignore_client_cc_max_age) {
-    result->ignore_client_cc_max_age = false;
-  }
 }
 
 bool 
@@ -232,8 +212,11 @@ getClusterCacheLocal(URL *url, char *hostname)
 void
 CacheControlResult::Print()
 {
-  printf("\t reval: %d, never-cache: %d, force-in-ram: %d, pin: %d, cluster-cache-c: %d ignore-c: %d ignore-s: %d\n",
-         revalidate_after, never_cache, force_in_ram, pin_in_cache_for, cluster_cache_local, ignore_client_no_cache, ignore_server_no_cache);
+  printf("\t reval: %d, ttl: %d, never-cache: %d, force-in-ram: %d, "
+      "pin: %d, cluster-cache-c: %d ignore-c: %d ignore-s: %d\n",
+      revalidate_after, ttl_in_cache, never_cache, force_in_ram,
+      pin_in_cache_for, cluster_cache_local, ignore_client_no_cache,
+      ignore_server_no_cache);
 }
 
 // void CacheControlRecord::Print()

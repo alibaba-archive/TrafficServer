@@ -9,9 +9,10 @@ class ConfigDirective : public RemapDirective {
     ConfigDirective();
     ~ConfigDirective();
 
-    DirectiveParams *newDirectiveParams(const int lineNo,
-        const char *lineStr, const int lineLen, DirectiveParams *parent,
-       const char *paramStr, const int paramLen, const bool bBlock);
+    DirectiveParams *newDirectiveParams(const int rank, const char *filename,
+        const int lineNo, const char *lineStr, const int lineLen,
+        DirectiveParams *parent, const char *paramStr, const int paramLen,
+        const bool bBlock);
 };
 
 
@@ -20,9 +21,10 @@ class ConfigSetDirective : public RemapDirective {
     ConfigSetDirective();
     ~ConfigSetDirective();
 
-    DirectiveParams *newDirectiveParams(const int lineNo,
-        const char *lineStr, const int lineLen, DirectiveParams *parent,
-        const char *paramStr, const int paramLen, const bool bBlock);
+    DirectiveParams *newDirectiveParams(const int rank, const char *filename,
+        const int lineNo, const char *lineStr, const int lineLen,
+        DirectiveParams *parent, const char *paramStr, const int paramLen,
+        const bool bBlock);
 };
 
 #endif

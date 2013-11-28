@@ -10,7 +10,7 @@
 #include "RemapParser.h"
 #include "DirectiveParams.h"
 
-#define MAX_CHILD_NUM  8
+#define MAX_CHILD_NUM  16
 #define MAX_DIRECTIVE_NAME_SIZE 32
 
 #define DIRECTIVE_TYPE_NONE      0
@@ -29,6 +29,7 @@
 #define DIRECTVIE_NAME_ACL          "acl"
 #define DIRECTVIE_NAME_CONFIG       "config"
 #define DIRECTVIE_NAME_CONFIG_SET   "set"
+#define DIRECTVIE_NAME_INCLUDE      "include"
 
 #define DIRECTVIE_NAME_ACL_METHOD       "method"
 #define DIRECTVIE_NAME_ACL_SRC_IP       "src_ip"
@@ -71,9 +72,10 @@ class RemapDirective {
 
     virtual int check(DirectiveParams *params, const bool bBlock);
 
-    virtual DirectiveParams *newDirectiveParams(const int lineNo,
-        const char *lineStr, const int lineLen, DirectiveParams *parent,
-        const char *paramStr, const int paramLen, const bool bBlock);
+    virtual DirectiveParams *newDirectiveParams(const int rank, const char *filename,
+        const int lineNo, const char *lineStr, const int lineLen,
+        DirectiveParams *parent, const char *paramStr, const int paramLen,
+        const bool bBlock);
 
   protected:
     RemapDirective *getChild(const char *name);

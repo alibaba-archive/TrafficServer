@@ -23,12 +23,13 @@ MapDirective::MapDirective() : MappingDirective(DIRECTVIE_NAME_MAP)
 {
 }
 
-DirectiveParams *MapDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *MapDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 
 {
-  return new MapParams(lineNo, lineStr, lineLen, parent, this,
+  return new MapParams(rank, filename, lineNo, lineStr, lineLen, parent, this,
       paramStr, paramLen, bBlock);
 }
 
@@ -36,11 +37,12 @@ RedirectDirective::RedirectDirective() : MappingDirective(DIRECTVIE_NAME_REDIREC
 {
 }
 
-DirectiveParams *RedirectDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *RedirectDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-  return new RedirectParams(lineNo, lineStr, lineLen, parent, this,
+  return new RedirectParams(rank, filename, lineNo, lineStr, lineLen, parent, this,
       paramStr, paramLen, bBlock);
 }
 

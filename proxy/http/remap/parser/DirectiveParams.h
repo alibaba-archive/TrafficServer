@@ -40,6 +40,7 @@ struct StringBuffer {
 };
 
 struct LineInfo {
+  const char *filename;  //config filename
   int lineNo;
   StringValue line;
 };
@@ -65,10 +66,10 @@ class DirectiveParams {
   friend class PluginParams;
 
   public:
-    DirectiveParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock);
+    DirectiveParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen,
+        DirectiveParams *parent, RemapDirective *directive,
+        const char *paramStr, const int paramLen, const bool bBlock);
     virtual ~DirectiveParams();
 
     int init();
@@ -109,8 +110,36 @@ class DirectiveParams {
       return 0;
     }
 
+    inline int getRank() const {
+      return _rank;
+    }
+
+    inline void setRank(const int rank) {
+      _rank = rank;
+    }
+
+    inline void incRank(const int inc) {
+      _rank += inc;
+    }
+
     inline const LineInfo *getLineInfo() const {
       return &_lineInfo;
+    }
+
+    inline int getLineNo() const {
+      return _lineInfo.lineNo;
+    }
+
+    inline const char *getFilename() const {
+      return _lineInfo.filename;
+    }
+
+    inline void setLineNo(const int lineNo) {
+      _lineInfo.lineNo = lineNo;
+    }
+
+    inline void setFilename(const char *filename) {
+      _lineInfo.filename = filename;
     }
 
     inline int getParamCount() const {
@@ -145,6 +174,7 @@ class DirectiveParams {
     DirectiveParams *_parent;
     RemapDirective *_directive;
     bool _bBlock; //block or single statement
+    int _rank;
     LineInfo _lineInfo;
     StringValue _paramStr;
 

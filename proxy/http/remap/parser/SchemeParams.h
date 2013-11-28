@@ -7,8 +7,8 @@
 
 class SchemeParams : public DirectiveParams {
   public:
-    SchemeParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
+    SchemeParams(const int rank, const char *filename, const int lineNo,
+        const char *lineStr, const int lineLen, DirectiveParams *parent,
         RemapDirective *directive, const char *paramStr,
         const int paramLen, const bool bBlock);
     ~SchemeParams() {}

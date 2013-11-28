@@ -1070,6 +1070,7 @@ public:
     URL pristine_url;  // pristine url is the url before remap
     
     bool api_skip_all_remapping;
+    bool cacheControlByRemap;  //if cache control config by remap.config
 
     OverridableHttpConfigParams *txn_conf;
     OverridableHttpConfigParams my_txn_conf; // Storage for plugins, to avoid malloc
@@ -1165,6 +1166,7 @@ public:
         reverse_proxy(false), url_remap_success(false), remap_redirect(NULL), filter_mask(0), already_downgraded(false),
         pristine_url(),
         api_skip_all_remapping(false),
+        cacheControlByRemap(false),
         txn_conf(NULL)
     {
       int i;

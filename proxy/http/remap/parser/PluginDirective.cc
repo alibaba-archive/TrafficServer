@@ -12,11 +12,12 @@ PluginDirective::~PluginDirective()
 {
 }
 
-DirectiveParams *PluginDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *PluginDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-  return new PluginParams(lineNo, lineStr, lineLen, parent, this,
+  return new PluginParams(rank, filename, lineNo, lineStr, lineLen, parent, this,
       paramStr, paramLen, bBlock);
 }
 
@@ -29,11 +30,12 @@ PluginParamDirective::~PluginParamDirective()
 {
 }
 
-DirectiveParams *PluginParamDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *PluginParamDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-  return new PluginParamParams(lineNo, lineStr, lineLen, parent, this,
-      paramStr, paramLen, bBlock);
+  return new PluginParamParams(rank, filename, lineNo, lineStr, lineLen, parent,
+      this, paramStr, paramLen, bBlock);
 }
 

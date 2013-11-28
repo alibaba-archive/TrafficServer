@@ -13,11 +13,12 @@ ConfigDirective::~ConfigDirective()
 }
 
 
-DirectiveParams *ConfigDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *ConfigDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-  return new ConfigParams(lineNo, lineStr, lineLen, parent, this,
+  return new ConfigParams(rank, filename, lineNo, lineStr, lineLen, parent, this,
       paramStr, paramLen, bBlock);
 }
 
@@ -31,11 +32,12 @@ ConfigSetDirective::~ConfigSetDirective()
 {
 }
 
-DirectiveParams *ConfigSetDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *ConfigSetDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-  return new ConfigSetParams(lineNo, lineStr, lineLen, parent, this,
-      paramStr, paramLen, bBlock);
+  return new ConfigSetParams(rank, filename, lineNo, lineStr, lineLen, parent,
+      this, paramStr, paramLen, bBlock);
 }
 

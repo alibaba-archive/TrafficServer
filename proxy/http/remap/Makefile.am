@@ -55,6 +55,8 @@ libhttp_remap_a_SOURCES = \
 	MappingTypes.h  \
   HostnameTrie.h  \
   HostnameTrie.cc \
+	UrlMappingRegexMatcher.cc \
+	UrlMappingPathContainer.cc \
   acl/ACLChecker.h    \
   acl/ACLChecker.cc   \
   acl/ACLCheckList.h  \
@@ -96,5 +98,9 @@ libhttp_remap_a_SOURCES = \
 	parser/SchemeDirective.h \
 	parser/SchemeDirective.cc\
 	parser/SchemeParams.h    \
-	parser/SchemeParams.cc
+	parser/SchemeParams.cc   \
+	parser/IncludeDirective.h  \
+	parser/IncludeDirective.cc \
+	parser/IncludeParams.h   \
+	parser/IncludeParams.cc
 

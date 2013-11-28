@@ -18,54 +18,55 @@ ACLDirective::ACLDirective() :
   this->_childrenCount = index;
 }
 
-DirectiveParams *ACLDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *ACLDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
   StringValue firstParam;
   if (DirectiveParams::getFirstParam(paramStr, paramLen, &firstParam)
       != 0)
   {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "empty acl parameter! config line no: %d, line: %.*s\n",
-        __LINE__, lineNo, lineLen, lineStr);
+        filename, lineNo, lineLen, lineStr);
     return NULL;
   }
 
   if (firstParam.equals(ACL_SECOND_DIRECTIVE_DEFINE_STR,
         sizeof(ACL_SECOND_DIRECTIVE_DEFINE_STR) - 1))
   {
-    return new ACLDefineParams(lineNo, lineStr, lineLen, parent, this,
-              paramStr, paramLen, bBlock);
+    return new ACLDefineParams(rank, filename, lineNo, lineStr, lineLen,
+        parent, this, paramStr, paramLen, bBlock);
   }
   else if (firstParam.equals(ACL_SECOND_DIRECTIVE_CHECK_STR,
         sizeof(ACL_SECOND_DIRECTIVE_CHECK_STR) - 1))
   {
-    return new ACLCheckParams(lineNo, lineStr, lineLen, parent, this,
-              paramStr, paramLen, bBlock);
+    return new ACLCheckParams(rank, filename, lineNo, lineStr, lineLen,
+        parent, this, paramStr, paramLen, bBlock);
   }
   else if (firstParam.equals(ACL_SECOND_DIRECTIVE_ALLOW_STR,
         sizeof(ACL_SECOND_DIRECTIVE_ALLOW_STR) - 1))
   {
-    return new ACLAllowParams(lineNo, lineStr, lineLen, parent, this,
-              paramStr, paramLen, bBlock);
+    return new ACLAllowParams(rank, filename, lineNo, lineStr, lineLen,
+        parent, this, paramStr, paramLen, bBlock);
   }
   else if (firstParam.equals(ACL_SECOND_DIRECTIVE_DENY_STR,
         sizeof(ACL_SECOND_DIRECTIVE_DENY_STR) - 1))
   {
-    return new ACLDenyParams(lineNo, lineStr, lineLen, parent, this,
-              paramStr, paramLen, bBlock);
+    return new ACLDenyParams(rank, filename, lineNo, lineStr, lineLen,
+        parent, this, paramStr, paramLen, bBlock);
   }
   else if (firstParam.equals(ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR,
         sizeof(ACL_SECOND_DIRECTIVE_REDIRECT_URL_STR) - 1))
   {
-    return new ACLRedirectUrlParams(lineNo, lineStr, lineLen, parent, this,
-              paramStr, paramLen, bBlock, false);
+    return new ACLRedirectUrlParams(rank, filename, lineNo, lineStr, lineLen,
+        parent, this, paramStr, paramLen, bBlock, false);
   }
   else {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid acl parameter: %.*s! config line no: %d, line: %.*s\n",
-        __LINE__, firstParam.length, firstParam.str, lineNo, lineLen, lineStr);
+        filename, firstParam.length, firstParam.str, lineNo, lineLen, lineStr);
     return NULL;
   }
 }
@@ -76,12 +77,13 @@ ACLRefererDirective::ACLRefererDirective() :
 {
 }
 
-DirectiveParams *ACLRefererDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *ACLRefererDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-    return new ACLRefererParams(lineNo, lineStr, lineLen, parent, this,
-              paramStr, paramLen, bBlock);
+    return new ACLRefererParams(rank, filename, lineNo, lineStr, lineLen,
+        parent, this, paramStr, paramLen, bBlock);
 }
 
 
@@ -90,12 +92,13 @@ ACLSrcIpDirective::ACLSrcIpDirective() :
 {
 }
 
-DirectiveParams *ACLSrcIpDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *ACLSrcIpDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-    return new ACLSrcIpParams(lineNo, lineStr, lineLen, parent, this,
-              paramStr, paramLen, bBlock);
+    return new ACLSrcIpParams(rank, filename, lineNo, lineStr, lineLen,
+        parent, this, paramStr, paramLen, bBlock);
 }
 
 
@@ -104,12 +107,13 @@ ACLMethodDirective::ACLMethodDirective() :
 {
 }
 
-DirectiveParams *ACLMethodDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *ACLMethodDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-    return new ACLMethodParams(lineNo, lineStr, lineLen, parent, this,
-              paramStr, paramLen, bBlock);
+    return new ACLMethodParams(rank, filename, lineNo, lineStr, lineLen,
+        parent, this, paramStr, paramLen, bBlock);
 }
 
 
@@ -118,11 +122,12 @@ ACLRedirectUrlDirective::ACLRedirectUrlDirective() :
 {
 }
 
-DirectiveParams *ACLRedirectUrlDirective::newDirectiveParams(const int lineNo,
-    const char *lineStr, const int lineLen, DirectiveParams *parent,
-    const char *paramStr, const int paramLen, const bool bBlock)
+DirectiveParams *ACLRedirectUrlDirective::newDirectiveParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, const char *paramStr, const int paramLen,
+    const bool bBlock)
 {
-    return new ACLRedirectUrlParams(lineNo, lineStr, lineLen, parent, this,
-              paramStr, paramLen, bBlock, true);
+    return new ACLRedirectUrlParams(rank, filename, lineNo, lineStr, lineLen,
+        parent, this, paramStr, paramLen, bBlock, true);
 }
 

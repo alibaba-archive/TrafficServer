@@ -9,7 +9,7 @@ class ACLRefererDirective : public RemapDirective {
     ACLRefererDirective();
     ~ACLRefererDirective() {}
 
-    DirectiveParams *newDirectiveParams(const int lineNo,
+    DirectiveParams *newDirectiveParams(const int rank, const char *filename, const int lineNo,
         const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
 };
@@ -19,7 +19,7 @@ class ACLSrcIpDirective : public RemapDirective {
     ACLSrcIpDirective();
     ~ACLSrcIpDirective() {}
 
-    DirectiveParams *newDirectiveParams(const int lineNo,
+    DirectiveParams *newDirectiveParams(const int rank, const char *filename, const int lineNo,
         const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
 };
@@ -30,7 +30,7 @@ class ACLMethodDirective : public RemapDirective {
     ACLMethodDirective();
     ~ACLMethodDirective() {}
 
-    DirectiveParams *newDirectiveParams(const int lineNo,
+    DirectiveParams *newDirectiveParams(const int rank, const char *filename, const int lineNo,
         const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
 };
@@ -41,7 +41,7 @@ class ACLRedirectUrlDirective : public RemapDirective {
     ACLRedirectUrlDirective();
     ~ACLRedirectUrlDirective() {}
 
-    DirectiveParams *newDirectiveParams(const int lineNo,
+    DirectiveParams *newDirectiveParams(const int rank, const char *filename, const int lineNo,
         const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
 };
@@ -51,7 +51,7 @@ class ACLDirective : public RemapDirective {
     ACLDirective();
     ~ACLDirective() {}
 
-    DirectiveParams *newDirectiveParams(const int lineNo,
+    DirectiveParams *newDirectiveParams(const int rank, const char *filename, const int lineNo,
         const char *lineStr, const int lineLen, DirectiveParams *parent,
         const char *paramStr, const int paramLen, const bool bBlock);
 

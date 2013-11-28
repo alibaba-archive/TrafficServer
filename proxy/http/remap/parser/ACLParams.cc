@@ -16,11 +16,11 @@ static StringIntPair allMethods[ACL_METHOD_MAX_NUM] = {
   {StringValue("all", sizeof("all") - 1), ACL_METHOD_FLAG_ALL}
 };
 
-ACLMethodParams::ACLMethodParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  DirectiveParams(lineNo, lineStr, lineLen, parent, directive,
+ACLMethodParams::ACLMethodParams(const int rank, const char *filename, const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
+    RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock)
 {
 }
@@ -42,9 +42,9 @@ int ACLMethodParams::parse(const char *blockStart, const char *blockEnd)
   StringValue methods[ACL_METHOD_MAX_NUM];
 
   if (_paramCount != 1) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid parameter count: %d! config line no: %d, line: %.*s\n",
-        __LINE__, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
@@ -56,9 +56,9 @@ int ACLMethodParams::parse(const char *blockStart, const char *blockEnd)
   }
 
   if (methodCount == 0) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "expect method! config line no: %d, line: %.*s\n",
-        __LINE__, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return ENOENT;
   }
@@ -68,9 +68,9 @@ int ACLMethodParams::parse(const char *blockStart, const char *blockEnd)
   for (int i=0; i<methodCount; i++) {
     flag = getMethodFlag(&methods[i]);
     if (flag == ACL_METHOD_FLAG_NONE) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "invalid method: %.*s! config line no: %d, line: %.*s\n",
-          __LINE__, methods[i].length, methods[i].str, _lineInfo.lineNo,
+          _lineInfo.filename, methods[i].length, methods[i].str, _lineInfo.lineNo,
           _lineInfo.line.length, _lineInfo.line.str);
       return EINVAL;
     }
@@ -116,11 +116,11 @@ const char *ACLMethodParams::toString(char *buff, int *len)
 }
 
 
-ACLSrcIpParams::ACLSrcIpParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  DirectiveParams(lineNo, lineStr, lineLen, parent, directive,
+ACLSrcIpParams::ACLSrcIpParams(const int rank, const char *filename, const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
+    RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock)
 {
 }
@@ -128,9 +128,9 @@ ACLSrcIpParams::ACLSrcIpParams(const int lineNo, const char *lineStr,
 int ACLSrcIpParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_paramCount != 1) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid parameter count: %d! config line no: %d, line: %.*s\n",
-        __LINE__, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
@@ -146,11 +146,11 @@ const char *ACLSrcIpParams::toString(char *buff, int *len)
 }
 
 
-ACLRedirectUrlParams::ACLRedirectUrlParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock, const bool primaryDirective) :
-  DirectiveParams(lineNo, lineStr, lineLen, parent, directive,
+ACLRedirectUrlParams::ACLRedirectUrlParams(const int rank, const char *filename,
+    const int lineNo, const char *lineStr, const int lineLen,
+    DirectiveParams *parent, RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock, const bool primaryDirective) :
+  DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock)
 {
   _primaryDirective = primaryDirective;
@@ -159,18 +159,18 @@ ACLRedirectUrlParams::ACLRedirectUrlParams(const int lineNo, const char *lineStr
 int ACLRedirectUrlParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_parent->getParent() == NULL) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "acl redirect_url can't in top level! " \
-        "config line no: %d, line: %.*s\n", __LINE__,
+        "config line no: %d, line: %.*s\n", _lineInfo.filename,
         _lineInfo.lineNo, _lineInfo.line.length, _lineInfo.line.str);
     return EINVAL;
   }
 
   int startIndex = _primaryDirective ? 0 : 1;
   if (_paramCount != startIndex + 1) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid parameter count: %d! config line no: %d, line: %.*s\n",
-        __LINE__, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
@@ -193,11 +193,11 @@ const char *ACLRedirectUrlParams::toString(char *buff, int *len)
   return (const char *)buff;
 }
 
-ACLRefererParams::ACLRefererParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  DirectiveParams(lineNo, lineStr, lineLen, parent, directive,
+ACLRefererParams::ACLRefererParams(const int rank, const char *filename, const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
+    RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock)
 {
 }
@@ -205,9 +205,9 @@ ACLRefererParams::ACLRefererParams(const int lineNo, const char *lineStr,
 int ACLRefererParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_paramCount == 0) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid parameter count: %d! config line no: %d, line: %.*s\n",
-        __LINE__, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
@@ -225,19 +225,19 @@ int ACLRefererParams::parse(const char *blockStart, const char *blockEnd)
       _partCount = 0;
     }
     else {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "invalid referer sub keywords: %.*s! " \
           "config line no: %d, line: %.*s\n",
-          __LINE__, sv->length, sv->str, _lineInfo.lineNo,
+          _lineInfo.filename, sv->length, sv->str, _lineInfo.lineNo,
           _lineInfo.line.length, _lineInfo.line.str);
       return EINVAL;
     }
   }
   else {
     if (_paramCount != 2) {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "invalid parameter count: %d! config line no: %d, line: %.*s\n",
-          __LINE__, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
+          _lineInfo.filename, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
           _lineInfo.line.str);
       return EINVAL;
     }
@@ -261,9 +261,9 @@ int ACLRefererParams::parse(const char *blockStart, const char *blockEnd)
       }
 
       if (_partCount == 0) {
-        fprintf(stderr, "file: "__FILE__", line: %d, " \
+        fprintf(stderr, "config file: %s, " \
             "expect referer parameter! config line no: %d, line: %.*s\n",
-            __LINE__, _lineInfo.lineNo, _lineInfo.line.length,
+            _lineInfo.filename, _lineInfo.lineNo, _lineInfo.line.length,
             _lineInfo.line.str);
         return ENOENT;
       }
@@ -278,9 +278,9 @@ int ACLRefererParams::parse(const char *blockStart, const char *blockEnd)
       }
     }
     else {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "invalid referer parameter: %.*s! config line no: %d, line: %.*s\n",
-          __LINE__, sv->length, sv->str, _lineInfo.lineNo,
+          _lineInfo.filename, sv->length, sv->str, _lineInfo.lineNo,
           _lineInfo.line.length, _lineInfo.line.str);
       return EINVAL;
     }
@@ -318,11 +318,11 @@ const char *ACLRefererParams::toString(char *buff, int *len)
 }
 
 
-ACLDefineParams::ACLDefineParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  DirectiveParams(lineNo, lineStr, lineLen, parent, directive,
+ACLDefineParams::ACLDefineParams(const int rank, const char *filename, const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
+    RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock)
 {
 }
@@ -330,25 +330,25 @@ ACLDefineParams::ACLDefineParams(const int lineNo, const char *lineStr,
 int ACLDefineParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_parent->getParent() != NULL) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "acl define must in top level! config line no: %d, line: %.*s\n",
-        __LINE__, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
 
   if (!_bBlock) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid config format! config line no: %d, line: %.*s\n",
-        __LINE__, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
 
   if (_paramCount != 3) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid parameter count: %d! config line no: %d, line: %.*s\n",
-        __LINE__, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
@@ -362,10 +362,10 @@ int ACLDefineParams::parse(const char *blockStart, const char *blockEnd)
     _action = ACL_ACTION_DENY_INT;
   }
   else {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid config format, unkown keywords: \"%.*s\"! " \
         "config line no: %d, line: %.*s\n",
-        __LINE__, sv->length, sv->str, _lineInfo.lineNo,
+        _lineInfo.filename, sv->length, sv->str, _lineInfo.lineNo,
         _lineInfo.line.length, _lineInfo.line.str);
     return EINVAL;
   }
@@ -383,11 +383,11 @@ const char *ACLDefineParams::toString(char *buff, int *len)
 }
 
 
-ACLCheckParams::ACLCheckParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  DirectiveParams(lineNo, lineStr, lineLen, parent, directive,
+ACLCheckParams::ACLCheckParams(const int rank, const char *filename, const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
+    RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock)
 {
 }
@@ -395,25 +395,25 @@ ACLCheckParams::ACLCheckParams(const int lineNo, const char *lineStr,
 int ACLCheckParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_parent->getParent() == NULL) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "acl check can't in top level! config line no: %d, line: %.*s\n",
-        __LINE__, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
 
   if (_bBlock) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid config format! config line no: %d, line: %.*s\n",
-        __LINE__, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
 
   if (_paramCount != 2) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid acl parameter count: %d! config line no: %d, line: %.*s\n",
-        __LINE__, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
@@ -432,11 +432,11 @@ const char *ACLCheckParams::toString(char *buff, int *len)
 }
 
 
-ACLActionParams::ACLActionParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  DirectiveParams(lineNo, lineStr, lineLen, parent, directive,
+ACLActionParams::ACLActionParams(const int rank, const char *filename, const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
+    RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  DirectiveParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock), _action(0), _actionParams(NULL)
 {
 }
@@ -444,17 +444,17 @@ ACLActionParams::ACLActionParams(const int lineNo, const char *lineStr,
 int ACLActionParams::parse(const char *blockStart, const char *blockEnd)
 {
   if (_parent->getParent() == NULL) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "acl %s can't in top level! config line no: %d, line: %.*s\n",
-        __LINE__, this->getActionString(), _lineInfo.lineNo,
+        _lineInfo.filename, this->getActionString(), _lineInfo.lineNo,
         _lineInfo.line.length, _lineInfo.line.str);
     return EINVAL;
   }
 
   if (_bBlock) {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid config format! config line no: %d, line: %.*s\n",
-        __LINE__, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
@@ -465,10 +465,10 @@ int ACLActionParams::parse(const char *blockStart, const char *blockEnd)
       _actionParams = NULL;
     }
     else {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "invalid config format, unkown keywords: \"%.*s\"! " \
           "config line no: %d, line: %.*s\n",
-          __LINE__, sv->length, sv->str, _lineInfo.lineNo,
+          _lineInfo.filename, sv->length, sv->str, _lineInfo.lineNo,
           _lineInfo.line.length, _lineInfo.line.str);
       return EINVAL;
     }
@@ -487,32 +487,32 @@ int ACLActionParams::parse(const char *blockStart, const char *blockEnd)
     if (sv->equals(DIRECTVIE_NAME_ACL_METHOD,
           sizeof(DIRECTVIE_NAME_ACL_METHOD) - 1))
     {
-      _actionParams = new ACLMethodParams(_lineInfo.lineNo,
-          _lineInfo.line.str, _lineInfo.line.length, _parent,
-          ((ACLDirective *)_directive)->getMethodDirective(),
+      _actionParams = new ACLMethodParams(_rank, _lineInfo.filename,
+          _lineInfo.lineNo, _lineInfo.line.str, _lineInfo.line.length,
+          _parent, ((ACLDirective *)_directive)->getMethodDirective(),
           paramStr, paramLen, _bBlock);
     }
     else if (sv->equals(DIRECTVIE_NAME_ACL_SRC_IP,
           sizeof(DIRECTVIE_NAME_ACL_SRC_IP) - 1))
     {
-      _actionParams = new ACLSrcIpParams(_lineInfo.lineNo,
-          _lineInfo.line.str, _lineInfo.line.length, _parent,
-          ((ACLDirective *)_directive)->getSrcIpDirective(),
+      _actionParams = new ACLSrcIpParams(_rank, _lineInfo.filename,
+          _lineInfo.lineNo, _lineInfo.line.str, _lineInfo.line.length,
+          _parent, ((ACLDirective *)_directive)->getSrcIpDirective(),
           paramStr, paramLen, _bBlock);
     }
     else if (sv->equals(DIRECTVIE_NAME_ACL_REFERER,
           sizeof(DIRECTVIE_NAME_ACL_REFERER) - 1))
     {
-      _actionParams = new ACLRefererParams(_lineInfo.lineNo,
-          _lineInfo.line.str, _lineInfo.line.length, _parent,
-          ((ACLDirective *)_directive)->getRefererDirective(),
+      _actionParams = new ACLRefererParams(_rank, _lineInfo.filename,
+          _lineInfo.lineNo, _lineInfo.line.str, _lineInfo.line.length,
+          _parent, ((ACLDirective *)_directive)->getRefererDirective(),
           paramStr, paramLen, _bBlock);
     }
     else {
-      fprintf(stderr, "file: "__FILE__", line: %d, " \
+      fprintf(stderr, "config file: %s, " \
           "invalid config format, unkown keywords: \"%.*s\"! " \
           "config line no: %d, line: %.*s\n",
-          __LINE__, sv->length, sv->str, _lineInfo.lineNo,
+          _lineInfo.filename, sv->length, sv->str, _lineInfo.lineNo,
           _lineInfo.line.length, _lineInfo.line.str);
       return EINVAL;
     }
@@ -521,9 +521,9 @@ int ACLActionParams::parse(const char *blockStart, const char *blockEnd)
     return _actionParams->parse(blockStart, blockEnd);
   }
   else {
-    fprintf(stderr, "file: "__FILE__", line: %d, " \
+    fprintf(stderr, "config file: %s, " \
         "invalid acl parameter count: %d! config line no: %d, line: %.*s\n",
-        __LINE__, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
+        _lineInfo.filename, _paramCount, _lineInfo.lineNo, _lineInfo.line.length,
         _lineInfo.line.str);
     return EINVAL;
   }
@@ -548,24 +548,24 @@ const char *ACLActionParams::toString(char *buff, int *len)
 }
 
 
-ACLAllowParams::ACLAllowParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  ACLActionParams(lineNo, lineStr, lineLen, parent, directive,
+ACLAllowParams::ACLAllowParams(const int rank, const char *filename, const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
+    RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  ACLActionParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock)
 {
   _action = ACL_ACTION_ALLOW_INT;
 }
 
 
-ACLDenyParams::ACLDenyParams(const int lineNo, const char *lineStr,
-        const int lineLen, DirectiveParams *parent,
-        RemapDirective *directive, const char *paramStr,
-        const int paramLen, const bool bBlock) :
-  ACLActionParams(lineNo, lineStr, lineLen, parent, directive,
+ACLDenyParams::ACLDenyParams(const int rank, const char *filename, const int lineNo,
+    const char *lineStr, const int lineLen, DirectiveParams *parent,
+    RemapDirective *directive, const char *paramStr,
+    const int paramLen, const bool bBlock) :
+  ACLActionParams(rank, filename, lineNo, lineStr, lineLen, parent, directive,
       paramStr, paramLen, bBlock)
 {
   _action = ACL_ACTION_DENY_INT;
 }
-
+ 
