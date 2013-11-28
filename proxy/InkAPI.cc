@@ -2109,6 +2109,18 @@ TSUrlStringGet(TSMBuffer bufp, TSMLoc obj, int *length)
   return url_string_get(url_impl, NULL, length, NULL);
 }
 
+char *
+TSUrlStringGetBuf(TSMBuffer bufp, TSMLoc obj, char *buff, int buf_size, int* length)
+{
+  sdk_assert(sdk_sanity_check_mbuffer(bufp) == TS_SUCCESS);
+  sdk_assert(sdk_sanity_check_url_handle(obj) == TS_SUCCESS);
+  sdk_assert(sdk_sanity_check_null_ptr((void*)buff) == TS_SUCCESS);
+  sdk_assert(sdk_sanity_check_null_ptr((void*)length) == TS_SUCCESS);
+
+  URLImpl *url_impl = (URLImpl *) obj;
+  return url_string_get_buf(url_impl, buff, buf_size, length);
+}
+
 typedef const char *(URL::*URLPartGetF) (int *length);
 typedef void (URL::*URLPartSetF) (const char *value, int length);
 

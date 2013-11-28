@@ -1376,6 +1376,25 @@ extern "C"
   tsapi char* TSUrlStringGet(TSMBuffer bufp, TSMLoc offset, int* length);
 
   /**
+      Constructs a string representation of the URL located at url_loc
+      within bufp. TSUrlStringGet() stores the length of the allocated
+      string in the parameter length. This is the same length that
+      TSUrlLengthGet() returns. The returned string is allocated by a
+      call to TSmalloc(). It should be freed by a call to TSfree().
+      The length parameter must present, providing storage for the URL
+      string length value.
+
+      @param bufp marshal buffer containing the URL you want to get.
+      @param offset location of the URL within bufp.
+      @param buff the buffer to store the url string
+      @param buf_size the buffer size
+      @param length string length of the URL.
+      @return The URL as a string.
+
+   */
+  tsapi char* TSUrlStringGetBuf(TSMBuffer bufp, TSMLoc offset, char *buff, int buf_size, int* length);
+
+  /**
       Retrieves the scheme portion of the URL located at url_loc within
       the marshal buffer bufp. TSUrlSchemeGet() places the length of
       the string in the length argument. If the length is NULL then no
