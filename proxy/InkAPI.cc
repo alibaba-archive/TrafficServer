@@ -8066,6 +8066,7 @@ TSHttpConfigParamSet(OverridableHttpConfigParams *overridableHttpConfig,
   switch (dataType) {
     case OVERRIDABLE_TYPE_BYTE:
       *(static_cast<TSMgmtByte *>(dest)) = static_cast<TSMgmtByte>(atoi(value));
+      break;
     case OVERRIDABLE_TYPE_INT:
       *(static_cast<TSMgmtInt *>(dest)) = static_cast<TSMgmtInt>(strtoll(value, NULL, 10));
       break;
@@ -8130,8 +8131,7 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
   case 36:
     if (!strncmp(name, "proxy.config.net.sock_packet_tos_out", length))
       cnf = TS_CONFIG_NET_SOCK_PACKET_TOS_OUT;
-    break;
-    if (!strncmp(name, "proxy.config.http.cache.force_in_ram", length))
+    else if (!strncmp(name, "proxy.config.http.cache.force_in_ram", length))
       cnf = TS_CONFIG_HTTP_CACHE_FORCE_IN_RAM;
     break;
 
