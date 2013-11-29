@@ -34,20 +34,7 @@ static Allocator g_session_allocator("SessionEntry", sizeof(SessionEntry), 1024)
 static MachineSessions *all_sessions;  //[src ip % MAX_MACHINE_COUNT]
 static pthread_mutex_t session_lock;
 
-struct SessionRecords {
-  RecRecord * create_total_count;   //create session total count
-  RecRecord * create_success_count; //create session success count
-  RecRecord * create_retry_times;   //create session retry times
-  RecRecord * close_total_count;    //close session count
-  RecRecord * close_success_count;  //close session success count
-  RecRecord * session_miss_count;     //session miss count
-  RecRecord * session_occupied_count; //session occupied count
-};
-
-static SessionRecords server_session_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
-static SessionRecords client_session_records = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
-
-static void init_session_stat(SessionRecords *pSessionRecords, const char *prefix);
+static void init_session_stat(const char *prefix);
 
 inline static int get_session_machine_index(const unsigned int ip)
 {
@@ -201,8 +188,8 @@ int session_init()
   Debug(CLUSTER_DEBUG_TAG, "g_my_machine_id: %d, g_my_machine_index: %u",
       g_my_machine_id, g_my_machine_index);
 
-  init_session_stat(&server_session_records, "proxy.process.cluster.server_session");
-  init_session_stat(&client_session_records, "proxy.process.cluster.client_session");
+  init_session_stat("proxy.process.cluster.server_session");
+  init_session_stat("proxy.process.cluster.client_session");
 
 	return 0;
 }
@@ -941,81 +928,80 @@ int push_in_message(const SessionId session,
   return 0;
 }
 
-static void set_session_stat(SessionRecords *pSessionRecords,
-    const SessionStat *pNewtat, SessionStat *pOldStat)
+static void set_session_stat(const char *prefix, const SessionStat *pNewtat,
+    SessionStat *pOldStat)
 {
+  char name[256];
+  RecData data;
   if (pNewtat->create_total_count != pOldStat->create_total_count) {
     pOldStat->create_total_count = pNewtat->create_total_count;
-    RecDataSetFromInk64(RECD_INT, &pSessionRecords->create_total_count->data,
-        pNewtat->create_total_count);
+    sprintf(name, "%s.create_total_count", prefix);
+    data.rec_int = pNewtat->create_total_count;
+    RecSetRecord(RECT_PROCESS, name, RECD_INT, &data, NULL);
   }
   if (pNewtat->create_success_count != pOldStat->create_success_count) {
     pOldStat->create_success_count = pNewtat->create_success_count;
-    RecDataSetFromInk64(RECD_INT, &pSessionRecords->create_success_count->data,
-        pNewtat->create_success_count);
+    sprintf(name, "%s.create_success_count", prefix);
+    data.rec_int = pNewtat->create_success_count;
+    RecSetRecord(RECT_PROCESS, name, RECD_INT, &data, NULL);
   }
   if (pNewtat->create_retry_times != pOldStat->create_retry_times) {
     pOldStat->create_retry_times = pNewtat->create_retry_times;
-    RecDataSetFromInk64(RECD_INT, &pSessionRecords->create_retry_times->data,
-        pNewtat->create_retry_times);
+    sprintf(name, "%s.create_retry_times", prefix);
+    data.rec_int = pNewtat->create_retry_times;
+    RecSetRecord(RECT_PROCESS, name, RECD_INT, &data, NULL);
   }
   if (pNewtat->close_total_count != pOldStat->close_total_count) {
     pOldStat->close_total_count = pNewtat->close_total_count;
-    RecDataSetFromInk64(RECD_INT, &pSessionRecords->close_total_count->data,
-        pNewtat->close_total_count);
+    sprintf(name, "%s.close_total_count", prefix);
+    data.rec_int = pNewtat->close_total_count;
+    RecSetRecord(RECT_PROCESS, name, RECD_INT, &data, NULL);
   }
   if (pNewtat->close_success_count != pOldStat->close_success_count) {
     pOldStat->close_success_count = pNewtat->close_success_count;
-    RecDataSetFromInk64(RECD_INT, &pSessionRecords->close_success_count->data,
-        pNewtat->close_success_count);
+    sprintf(name, "%s.close_success_count", prefix);
+    data.rec_int = pNewtat->close_success_count;
+    RecSetRecord(RECT_PROCESS, name, RECD_INT, &data, NULL);
   }
   if (pNewtat->session_miss_count != pOldStat->session_miss_count) {
     pOldStat->session_miss_count = pNewtat->session_miss_count;
-    RecDataSetFromInk64(RECD_INT, &pSessionRecords->session_miss_count->data,
-        pNewtat->session_miss_count);
+    sprintf(name, "%s.miss_count", prefix);
+    data.rec_int = pNewtat->session_miss_count;
+    RecSetRecord(RECT_PROCESS, name, RECD_INT, &data, NULL);
   }
   if (pNewtat->session_occupied_count != pOldStat->session_occupied_count) {
     pOldStat->session_occupied_count = pNewtat->session_occupied_count;
-    RecDataSetFromInk64(RECD_INT, &pSessionRecords->session_occupied_count->data,
-        pNewtat->session_occupied_count);
+    sprintf(name, "%s.occupied_count", prefix);
+    data.rec_int = pNewtat->session_occupied_count;
+    RecSetRecord(RECT_PROCESS, name, RECD_INT, &data, NULL);
   }
 }
 
-static void init_session_stat(SessionRecords *pSessionRecords, const char *prefix)
+static void init_session_stat(const char *prefix)
 {
   char name[256];
-  RecData data_default;
-  memset(&data_default, 0, sizeof(RecData));
 
   sprintf(name, "%s.create_total_count", prefix);
-  pSessionRecords->create_total_count = RecRegisterStat(RECT_PROCESS,
-      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, name, 0, RECP_NON_PERSISTENT);
 
   sprintf(name, "%s.create_success_count", prefix);
-  pSessionRecords->create_success_count = RecRegisterStat(RECT_PROCESS,
-      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, name, 0, RECP_NON_PERSISTENT);
 
   sprintf(name, "%s.create_retry_times", prefix);
-  pSessionRecords->create_retry_times = RecRegisterStat(RECT_PROCESS,
-      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, name, 0, RECP_NON_PERSISTENT);
 
   sprintf(name, "%s.close_total_count", prefix);
-  pSessionRecords->close_total_count = RecRegisterStat(RECT_PROCESS,
-      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, name, 0, RECP_NON_PERSISTENT);
 
   sprintf(name, "%s.close_success_count", prefix);
-  pSessionRecords->close_success_count = RecRegisterStat(RECT_PROCESS,
-      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, name, 0, RECP_NON_PERSISTENT);
 
   sprintf(name, "%s.miss_count", prefix);
-  pSessionRecords->session_miss_count = RecRegisterStat(RECT_PROCESS,
-      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, name, 0, RECP_NON_PERSISTENT);
 
   sprintf(name, "%s.occupied_count", prefix);
-  pSessionRecords->session_occupied_count = RecRegisterStat(RECT_PROCESS,
-      name, RECD_INT, data_default, RECP_NON_PERSISTENT);
+  RecRegisterStatInt(RECT_PROCESS, name, 0, RECP_NON_PERSISTENT);
 }
-
 
 void log_session_stat()
 {
@@ -1063,9 +1049,10 @@ void log_session_stat()
 
   pClientSessions = all_sessions + g_my_machine_id;
 
-  set_session_stat(&server_session_records, &serverSessionStat, &serverOldStat);
-  set_session_stat(&client_session_records, (const SessionStat *)
-      &pClientSessions->session_stat, &clientOldStat);
+  set_session_stat("proxy.process.cluster.server_session",
+      &serverSessionStat, &serverOldStat);
+  set_session_stat("proxy.process.cluster.client_session",
+      (const SessionStat *)&pClientSessions->session_stat, &clientOldStat);
 }
 
 #ifdef TRIGGER_STAT_FLAG
