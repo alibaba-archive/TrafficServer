@@ -47,6 +47,8 @@ ssl_netvc_cast(int event, void * edata)
     ptr.vc = static_cast<NetVConnection *>(edata);
     return dynamic_cast<SSLNetVConnection *>(ptr.vc);
   case VC_EVENT_READ_COMPLETE:
+  case VC_EVENT_INACTIVITY_TIMEOUT:
+  case VC_EVENT_ERROR:
     ptr.vio = static_cast<VIO *>(edata);
     return dynamic_cast<SSLNetVConnection *>(ptr.vio->vc_server);
   default:
@@ -88,6 +90,9 @@ SSLNextProtocolAccept::mainEvent(int event, void * edata)
       netvc->do_io(VIO::CLOSE);
     }
     return EVENT_CONT;
+  case VC_EVENT_INACTIVITY_TIMEOUT:
+  case VC_EVENT_ERROR:
+    netvc->do_io(VIO::CLOSE);
   default:
     return EVENT_DONE;
   }
