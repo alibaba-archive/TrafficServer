@@ -127,6 +127,7 @@ int EventPoll::poll()
 #elif TS_USE_KQUEUE
   return kevent(_poll_fd, NULL, 0, _events, _size, &_timeout);
 #elif TS_USE_PORT
+  int result;
   int retval;
   unsigned nget = 1;
   if((retval = port_getn(_poll_fd, _events,
