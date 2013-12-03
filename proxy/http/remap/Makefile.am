@@ -104,3 +104,21 @@ libhttp_remap_a_SOURCES = \
 	parser/IncludeParams.h   \
 	parser/IncludeParams.cc
 
+if STATIC_LIBTS
+   which_libts = $(top_builddir)/lib/ts/.libs/libtsutil.a
+else
+   which_libts = $(top_builddir)/lib/ts/libtsutil.la
+endif
+
+bin_PROGRAMS = \
+  ts_remap_check
+
+ts_remap_check_SOURCES = \
+  ts_remap_check.cc
+
+ts_remap_check_LDFLAGS = @EXTRA_CXX_LDFLAGS@ @LIBTOOL_LINK_FLAGS@
+ts_remap_check_LDADD = \
+  libhttp_remap.a \
+  $(which_libts) \
+  @LIBPCRE@
+

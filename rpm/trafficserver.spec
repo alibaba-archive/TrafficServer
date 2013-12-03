@@ -95,6 +95,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(0644, root, root) /usr/share/man/man1/*
 %attr(0644, root, root) /usr/share/doc/trafficserver/trafficshell/*
 %attr(0755,root,root) /usr/bin/traffic*
+%attr(0755,root,root) /usr/bin/ts_remap_check
 %attr(0755,root,root) %dir %{_libdir}/trafficserver
 %attr(0755,root,root) %dir %{_libdir}/trafficserver/plugins
 %attr(0755,root,root) %{_libdir}/trafficserver/*.so.*
