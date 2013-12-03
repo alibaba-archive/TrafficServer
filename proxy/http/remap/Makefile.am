@@ -38,8 +38,6 @@ AM_CPPFLAGS = \
 noinst_LIBRARIES = libhttp_remap.a
 
 libhttp_remap_a_SOURCES = \
-  AclFiltering.cc \
-  AclFiltering.h  \
   RemapPluginInfo.cc \
   RemapPluginInfo.h  \
   RemapPlugins.cc \
