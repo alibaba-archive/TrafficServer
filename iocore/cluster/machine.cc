@@ -56,7 +56,7 @@ ClusterMachine *add_machine(const unsigned int ip, const int port)
   int result;
   char *ip_addr;
 
-  memset(&machine, 0, sizeof(machine));
+  memset((void *)&machine, 0, sizeof(machine));
   in.s_addr = ip;
   ip_addr = inet_ntoa(in);
   machine.hostname_len = strlen(ip_addr);
@@ -84,7 +84,7 @@ int init_machines()
         "malloc %d bytes fail!", __LINE__, bytes);
     return ENOMEM;
   }
-  memset(cluster_machines, 0, bytes);
+  memset((void *)cluster_machines, 0, bytes);
 
   bytes = sizeof(ClusterMachine *) * MAX_MACHINE_COUNT;
   sorted_machines = (ClusterMachine **)malloc(bytes);
@@ -93,7 +93,7 @@ int init_machines()
         "malloc %d bytes fail!", __LINE__, bytes);
     return ENOMEM;
   }
-  memset(sorted_machines, 0, bytes);
+  memset((void *)sorted_machines, 0, bytes);
 
   return 0;
 }
@@ -184,7 +184,7 @@ ClusterMachine *get_machine(const unsigned int ip, const int port)
   ClusterMachine *target;
   ClusterMachine **found;
 
-  memset(&machine, 0, sizeof(machine));
+  memset((void *)&machine, 0, sizeof(machine));
   machine.ip = ip;
   machine.cluster_port = port;
   target = &machine;
