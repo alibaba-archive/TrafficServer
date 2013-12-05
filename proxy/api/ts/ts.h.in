@@ -2630,6 +2630,7 @@ extern "C"
   );
 
   tsapi TSAction TSNetAccept(TSCont contp, int port, int domain, int accept_threads);
+  tsapi TSAction TSNetAcceptFrequent(TSCont contp, int port, int domain, int accept_threads, int frequent);
 
   /**
     Listen on all SSL ports for connections for the specified protocol name.

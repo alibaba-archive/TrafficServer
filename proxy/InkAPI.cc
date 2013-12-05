@@ -6502,6 +6502,29 @@ TSNetAccept(TSCont contp, int port, int domain, int accept_threads)
   return (TSAction)netProcessor.accept(i, opt);
 }
 
+TSAction
+TSNetAcceptFrequent(TSCont contp, int port, int domain, int accept_threads, int frequent)
+{
+  NetProcessor::AcceptOptions opt;
+
+  sdk_assert(sdk_sanity_check_continuation(contp) == TS_SUCCESS);
+  sdk_assert(port > 0);
+  sdk_assert(accept_threads >= -1);
+
+  // TODO: Does this imply that only one "accept thread" could be
+  // doing an accept at any time?
+  FORCE_PLUGIN_MUTEX(contp);
+
+  // If it's not IPv6, force to IPv4.
+  opt.ip_family = domain == AF_INET6 ? AF_INET6 : AF_INET;
+  opt.accept_threads = accept_threads;
+  opt.local_port = port;
+  opt.frequent_accept = (frequent != 0);
+
+  INKContInternal *i = (INKContInternal *) contp;
+  return (TSAction)netProcessor.accept(i, opt);
+}
+
 /* From proxy/http/HttpProxyServerMain.c: */
 extern bool ssl_register_protocol(const char *, Continuation *);
 extern bool ssl_unregister_protocol(const char *, Continuation *);
