@@ -977,6 +977,8 @@ HttpConfigParams::HttpConfigParams()
     server_transparency_enabled(0),
     reverse_proxy_enabled(0),
     url_remap_required(0),
+    reverse_proxy_no_host_redirect(NULL),
+    reverse_proxy_no_host_redirect_len(0),
     negative_revalidating_enabled(0),
     negative_revalidating_lifetime(0),
     record_cop_page(0),
@@ -1016,6 +1018,7 @@ HttpConfigParams::~HttpConfigParams()
   ats_free(reverse_proxy_no_host_redirect);
   ats_free(url_expansions);
   ats_free(oride.proxy_response_server_string);
+  oride.proxy_response_server_string = NULL;
 
   if (connect_ports) {
     delete connect_ports;

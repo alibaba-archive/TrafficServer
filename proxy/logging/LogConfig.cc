@@ -1814,14 +1814,14 @@ LogConfig::read_xml_log_config(int from_memory)
   } else {
     int filedes[2];
     int nbytes = sizeof(xml_config_buffer);
-    const size_t ptr_size = nbytes + 20;
-    char *ptr = (char *)ats_malloc(ptr_size);
 
     if (pipe(filedes) != 0) {
       Note("xml parsing: Error in Opening a pipe\n");
       return;
     }
 
+    const size_t ptr_size = nbytes + 20;
+    char *ptr = (char *)ats_malloc(ptr_size);
     snprintf(ptr, ptr_size, xml_config_buffer, search_rolling_interval_sec, search_rolling_interval_sec);
     nbytes = strlen(ptr);
     if (write(filedes[1], ptr, nbytes) != nbytes) {

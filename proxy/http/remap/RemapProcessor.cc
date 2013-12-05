@@ -190,8 +190,7 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
   }
 
   // Check referer filtering rules
-  if (map->needCheckReferer())
-  {
+  if (map->needCheckReferer()) {
     const char *referer_str;
     ACLContext aclContext;
 
@@ -303,9 +302,15 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
             }
           }
 
+          if (*redirect_url != NULL) {
+            ats_free(*redirect_url);
+          }
           *redirect_url = ats_strdup(tmp_redirect_buf);
         }
       } else {
+        if (*redirect_url != NULL) {
+          ats_free(*redirect_url);
+        }
         *redirect_url = ats_strdup(rewrite_table->http_default_redirect_url);
       }
 

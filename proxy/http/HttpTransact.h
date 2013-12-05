@@ -1255,6 +1255,9 @@ public:
       url_map.clear();
       arena.reset();
       pristine_url.clear();
+      if (remap_redirect != NULL) {
+        ats_free(remap_redirect);
+      }
       return;
     }
 

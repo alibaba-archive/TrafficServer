@@ -78,8 +78,12 @@ RemapPlugins::run_plugin(remap_plugin_info* plugin)
     plugin_retcode = TSREMAP_NO_REMAP;
 
   // First step after plugin remap must be "redirect url" check
-  if ((TSREMAP_DID_REMAP == plugin_retcode || TSREMAP_DID_REMAP_STOP == plugin_retcode) && rri.redirect)
+  if ((TSREMAP_DID_REMAP == plugin_retcode || TSREMAP_DID_REMAP_STOP == plugin_retcode) && rri.redirect) {
+    if (_s->remap_redirect != NULL) {
+      ats_free(_s->remap_redirect);
+    }
     _s->remap_redirect = _request_url->string_get(NULL);
+  }
 
   return plugin_retcode;
 }
@@ -127,8 +131,9 @@ RemapPlugins::run_single_remap()
     return 1;
   }
 
-  if (_s->remap_redirect)     //if redirect was set, we need to use that.
+  if (_s->remap_redirect) {    //if redirect was set, we need to use that.
     return 1;
+  }
 
   // skip the !plugin_modified_* stuff if we are on our 2nd plugin (or greater) and there's no more plugins
   if (_cur > 0 && (_cur + 1) >= map->plugin_count)
@@ -182,8 +187,8 @@ RemapPlugins::run_single_remap()
         redirect_url.host_set(rewrite_table->ts_name, strlen(rewrite_table->ts_name));
       }
 
-      if ((_s->remap_redirect = redirect_url.string_get(NULL)) != NULL) {
-        retcode = strlen(_s->remap_redirect);
+      ats_free(_s->remap_redirect);
+      if ((_s->remap_redirect = redirect_url.string_get(NULL, &retcode)) != NULL) {
       }
       Debug("url_rewrite", "Redirected %.*s to %.*s", requestPathLen, requestPath, retcode, _s->remap_redirect);
       redirect_url.destroy();

@@ -894,6 +894,7 @@ HttpTransact::EndRemapRequest(State* s)
     }
     s->hdr_info.client_response.value_set(MIME_FIELD_LOCATION, MIME_LEN_LOCATION, s->remap_redirect, strlen(s->remap_redirect));
     ats_free(s->remap_redirect);
+    s->remap_redirect = NULL;
     s->reverse_proxy = false;
     goto done;
   }
