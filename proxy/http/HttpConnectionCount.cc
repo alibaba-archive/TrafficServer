@@ -21,8 +21,10 @@
   limitations under the License.
  */
 
+#include "I_EventSystem.h"
 #include "HttpConnectionCount.h"
 
+#define CLEAR_INTERVAL (100 * HRTIME_MSECOND)
 
 ConnectionCount ConnectionCount::_connectionCount;
 
@@ -32,14 +34,57 @@ ConnectionCount::ConnectionCount() : _hostCount(0)
   HostHashBucket *pBucket;
   HostHashBucket *pEnd;
 
-  bytes = sizeof(HostHashBucket) * IP_HASH_TABLE_SIZE;
+  bytes = sizeof(HostHashBucket) * HOST_HASH_TABLE_SIZE;
   _hostTable = (HostHashBucket *)ats_malloc(bytes);
   memset(_hostTable, 0, bytes);
 
-  pEnd = _hostTable + IP_HASH_TABLE_SIZE;
+  pEnd = _hostTable + HOST_HASH_TABLE_SIZE;
   for (pBucket=_hostTable; pBucket<pEnd; pBucket++) {
     ink_mutex_init(&pBucket->_mutex, "ConnectionCountMutex");
   }
+}
+
+int ConnectionCount::clear(HostHashBucket *pBucket)
+{
+  HostEntry *newHosts;
+  HostEntry *srcEnd;
+  HostEntry *pSrcHost;
+  HostEntry *pDestHost;
+  HostEntry *tmp;
+  int oldCount;
+  int clearCount;
+
+  pBucket->last_clear_time = ink_get_hrtime();
+  newHosts = (HostEntry *)ats_malloc(sizeof(HostEntry) *
+      pBucket->_allocSize);
+  srcEnd = pBucket->_hosts + pBucket->_count;
+  pDestHost = newHosts;
+  for (pSrcHost=pBucket->_hosts; pSrcHost<srcEnd; pSrcHost++) {
+    if (pSrcHost->_count > 0) {  //should keep
+      pDestHost->_hostname = pSrcHost->_hostname;
+      pDestHost->_length = pSrcHost->_length;
+      pDestHost->_count = pSrcHost->_count;
+      pDestHost++;
+    }
+    else {  //should release
+      pSrcHost->_length = 0;
+      ats_free(pSrcHost->_hostname);
+      pSrcHost->_hostname = NULL;
+    }
+  }
+
+  oldCount = pBucket->_count;
+  tmp = pBucket->_hosts;
+  pBucket->_count = pDestHost - newHosts;
+  pBucket->_hosts = newHosts;
+  ats_free(tmp);
+  clearCount = oldCount - pBucket->_count;
+  if (clearCount == 0) {
+    return 0;
+  }
+
+  ink_atomic_increment64(&_hostCount, -1 * clearCount);
+  return clearCount;
 }
 
 int ConnectionCount::getCount(const char *hostname, const int host_len)
@@ -48,7 +93,7 @@ int ConnectionCount::getCount(const char *hostname, const int host_len)
   HostEntry *found;
   int count;
 
-  pBucket = _hostTable + time33Hash(hostname, host_len) % IP_HASH_TABLE_SIZE;
+  pBucket = _hostTable + time33Hash(hostname, host_len) % HOST_HASH_TABLE_SIZE;
   ink_mutex_acquire(&pBucket->_mutex);
   found = find(pBucket, hostname, host_len);
   count = found != NULL ? found->_count : 0;
@@ -61,23 +106,43 @@ int ConnectionCount::incrementCount(const char *hostname, const int host_len, co
   HostHashBucket *pBucket;
   HostEntry *found;
   int count;
+  int allocSize;
 
-  pBucket = _hostTable + time33Hash(hostname, host_len) % IP_HASH_TABLE_SIZE;
+  pBucket = _hostTable + time33Hash(hostname, host_len) % HOST_HASH_TABLE_SIZE;
   ink_mutex_acquire(&pBucket->_mutex);
   found = find(pBucket, hostname, host_len);
   if (found != NULL) {
     found->_count += delta;
   }
   else {
+    if (delta < 0) {
+      ink_mutex_release(&pBucket->_mutex);
+      return 0;
+    }
+
     if (pBucket->_allocSize <= pBucket->_count) {
       if (pBucket->_allocSize == 0) {
-        pBucket->_allocSize = 8;
+        allocSize = 8;  //must be power of 2
       }
       else {
-        pBucket->_allocSize *= 2;
+        allocSize = pBucket->_allocSize * 2;
       }
-      pBucket->_hosts = (HostEntry *)ats_realloc(pBucket->_hosts,
-          sizeof(HostEntry) * pBucket->_allocSize);
+
+      if (allocSize <= MAX_HOST_COUNT_PER_BUCKET) {
+        pBucket->_allocSize = allocSize;
+        pBucket->_hosts = (HostEntry *)ats_realloc(pBucket->_hosts,
+            sizeof(HostEntry) * pBucket->_allocSize);
+      }
+      else if (ink_get_hrtime() - pBucket->last_clear_time <= CLEAR_INTERVAL) {
+        ink_mutex_release(&pBucket->_mutex);
+        return INT_MAX;
+      }
+      else  {
+        if (clear(pBucket) == 0) {
+          ink_mutex_release(&pBucket->_mutex);
+          return INT_MAX;
+        }
+      }
     }
 
     found = pBucket->_hosts + pBucket->_count;
@@ -109,7 +174,7 @@ void ConnectionCount::hostTableStat(int &hostCount, int &min, int &max, double &
   usedCount = 0;
   min = -1;
   max = 0;
-  pEnd = _hostTable + IP_HASH_TABLE_SIZE;
+  pEnd = _hostTable + HOST_HASH_TABLE_SIZE;
   for (pBucket=_hostTable; pBucket<pEnd; pBucket++) {
     if (pBucket->_count > 0) {
       usedCount++;

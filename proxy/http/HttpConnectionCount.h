@@ -23,11 +23,11 @@
 
 //
 #include "libts.h"
-#include "Map.h"
 
 #ifndef _HTTP_CONNECTION_COUNT_H_
 
-#define IP_HASH_TABLE_SIZE  1361
+#define HOST_HASH_TABLE_SIZE  1361
+#define MAX_HOST_COUNT_PER_BUCKET  256  //must be power of 2
 
 /**
  * Singleton class to keep track of the number of connections per host
@@ -66,6 +66,7 @@ class ConnectionCount
     HostEntry *_hosts; //hosts items
     int _allocSize;    //alloc count
     int _count;        //real count
+    int64_t last_clear_time; //last time to clear zero count _hosts
   };
 
 public:
@@ -151,6 +152,7 @@ private:
   // Hide the constructor and copy constructor
   ConnectionCount();
   ConnectionCount(const ConnectionCount & x) { NOWARN_UNUSED(x); }
+  int clear(HostHashBucket *pBucket);
 
   static ConnectionCount _connectionCount;
   volatile int64_t _hostCount;
