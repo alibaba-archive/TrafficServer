@@ -6708,6 +6708,7 @@ HttpSM::set_next_state()
         break;
       } else  if (t_state.http_config_param->use_client_target_addr
         && !t_state.url_remap_success
+        && t_state.parent_result.r != PARENT_SPECIFIED
         && t_state.client_info.is_transparent
         && ats_is_ip(addr = t_state.state_machine->ua_session->get_netvc()->get_local_addr())
       ) {
