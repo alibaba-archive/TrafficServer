@@ -41,7 +41,7 @@
 static const int max_chunked_ahead_bytes = 1 << 15;
 static const int max_chunked_ahead_blocks = 128;
 static const int min_block_transfer_bytes = 256;
-static const int max_chunk_size = 4096;
+static const int max_chunk_size = 1 << 14;
 static char max_chunk_buf[10];
 static int max_chunk_buf_len;
 
@@ -148,14 +148,15 @@ ChunkedHandler::init(IOBufferReader * buffer_in, HttpTunnelProducer * p)
   if (p->do_chunking) {
     dechunked_reader = buffer_in->mbuf->clone_reader(buffer_in);
     dechunked_reader->mbuf->water_mark = min_block_transfer_bytes;
-    chunked_buffer = new_MIOBuffer(MAX_IOBUFFER_SIZE);
+    chunked_buffer = new_MIOBuffer(BUFFER_SIZE_INDEX_4K);
     chunked_size = 0;
   } else {
     ink_assert(p->do_dechunking || p->do_chunked_passthru);
     chunked_reader = buffer_in->mbuf->clone_reader(buffer_in);
 
     if (p->do_dechunking) {
-      dechunked_buffer = new_MIOBuffer(MAX_IOBUFFER_SIZE);
+      // This is the min_block_transfer_bytes value.
+      dechunked_buffer = new_MIOBuffer(BUFFER_SIZE_INDEX_256);
       dechunked_size = 0;
     }
   }
