@@ -178,7 +178,7 @@ start_HttpProxyServer(int accept_threads)
   REC_ReadConfigInteger(opt.send_bufsize, "proxy.config.net.sock_send_buffer_size_in");
   REC_ReadConfigInteger(opt.packet_mark, "proxy.config.net.sock_packet_mark_in");
   REC_ReadConfigInteger(opt.packet_tos, "proxy.config.net.sock_packet_tos_in");
-  SslConfigParams *sslParam = sslTerminationConfig.acquire();
+  SSLConfig::scoped_config sslParam;
   
   for ( int i = 0 , n = HttpProxyPort::global().length() ; i < n ; ++i ) {
     HttpProxyPort& p = HttpProxyPort::global()[i];
@@ -224,7 +224,7 @@ start_HttpProxyServer(int accept_threads)
     }
   }
 
-  sslTerminationConfig.release(sslParam);
+  SSLConfig::release(sslParam);
 
 #ifdef DEBUG
   if (diags->on("http_dump")) {
