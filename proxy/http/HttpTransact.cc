@@ -8931,6 +8931,8 @@ HttpTransact::update_size_and_time_stats(State* s, ink_hrtime total_time, ink_hr
     HTTP_SUM_TRANS_STAT(http_tcp_ims_miss_origin_server_bytes_stat, origin_server_bytes);
     break;
   case SQUID_LOG_ERR_CLIENT_ABORT:
+  case SQUID_LOG_ERR_CLIENT_ABORT_HIT:
+  case SQUID_LOG_ERR_CLIENT_ABORT_MISS:
   case SQUID_LOG_ERR_SPIDER_MEMBER_ABORTED:
     HTTP_INCREMENT_TRANS_STAT(http_err_client_abort_count_stat);
     HTTP_SUM_TRANS_STAT(http_err_client_abort_user_agent_bytes_stat, user_agent_bytes);

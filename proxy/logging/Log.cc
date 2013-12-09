@@ -651,6 +651,8 @@ Log::init_fields()
                        SQUID_LOG_ERR_NO_CLIENTS_BIG_OBJ, "ERR_NO_CLIENTS_BIG_OBJ",
                        SQUID_LOG_ERR_READ_ERROR, "ERR_READ_ERROR",
                        SQUID_LOG_ERR_CLIENT_ABORT, "ERR_CLIENT_ABORT",
+                       SQUID_LOG_ERR_CLIENT_ABORT_HIT, "ERR_CLIENT_ABORT_HIT",
+                       SQUID_LOG_ERR_CLIENT_ABORT_MISS, "ERR_CLIENT_ABORT_MISS",
                        SQUID_LOG_ERR_CONNECT_FAIL, "ERR_CONNECT_FAIL",
                        SQUID_LOG_ERR_INVALID_REQ, "ERR_INVALID_REQ",
                        SQUID_LOG_ERR_UNSUP_REQ, "ERR_UNSUP_REQ",

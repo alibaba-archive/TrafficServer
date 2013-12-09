@@ -4678,7 +4678,15 @@ HttpSM::set_ua_abort(HttpTransact::AbortState_t ua_abort, int event)
   case HttpTransact::MAYBE_ABORTED:
     t_state.squid_codes.wuts_proxy_status_code =
       log_spider_codes ? WUTS_PROXY_STATUS_SPIDER_MEMBER_ABORTED : WUTS_PROXY_STATUS_CLIENT_ABORT;
-    t_state.squid_codes.log_code = log_spider_codes ? SQUID_LOG_ERR_SPIDER_MEMBER_ABORTED : SQUID_LOG_ERR_CLIENT_ABORT;
+    if (log_spider_codes) {
+      t_state.squid_codes.log_code = SQUID_LOG_ERR_SPIDER_MEMBER_ABORTED;
+    } else if (t_state.squid_codes.log_code == SQUID_LOG_TCP_HIT ||
+        t_state.squid_codes.log_code == SQUID_LOG_TCP_MEM_HIT) {
+      t_state.squid_codes.log_code = SQUID_LOG_ERR_CLIENT_ABORT_HIT;
+    } else if (t_state.squid_codes.log_code == SQUID_LOG_TCP_MISS) {
+      t_state.squid_codes.log_code = SQUID_LOG_ERR_CLIENT_ABORT_MISS;
+    } else
+      t_state.squid_codes.log_code = SQUID_LOG_ERR_CLIENT_ABORT;
     break;
   default:
     // Handled here:

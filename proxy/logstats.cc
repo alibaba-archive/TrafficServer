@@ -439,6 +439,8 @@ public:
         ++(l->misses);
         break;
       case SQUID_LOG_ERR_CLIENT_ABORT:
+      case SQUID_LOG_ERR_CLIENT_ABORT_HIT:
+      case SQUID_LOG_ERR_CLIENT_ABORT_MISS:
       case SQUID_LOG_ERR_CONNECT_FAIL:
       case SQUID_LOG_ERR_INVALID_REQ:
       case SQUID_LOG_ERR_UNKNOWN:
@@ -508,6 +510,8 @@ public:
         l->misses = 1;
         break;
       case SQUID_LOG_ERR_CLIENT_ABORT:
+      case SQUID_LOG_ERR_CLIENT_ABORT_HIT:
+      case SQUID_LOG_ERR_CLIENT_ABORT_MISS:
       case SQUID_LOG_ERR_CONNECT_FAIL:
       case SQUID_LOG_ERR_INVALID_REQ:
       case SQUID_LOG_ERR_UNKNOWN:
@@ -907,6 +911,8 @@ update_results_elapsed(OriginStats * stat, int result, int elapsed, int size)
     update_elapsed(stat->elapsed.misses.total, elapsed, stat->results.misses.total);
     break;
   case SQUID_LOG_ERR_CLIENT_ABORT:
+  case SQUID_LOG_ERR_CLIENT_ABORT_HIT:
+  case SQUID_LOG_ERR_CLIENT_ABORT_MISS:
     update_counter(stat->results.errors.client_abort, size);
     update_counter(stat->results.errors.total, size);
     break;
