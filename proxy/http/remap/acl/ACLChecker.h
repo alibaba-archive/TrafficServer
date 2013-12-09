@@ -26,7 +26,6 @@ class ACLChecker {
   friend class ACLRefererCheckList;
 
   public:
-    ACLChecker(const int action) : _action(action), _next(NULL) {}
     virtual ~ACLChecker() {}
 
     inline int getAction() const {
@@ -61,6 +60,8 @@ class ACLChecker {
     }
 
   protected:
+    ACLChecker(const int action) : _action(action), _next(NULL) {}
+
     int _action;  //allow or deny
     ACLChecker *_next; //for ACLCheckList
 };

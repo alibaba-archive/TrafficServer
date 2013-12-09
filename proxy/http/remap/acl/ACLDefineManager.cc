@@ -23,6 +23,10 @@ DynamicArray<ACLDefineChecker *> *ACLDefineManager::commit()
 
 void ACLDefineManager::rollback()
 {
+  if (_oldDefineCheckers == NULL) {
+    return;
+  }
+
   freeDefineCheckers(_defineCheckers);
   _defineCheckers = _oldDefineCheckers;
   _oldDefineCheckers = NULL;
