@@ -1111,7 +1111,7 @@ fileUpdated(char *fname, bool incVersion)
     mgmt_log(stderr, "[fileUpdated] plugin.config file has been modified\n");
 
   } else if (strcmp(fname, "ssl_multicert.config") == 0) {
-    mgmt_log(stderr, "[fileUpdated] ssl_multicert.config file has been modified\n");
+    lmgmt->signalFileChange("proxy.config.ssl.server.multicert.filename");
 
   } else if (strcmp(fname, "proxy.config.body_factory.template_sets_dir") == 0) {
     lmgmt->signalFileChange("proxy.config.body_factory.template_sets_dir");

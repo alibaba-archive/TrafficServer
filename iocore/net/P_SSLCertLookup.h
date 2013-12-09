@@ -25,28 +25,27 @@
 #define _ssl_Cert_Lookup_h_
 #include "libts.h"
 #include "P_SSLNetProcessor.h"
+#include "ProxyConfig.h"
 
 class SSLContextStorage;
 
-class SSLCertLookup
+class SSLCertLookup : public ConfigInfo
 {
-  bool buildTable(const SSLConfigParams * param);
   const char *extractIPAndCert(
     matcher_line * line_info, char **addr, char **cert, char **ca, char **priKey) const;
   bool addInfoToHash(
       const SSLConfigParams * param,
       const char *strAddr, const char *cert, const char *ca, const char *serverPrivateKey);
 
-  char config_file_path[PATH_NAME_MAX];
-  bool multipleCerts;
-
   SSLContextStorage * ssl_storage;
   SSL_CTX * ssl_default;
 
-public:
-  bool hasMultipleCerts() const { return multipleCerts; }
+  static int id;
 
-  void init(const SSLConfigParams * param);
+public:
+  bool buildTable(const SSLConfigParams * param);
+  void checkDefaultContext();
+
   SSL_CTX *findInfoInHash(const char * address) const;
 
   // Return the last-resort default TLS context if there is no name or address match.
@@ -54,8 +53,11 @@ public:
 
   SSLCertLookup();
   ~SSLCertLookup();
-};
 
-extern SSLCertLookup sslCertLookup;
+  static void startup();
+  static void reconfigure();
+  static SSLCertLookup * acquire();
+  static void release(SSLCertLookup *p);
+};
 
 #endif
