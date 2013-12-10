@@ -1756,14 +1756,39 @@ UrlRewrite::_regexMappingLookup(UrlMappingRegexList &regex_mappings, URL *reques
       }
     }
     else { //full url regex match NOT include query part
-      req_url_str = request_url->string_get_ref(&req_url_len);
-      const char *query = (const char *)memchr(req_url_str, '?', req_url_len);
-      if (query != NULL) {
-        input_url_len = query - req_url_str;
-        query++;  //skip "?"
+      const char *query;
+      char url_buff[2048];
+      int host_len;
+
+      if (request_url->host_get(&host_len) != NULL) {
+        req_url_str = request_url->string_get_ref(&req_url_len);
+        query = (const char *)memchr(req_url_str, '?', req_url_len);
+        if (query != NULL) {
+          input_url_len = query - req_url_str;
+          query++;  //skip "?"
+        }
+        else {
+          input_url_len = req_url_len;
+        }
       }
       else {
-        input_url_len = req_url_len;
+
+        int query_len;
+        query =  request_url->query_get(&query_len);
+        if (mapping->fromURL.port_get_raw() == 0) {
+          input_url_len = snprintf(url_buff, sizeof(url_buff),
+              "%.*s://%.*s/%.*s", request_scheme_len, request_scheme,
+              request_host_len, request_host,
+              request_path_len, request_path);
+        }
+        else {
+          input_url_len = snprintf(url_buff, sizeof(url_buff),
+              "%.*s://%.*s:%d/%.*s", request_scheme_len, request_scheme,
+              request_host_len, request_host, request_port,
+              request_path_len, request_path);
+        }
+
+        req_url_str = url_buff;
       }
 
       if ((match_result=list_iter->match(req_url_str, input_url_len, new_url,
