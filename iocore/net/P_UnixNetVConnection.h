@@ -41,6 +41,13 @@ class UnixNetVConnection;
 class NetHandler;
 struct PollDescriptor;
 
+enum ProbeType
+{
+  NONE_SPDY_PROBE,
+  BEGIN_SPDY_PROBE,
+  END_SPDY_PROBE
+};
+
 TS_INLINE void
 NetVCOptions::reset()
 {
@@ -233,6 +240,7 @@ public:
   ink_hrtime submit_time;
   OOB_callback *oob_ptr;
   bool from_accept_thread;
+  ProbeType pt;
 
   int startEvent(int event, Event *e);
   int acceptEvent(int event, Event *e);

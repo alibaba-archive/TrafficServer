@@ -8492,5 +8492,12 @@ TSReturnCode TSCacheUrlGet(const char *in_url, const int in_url_len,
   }
 }
 
+TSReturnCode TSSpdyAcceptHandlerSet(TSSpdyAcceptHandler fn)
+{
+  if (spdy_accept != NULL || fn == NULL)
+    return TS_ERROR;
+  spdy_accept = (SpdyAcceptHandlerPtr) fn;
+  return TS_SUCCESS;
+}
 #endif //TS_NO_API
 

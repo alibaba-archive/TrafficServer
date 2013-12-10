@@ -38,6 +38,74 @@ typedef struct iovec IOVec;
 #define NET_MAX_IOV UIO_MAXIOV
 #endif
 
+struct SpdyProberCont:public Continuation
+{
+  MIOBuffer buf;
+  unsigned char data;
+  SpdyProberCont(): data(0)
+  {
+    SET_HANDLER(&SpdyProberCont::mainEvent);
+  }
+
+  int mainEvent(int event, void *e);
+};
+
+static ClassAllocator<SpdyProberCont> spdyProberContAllocator("spdyProberContAllocator");
+
+SpdyProberCont *
+new_SpdyProberCont(UnixNetVConnection *vc)
+{
+  SpdyProberCont *c = spdyProberContAllocator.alloc();
+  c->buf.clear();
+  c->buf.set(&c->data, sizeof c->data);
+  c->buf._writer->fill(-(sizeof c->data));
+  c->mutex = vc->mutex;
+  return c;
+}
+void
+free_SpdyProberCont(SpdyProberCont *c)
+{
+  c->mutex.clear();
+  c->buf.clear();
+  spdyProberContAllocator.free(c);
+}
+
+inline int
+SpdyProberCont::mainEvent(int event, void *e) {
+  UnixNetVConnection *vc = (UnixNetVConnection *) ((VIO *) e)->vc_server;
+  vc->pt = END_SPDY_PROBE;
+
+  switch (event) {
+  case VC_EVENT_EOS:
+  case VC_EVENT_ERROR:
+  case VC_EVENT_INACTIVITY_TIMEOUT:
+  case VC_EVENT_ACTIVE_TIMEOUT:
+    vc->do_io_close();
+    free_SpdyProberCont(this);
+    return EVENT_DONE;
+  case VC_EVENT_READ_COMPLETE:
+    if ((data & 0x80) != 0) {
+      free_SpdyProberCont(this);
+      spdy_accept(NET_EVENT_ACCEPT, vc);
+      return EVENT_DONE;
+    } else {
+      // normal http request
+      free_SpdyProberCont(this);
+      vc->action_.continuation->handleEvent(NET_EVENT_ACCEPT, vc);
+      return EVENT_DONE;
+    }
+  default:
+    ink_release_assert(!"unexpected event");
+  }
+  return EVENT_CONT;
+}
+static inline
+int SpdyProbe(UnixNetVConnection *vc)
+{
+  SpdyProberCont *spdyProber = new_SpdyProberCont(vc);
+  vc->do_io_read(spdyProber, 1, &spdyProber->buf);
+  return EVENT_CONT;
+}
 // Global
 ClassAllocator<UnixNetVConnection> netVCAllocator("netVCAllocator");
 
@@ -259,8 +327,12 @@ read_from_net(NetHandler *nh, UnixNetVConnection *vc, EThread *thread)
         }
         b = b->next;
       }
+      ink_assert(vc->pt != BEGIN_SPDY_PROBE || niov == 1);
       if (niov == 1) {
-        r = socketManager.read(vc->con.fd, tiovec[0].iov_base, tiovec[0].iov_len);
+        if (vc->pt == BEGIN_SPDY_PROBE) {
+          r = recv(vc->con.fd, tiovec[0].iov_base, tiovec[0].iov_len, MSG_PEEK);
+        } else
+          r = socketManager.read(vc->con.fd, tiovec[0].iov_base, tiovec[0].iov_len);
       } else {
         r = socketManager.readv(vc->con.fd, &tiovec[0], niov);
       }
@@ -786,7 +858,7 @@ UnixNetVConnection::UnixNetVConnection()
 #endif
     active_timeout(NULL), nh(NULL),
     id(0), flags(0), recursion(0), submit_time(0), oob_ptr(0),
-    from_accept_thread(false)
+    from_accept_thread(false), pt(NONE_SPDY_PROBE)
 {
   memset(&local_addr, 0, sizeof local_addr);
   memset(&server_addr, 0, sizeof server_addr);
@@ -971,7 +1043,13 @@ UnixNetVConnection::acceptEvent(int event, Event *e)
     UnixNetVConnection::set_inactivity_timeout(inactivity_timeout_in);
   if (active_timeout_in)
     UnixNetVConnection::set_active_timeout(active_timeout_in);
-  action_.continuation->handleEvent(NET_EVENT_ACCEPT, this);
+  if (pt == NONE_SPDY_PROBE)
+    action_.continuation->handleEvent(NET_EVENT_ACCEPT, this);
+  else {
+    ink_assert(pt == BEGIN_SPDY_PROBE);
+    SpdyProbe(this);
+  }
+
   return EVENT_DONE;
 }
 

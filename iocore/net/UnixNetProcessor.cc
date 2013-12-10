@@ -120,6 +120,7 @@ UnixNetProcessor::accept_internal(
   accept_ip.port() = htons(opt.local_port);
 
   na->accept_fn = net_accept; // All callers used this.
+  na->spdy_accept_fn = spdy_accept;
   na->server.fd = fd;
   ats_ip_copy(&na->server.accept_addr, &accept_ip);
   na->server.f_inbound_transparent = opt.f_inbound_transparent;

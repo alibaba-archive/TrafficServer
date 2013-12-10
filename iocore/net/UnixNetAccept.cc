@@ -28,6 +28,8 @@
 #endif
 #define ROUNDUP(x, y) ((((x)+((y)-1))/(y))*(y))
 
+SpdyAcceptHandlerPtr spdy_accept = NULL;
+
 typedef int (NetAccept::*NetAcceptHandler) (int, void *);
 volatile int dummy_volatile = 0;
 int accept_till_done = 1;
@@ -318,6 +320,7 @@ NetAccept::do_blocking_accept(EThread * t)
     vc->set_is_transparent(server.f_inbound_transparent);
     vc->mutex = new_ProxyMutex();
     vc->action_ = *action_;
+    vc->pt = spdy_accept ? BEGIN_SPDY_PROBE : NONE_SPDY_PROBE;
     SET_CONTINUATION_HANDLER(vc, (NetVConnHandler) & UnixNetVConnection::acceptEvent);
     //eventProcessor.schedule_imm(vc, getEtype());
     eventProcessor.schedule_imm_signal(vc, getEtype());

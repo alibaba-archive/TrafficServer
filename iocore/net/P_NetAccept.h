@@ -56,6 +56,11 @@ AcceptFunction net_accept;
 
 class UnixNetVConnection;
 
+typedef int (SpdyAcceptHandler) (int event, void * vc);
+typedef SpdyAcceptHandler *SpdyAcceptHandlerPtr;
+
+extern SpdyAcceptHandlerPtr spdy_accept;
+
 // TODO fix race between cancel accept and call back
 struct NetAcceptAction:public Action, public RefCountObj
 {
@@ -87,6 +92,7 @@ struct NetAccept:public Continuation
   Server server;
   void *alloc_cache;
   AcceptFunctionPtr accept_fn;
+  SpdyAcceptHandlerPtr spdy_accept_fn;
   int ifd;
   int ifd_seq_num;
   bool callback_on_open;
