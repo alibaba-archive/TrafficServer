@@ -174,6 +174,8 @@ static int cmd_line_dprintf_level = 0;  // default debug output level fro ink_dp
 
 AppVersionInfo appVersionInfo;  // Build info for this application
 
+static int config_test_flag = 0;
+
 #if TS_HAS_TESTS
 extern int run_TestHook();
 #endif
@@ -259,8 +261,9 @@ ArgumentDescription argument_descriptions[] = {
 
   {"accept_mss", ' ', "MSS for client connections", "I", &accept_mss,
    NULL, NULL},
-  {"poll_timeout", 't', "poll timeout in milliseconds", "I", &net_config_poll_timeout,
+  {"poll_timeout", 'm', "poll timeout in milliseconds", "I", &net_config_poll_timeout,
    NULL, NULL},
+  {"config_test", 't', "Config Test", "F", &config_test_flag, NULL, NULL},
   {"help", 'h', "HELP!", NULL, NULL, NULL, usage},
 };
 int n_argument_descriptions = SIZE(argument_descriptions);
@@ -1753,6 +1756,10 @@ main(int argc, char **argv)
 #endif
 
     init_HttpProxyServer();
+    if (config_test_flag) {  //just for config test
+      _exit(0);
+    }
+
     int http_enabled = 1;
     TS_ReadConfigInteger(http_enabled, "proxy.config.http.enabled");
 
