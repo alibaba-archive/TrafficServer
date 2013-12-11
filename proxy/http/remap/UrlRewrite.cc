@@ -1679,18 +1679,27 @@ UrlRewrite::_regexMappingLookup(UrlMappingRegexList &regex_mappings, URL *reques
     Debug("url_rewrite_regex", "Going to match regexes with rank <= %d", rank_ceiling);
   }
 
-  int request_scheme_len, reg_map_scheme_len;
-  const char *request_scheme = request_url->scheme_get(&request_scheme_len), *reg_map_scheme;
-
+  int request_scheme_len;
+  int reg_map_scheme_len;
+  const char *request_scheme = request_url->scheme_get(&request_scheme_len);
+  const char *reg_map_scheme;
   const char *req_url_str;
-  int req_url_len, input_url_len;
-  int request_path_len, reg_map_path_len;
-  const char *request_path = request_url->path_get(&request_path_len), *reg_map_path;
+  char req_url_without_port[4096];
+  char req_url_with_port[4096];
+  int req_url_without_port_len = -1;
+  int req_url_with_port_len = -1;
+  int input_url_len;
+  int request_path_len;
+  int reg_map_path_len;
+  const char *request_path = request_url->path_get(&request_path_len);
+  const char *reg_map_path;
+  const char *query = NULL;
   char new_host[1024];
   char new_url[4096];
   int new_host_len;
   int new_url_len;
   int match_result;
+  int query_len = -1;
 
   // Loop over the entire linked list, or until we're satisfied
   forl_LL(UrlMappingRegexMatcher, list_iter, regex_mappings) {
@@ -1756,41 +1765,33 @@ UrlRewrite::_regexMappingLookup(UrlMappingRegexList &regex_mappings, URL *reques
       }
     }
     else { //full url regex match NOT include query part
-      const char *query;
-      char url_buff[2048];
-      int host_len;
-      int query_len;
-
-      if (request_url->host_get(&host_len) != NULL) {
-        req_url_str = request_url->string_get_ref(&req_url_len);
-        query = (const char *)memchr(req_url_str, '?', req_url_len);
-        if (query != NULL) {
-          input_url_len = query - req_url_str;
-          query++;  //skip "?"
-          query_len = req_url_len - input_url_len - 1;
-        }
-        else {
-          input_url_len = req_url_len;
-          query_len = 0;
-        }
-      }
-      else {
-
+      if (query_len < 0) {  //lazy load
         query =  request_url->query_get(&query_len);
-        if (mapping->fromURL.port_get_raw() == 0) {
-          input_url_len = snprintf(url_buff, sizeof(url_buff),
-              "%.*s://%.*s/%.*s", request_scheme_len, request_scheme,
+      }
+
+      if (mapping->fromURL.port_get_raw() == 0) {
+        if (req_url_without_port_len < 0) { //lazy load
+          req_url_without_port_len = snprintf(req_url_without_port,
+              sizeof(req_url_without_port), "%.*s://%.*s/%.*s",
+              request_scheme_len, request_scheme,
               request_host_len, request_host,
               request_path_len, request_path);
         }
-        else {
-          input_url_len = snprintf(url_buff, sizeof(url_buff),
-              "%.*s://%.*s:%d/%.*s", request_scheme_len, request_scheme,
+
+        req_url_str = req_url_without_port;
+        input_url_len = req_url_without_port_len;
+      }
+      else {
+        if (req_url_with_port_len < 0) {  //lazy load
+          req_url_with_port_len = snprintf(req_url_with_port,
+              sizeof(req_url_with_port), "%.*s://%.*s:%d/%.*s",
+              request_scheme_len, request_scheme,
               request_host_len, request_host, request_port,
               request_path_len, request_path);
         }
 
-        req_url_str = url_buff;
+        req_url_str = req_url_with_port;
+        input_url_len = req_url_with_port_len;
       }
 
       if ((match_result=list_iter->match(req_url_str, input_url_len, new_url,
