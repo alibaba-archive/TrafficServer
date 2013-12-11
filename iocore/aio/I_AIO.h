@@ -73,6 +73,11 @@ struct AIOCallback: public Continuation
   AIOCallback() : thread(AIO_CALLBACK_THREAD_ANY), then(0) {
     aiocb.aio_reqprio = AIO_DEFAULT_PRIORITY;
   }
+
+  virtual ~AIOCallback() {
+    action.mutex = NULL;
+    mutex.clear();
+  }
 };
 
 void ink_aio_init(ModuleVersion version);
