@@ -443,6 +443,9 @@ public:
   /** Returns remote port. */
   uint16_t get_remote_port();
 
+  /** NetProtoType of this VC */
+  NetProtoType proto_type;
+
   /** Structure holding user options. */
   NetVCOptions options;
 
@@ -526,6 +529,7 @@ protected:
 inline
 NetVConnection::NetVConnection():
   VConnection(NULL),
+  proto_type(NET_PROTO_HTTP),
   attributes(0),
   thread(NULL),
   got_local_addr(0),

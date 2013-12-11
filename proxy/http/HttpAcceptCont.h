@@ -21,25 +21,26 @@
   limitations under the License.
  */
 
-#if !defined (_HttpAccept_h_)
-#define _HttpAccept_h_
+#if !defined (_HttpAcceptCont_h_)
+#define _HttpAcceptCont_h_
 
 #include "libts.h"
 #include "P_EventSystem.h"
 #include "HttpConfig.h"
 #include "HTTP.h"
+#include "I_Net.h"
 
 namespace detail {
-  /** Options for @c HttpAccept.
+  /** Options for @c HttpAcceptCont.
 
       @internal This is done as a separate class for two reasons.
 
       The first is that in current usage many instances are created
       with the same options so (for the client) this is easier and
       more efficient than passing options directly to the @c
-      HttpAccept or calling setters.
+      HttpAcceptCont or calling setters.
 
-      The second is that @c HttpAccept is not provided with any thread
+      The second is that @c HttpAcceptCont is not provided with any thread
       safety because it is intended as an immutable object. Putting
       the setters here and not there makes that clearer.
 
@@ -47,11 +48,11 @@ namespace detail {
       inherit the data members rather than duplicate the declarations
       and initializations.
    */
-  class HttpAcceptOptions {
+  class HttpAcceptContOptions {
   private:
-    typedef HttpAcceptOptions self; ///< Self reference type.
+    typedef HttpAcceptContOptions self; ///< Self reference type.
   public:
-    HttpAcceptOptions();
+    HttpAcceptContOptions();
 
     // Connection type (HttpProxyPort::TransportType)
     int transport_type;
@@ -78,7 +79,7 @@ namespace detail {
     self& setBackdoor(bool);
   };
 
-  inline HttpAcceptOptions::HttpAcceptOptions()
+  inline HttpAcceptContOptions::HttpAcceptContOptions()
     : transport_type(0)
     , outbound_port(0)
     , f_outbound_transparent(false)
@@ -86,40 +87,40 @@ namespace detail {
   {
   }
 
-  inline HttpAcceptOptions&
-  HttpAcceptOptions::setTransportType(int type) {
+  inline HttpAcceptContOptions&
+  HttpAcceptContOptions::setTransportType(int type) {
     transport_type =  type;
     return *this;
   }
 
-  inline HttpAcceptOptions&
-  HttpAcceptOptions::setOutboundIp(IpAddr& ip) {
+  inline HttpAcceptContOptions&
+  HttpAcceptContOptions::setOutboundIp(IpAddr& ip) {
     if (ip.isIp4()) outbound_ip4 = ip;
     else if (ip.isIp6()) outbound_ip6 = ip;
     return *this;
   }
 
-  inline HttpAcceptOptions&
-  HttpAcceptOptions::setOutboundIp(IpEndpoint* ip) {
+  inline HttpAcceptContOptions&
+  HttpAcceptContOptions::setOutboundIp(IpEndpoint* ip) {
     if (ip->isIp4()) outbound_ip4 = *ip;
     else if (ip->isIp6()) outbound_ip6 = *ip;
     return *this;
   }
 
-  inline HttpAcceptOptions&
-  HttpAcceptOptions::setOutboundPort(uint16_t port) {
+  inline HttpAcceptContOptions&
+  HttpAcceptContOptions::setOutboundPort(uint16_t port) {
     outbound_port = port;
     return *this;
   }
 
-  inline HttpAcceptOptions&
-  HttpAcceptOptions::setOutboundTransparent(bool flag) {
+  inline HttpAcceptContOptions&
+  HttpAcceptContOptions::setOutboundTransparent(bool flag) {
     f_outbound_transparent = flag;
     return *this;
   }
 
-  inline HttpAcceptOptions&
-  HttpAcceptOptions::setBackdoor(bool flag) {
+  inline HttpAcceptContOptions&
+  HttpAcceptContOptions::setBackdoor(bool flag) {
     backdoor = flag;
     return *this;
   }
@@ -136,24 +137,24 @@ namespace detail {
    from the top level configuration to the HTTP session.
 */
 
-class HttpAccept: public Continuation, private detail::HttpAcceptOptions
+class HttpAcceptCont: public AcceptCont, private detail::HttpAcceptContOptions
 {
 private:
-  typedef HttpAccept self; ///< Self reference type.
+  typedef HttpAcceptCont self; ///< Self reference type.
 public:
   /** Construction options.
       Provide an easier to remember typedef for clients.
   */
-  typedef detail::HttpAcceptOptions Options;
+  typedef detail::HttpAcceptContOptions Options;
 
-  HttpAccept(Options const& opt = DEFAULT_OPTIONS) :
-    detail::HttpAcceptOptions(opt) // copy these.
+  HttpAcceptCont(Options const& opt = DEFAULT_OPTIONS) :
+    AcceptCont(NULL), detail::HttpAcceptContOptions(opt) // copy these.
   {
-    SET_HANDLER(&HttpAccept::mainEvent);
+    SET_HANDLER(&HttpAcceptCont::mainEvent);
     return;
   }
 
-  ~HttpAccept()
+  ~HttpAcceptCont()
   {
     return;
   }
@@ -164,8 +165,8 @@ public:
   static Options const DEFAULT_OPTIONS;
 
 private:
-    HttpAccept(const HttpAccept &);
-    HttpAccept & operator =(const HttpAccept &);
+    HttpAcceptCont(const HttpAcceptCont &);
+    HttpAcceptCont & operator =(const HttpAcceptCont &);
 };
 
 #endif

@@ -21,15 +21,15 @@
   limitations under the License.
  */
 
-#include "HttpAccept.h"
+#include "HttpAcceptCont.h"
 #include "IPAllow.h"
 #include "HttpClientSession.h"
 #include "I_Machine.h"
 
-HttpAccept::Options const HttpAccept::DEFAULT_OPTIONS;
+HttpAcceptCont::Options const HttpAcceptCont::DEFAULT_OPTIONS;
 
 int
-HttpAccept::mainEvent(int event, void *data)
+HttpAcceptCont::mainEvent(int event, void *data)
 {
   ink_release_assert(event == NET_EVENT_ACCEPT || event == EVENT_ERROR);
   ink_release_assert((event == NET_EVENT_ACCEPT) ? (data != 0) : (1));
@@ -58,7 +58,7 @@ HttpAccept::mainEvent(int event, void *data)
     netvc->attributes = transport_type;
 
     if (is_debug_tag_set("http_seq"))
-      Debug("http_seq", "[HttpAccept:mainEvent %p] accepted connection from %s transport type = %d", netvc, ats_ip_nptop(client_ip, ipb, sizeof(ipb)), netvc->attributes);
+      Debug("http_seq", "[HttpAcceptCont:mainEvent %p] accepted connection from %s transport type = %d", netvc, ats_ip_nptop(client_ip, ipb, sizeof(ipb)), netvc->attributes);
 
     HttpClientSession *new_session = THREAD_ALLOC_INIT(httpClientSessionAllocator, netvc->thread);
 

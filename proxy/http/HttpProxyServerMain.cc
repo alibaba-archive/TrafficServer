@@ -26,7 +26,7 @@
 #include "Main.h"
 #include "Error.h"
 #include "HttpConfig.h"
-#include "HttpAccept.h"
+#include "HttpAcceptCont.h"
 #include "ReverseProxy.h"
 #include "HttpSessionManager.h"
 #include "HttpUpdateSM.h"
@@ -35,6 +35,7 @@
 #include "HttpTunnel.h"
 #include "Tokenizer.h"
 #include "P_SSLNextProtocolAccept.h"
+#include "P_ProtocolAcceptCont.h"
 
 #ifdef DEBUG
 extern "C"
@@ -74,8 +75,8 @@ struct DumpStats: public Continuation
   }
 };
 
-HttpAccept *plugin_http_accept = NULL;
-HttpAccept *plugin_http_transparent_accept = 0;
+HttpAcceptCont *plugin_http_accept = NULL;
+HttpAcceptCont *plugin_http_transparent_accept = 0;
 
 #if !defined(TS_NO_API)
 static SLL<SSLNextProtocolAccept> ssl_plugin_acceptors;
@@ -140,14 +141,14 @@ init_HttpProxyServer(void)
   //   port but without going through the operating system
   //
   if (plugin_http_accept == NULL) {
-    plugin_http_accept = NEW(new HttpAccept);
+    plugin_http_accept = NEW(new HttpAcceptCont);
     plugin_http_accept->mutex = new_ProxyMutex();
   }
   // Same as plugin_http_accept except outbound transparent.
   if (! plugin_http_transparent_accept) {
-    HttpAccept::Options ha_opt;
+    HttpAcceptCont::Options ha_opt;
     ha_opt.setOutboundTransparent(true);
-    plugin_http_transparent_accept = NEW(new HttpAccept(ha_opt));
+    plugin_http_transparent_accept = NEW(new HttpAcceptCont(ha_opt));
     plugin_http_transparent_accept->mutex = new_ProxyMutex();
   }
   ink_mutex_init(&ssl_plugin_mutex, "SSL Acceptor List");
@@ -182,11 +183,12 @@ start_HttpProxyServer(int accept_threads)
   
   for ( int i = 0 , n = HttpProxyPort::global().length() ; i < n ; ++i ) {
     HttpProxyPort& p = HttpProxyPort::global()[i];
-    HttpAccept::Options ha_opt;
+    HttpAcceptCont::Options ha_opt;
 
     opt.f_inbound_transparent = p.m_inbound_transparent_p;
     opt.ip_family = p.m_family;
     opt.local_port = p.m_port;
+    opt.create_default_NetAccept = false;
 
     ha_opt.f_outbound_transparent = p.m_outbound_transparent_p;
     ha_opt.transport_type = p.m_type;
@@ -208,9 +210,16 @@ start_HttpProxyServer(int accept_threads)
     else if (HttpConfig::m_master.outbound_ip6.isValid())
       ha_opt.outbound_ip6 = HttpConfig::m_master.outbound_ip6;
 
+    HttpAcceptCont *http = NEW(new HttpAcceptCont(ha_opt));
+    SpdyAcceptCont *spdy = NEW(new SpdyAcceptCont(http));
+    SSLNextProtocolAccept *ssl = NEW(new SSLNextProtocolAccept(http));
+    ProtocolAcceptCont *proto = NEW(new ProtocolAcceptCont());
+
+    proto->registerEndpoint(NET_PROTO_HTTP, http);
+    proto->registerEndpoint(NET_PROTO_HTTP_SSL, ssl);
+    proto->registerEndpoint(NET_PROTO_HTTP_SPDY, spdy);
+
     if (p.isSSL()) {
-      HttpAccept * http = NEW(new HttpAccept(ha_opt));
-      SSLNextProtocolAccept * ssl = NEW(new SSLNextProtocolAccept(http));
       ssl->registerEndpoint(TS_NPN_PROTOCOL_HTTP_1_0, http);
       ssl->registerEndpoint(TS_NPN_PROTOCOL_HTTP_1_1, http);
 
@@ -218,9 +227,9 @@ start_HttpProxyServer(int accept_threads)
       ink_scoped_mutex lock(ssl_plugin_mutex);
       ssl_plugin_acceptors.push(ssl);
 #endif
-      sslNetProcessor.main_accept(ssl, p.m_fd, opt);
+      sslNetProcessor.main_accept(proto, p.m_fd, opt);
     } else {
-      netProcessor.main_accept(NEW(new HttpAccept(ha_opt)), p.m_fd, opt);
+      netProcessor.main_accept(proto, p.m_fd, opt);
     }
   }
 
@@ -242,7 +251,7 @@ void
 start_HttpProxyServerBackDoor(int port, int accept_threads)
 {
   NetProcessor::AcceptOptions opt;
-  HttpAccept::Options ha_opt;
+  HttpAcceptCont::Options ha_opt;
 
   opt.local_port = port;
   opt.accept_threads = accept_threads;
@@ -251,5 +260,5 @@ start_HttpProxyServerBackDoor(int port, int accept_threads)
   opt.backdoor = true;
   
   // The backdoor only binds the loopback interface
-  netProcessor.main_accept(NEW(new HttpAccept(ha_opt)), NO_FD, opt);
+  netProcessor.main_accept(NEW(new HttpAcceptCont(ha_opt)), NO_FD, opt);
 }

@@ -112,6 +112,8 @@ do { \
 #include "P_SSLNetProcessor.h"
 #include "P_SSLNetAccept.h"
 #include "P_SSLCertLookup.h"
+#include "P_SpdyAcceptCont.h"
+#include "P_ProtocolNetAccept.h"
 
 #undef  NET_SYSTEM_MODULE_VERSION
 #define NET_SYSTEM_MODULE_VERSION makeModuleVersion(                    \
