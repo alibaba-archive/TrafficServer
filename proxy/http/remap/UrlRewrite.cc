@@ -1759,6 +1759,7 @@ UrlRewrite::_regexMappingLookup(UrlMappingRegexList &regex_mappings, URL *reques
       const char *query;
       char url_buff[2048];
       int host_len;
+      int query_len;
 
       if (request_url->host_get(&host_len) != NULL) {
         req_url_str = request_url->string_get_ref(&req_url_len);
@@ -1766,14 +1767,15 @@ UrlRewrite::_regexMappingLookup(UrlMappingRegexList &regex_mappings, URL *reques
         if (query != NULL) {
           input_url_len = query - req_url_str;
           query++;  //skip "?"
+          query_len = req_url_len - input_url_len - 1;
         }
         else {
           input_url_len = req_url_len;
+          query_len = 0;
         }
       }
       else {
 
-        int query_len;
         query =  request_url->query_get(&query_len);
         if (mapping->fromURL.port_get_raw() == 0) {
           input_url_len = snprintf(url_buff, sizeof(url_buff),
@@ -1806,7 +1808,7 @@ UrlRewrite::_regexMappingLookup(UrlMappingRegexList &regex_mappings, URL *reques
         }
 
         if (query != NULL) {
-          expanded_url->query_set(query, req_url_len - input_url_len - 1);
+          expanded_url->query_set(query, query_len);
         }
         Debug("url_rewrite_regex", "Expanded toURL to [%.*s]",
             expanded_url->length_get(), expanded_url->string_get_ref());
