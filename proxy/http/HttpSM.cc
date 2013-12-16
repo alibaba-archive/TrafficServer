@@ -4327,7 +4327,7 @@ HttpSM::do_http_server_open(bool raw)
 
   if (raw == false && t_state.txn_conf->share_server_sessions &&
       (t_state.txn_conf->keep_alive_post_out == 1 || t_state.hdr_info.request_content_length == 0) &&
-      ua_session != NULL) {
+      ua_session != NULL && is_private()) {
     shared_result = httpSessionManager.acquire_session(this,    // state machine
                                                        &t_state.current.server->addr.sa,    // ip + port
                                                        t_state.current.server->name,    // hostname
@@ -4354,7 +4354,7 @@ HttpSM::do_http_server_open(bool raw)
   // This bug was due to when share_server_sessions is set to 0
   // and we have keep-alive, we are trying to open a new server session
   // when we already have an attached server session.
-  else if ((!t_state.txn_conf->share_server_sessions) && (ua_session != NULL)) {
+  else if ((!t_state.txn_conf->share_server_sessions || is_private()) && (ua_session != NULL)) {
     HttpServerSession *existing_ss = ua_session->get_server_session();
 
     if (existing_ss) {
@@ -5406,19 +5406,13 @@ HttpSM::setup_server_send_request()
     hdr_length += server_entry->write_buffer->write(t_state.internal_msg_buffer, msg_len);
     server_request_body_bytes = msg_len;
   }
-  // If we are sending authorizations headers, mark the connection
-  //  private
-  /*if (t_state.hdr_info.server_request.presence(MIME_PRESENCE_AUTHORIZATION | MIME_PRESENCE_PROXY_AUTHORIZATION)) {
+  // milestones.server_begin_write = ink_get_hrtime();
+  // If we are sending authorizations headers, mark the connection private
+  if (t_state.hdr_info.server_request.presence(MIME_PRESENCE_AUTHORIZATION | MIME_PRESENCE_PROXY_AUTHORIZATION
+          | MIME_PRESENCE_WWW_AUTHENTICATE)) {
     server_session->private_session = true;
-    if (t_state.hdr_info.server_request.presence(MIME_PRESENCE_AUTHORIZATION)) {
-      // we need this variable for the session based Authentication
-      // like NTLM.
-      server_session->www_auth_content = true;
-    }
-  }*/
-  /*if (server_session->www_auth_content && t_state.www_auth_content == HttpTransact::CACHE_AUTH_NONE) {
-    t_state.www_auth_content = HttpTransact::CACHE_AUTH_TRUE;
-  }*/
+  }
+
   // milestones.server_begin_write = ink_get_hrtime();
   server_entry->write_vio = server_entry->vc->do_io_write(this, hdr_length, buf_start);
 }
@@ -7327,5 +7321,12 @@ HttpSM::set_server_session_private(bool private_session)
     return true;
   }
   return false;
+}
+
+bool
+HttpSM::is_private()
+{
+   HttpServerSession * ss = server_session ? server_session : ua_session->get_server_session();
+   return ss ? ss->private_session : false;
 }
 
