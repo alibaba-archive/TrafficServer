@@ -26,12 +26,13 @@
 static void
 send_plugin_event(Continuation * plugin, int event, void * edata)
 {
-  if (likely(plugin)) {
+  if (plugin->mutex) {
     EThread * thread(this_ethread());
     MUTEX_TAKE_LOCK(plugin->mutex, thread);
     plugin->handleEvent(event, edata);
     MUTEX_UNTAKE_LOCK(plugin->mutex, thread);
-  }
+  } else
+    plugin->handleEvent(event, edata);
 }
 
 static SSLNetVConnection *
@@ -56,16 +57,86 @@ ssl_netvc_cast(int event, void * edata)
   }
 }
 
+// SSLNextProtocolTrampoline is the receiver of the I/O event generated when we perform a 0-length read on the new SSL
+// connection. The 0-length read forces the SSL handshake, which allows us to bind an endpoint that is selected by the
+// NPN extension. The Continuation that receives the read event *must* have a mutex, but we don't want to take a global
+// lock across the handshake, so we make a trampoline to bounce the event from the SSL acceptor to the ultimate session
+// acceptor.
+struct SSLNextProtocolTrampoline : public Continuation
+{
+  explicit
+  SSLNextProtocolTrampoline() : npnParent(NULL)
+  {
+    SET_HANDLER(&SSLNextProtocolTrampoline::ioCompletionEvent);
+  }
+
+  int ioCompletionEvent(int event, void * edata);
+
+  const SSLNextProtocolAccept * npnParent;
+};
+
+static ClassAllocator<SSLNextProtocolTrampoline>
+sslNextProtocolTrampolineAllocator("sslNextProtocolTrampolineAllocator");
+
+static inline
+SSLNextProtocolTrampoline * new_SSLNextProtocolTrampoline(ProxyMutex *m, SSLNextProtocolAccept *npn)
+{
+  SSLNextProtocolTrampoline *p = sslNextProtocolTrampolineAllocator.alloc();
+  p->mutex = m;
+  p->npnParent = npn;
+
+  return p;
+}
+
+static inline
+void free_SSLNextProtocolTrampoline(SSLNextProtocolTrampoline *p)
+{
+  p->mutex.clear();
+  sslNextProtocolTrampolineAllocator.free(p);
+}
+
+inline int
+SSLNextProtocolTrampoline::ioCompletionEvent(int event, void * edata)
+{
+  VIO * vio;
+  Continuation * plugin;
+  SSLNetVConnection * netvc;
+
+  switch (event) {
+  case VC_EVENT_INACTIVITY_TIMEOUT:
+  case VC_EVENT_READ_COMPLETE:
+  case VC_EVENT_ERROR:
+    vio = static_cast<VIO *>(edata);
+    break;
+  default:
+    return EVENT_ERROR;
+  }
+
+  netvc = dynamic_cast<SSLNetVConnection *>(vio->vc_server);
+  ink_assert(netvc != NULL);
+
+  plugin = netvc->endpoint();
+  if (plugin) {
+    send_plugin_event(plugin, NET_EVENT_ACCEPT, netvc);
+  } else if (npnParent->endpoint) {
+    // Route to the default endpoint
+    send_plugin_event(npnParent->endpoint, NET_EVENT_ACCEPT, netvc);
+  } else {
+    // No handler, what should we do? Best to just kill the VC while we can.
+    netvc->do_io(VIO::CLOSE);
+  }
+
+  free_SSLNextProtocolTrampoline(this);
+  return EVENT_CONT;
+}
+
 int
 SSLNextProtocolAccept::mainEvent(int event, void * edata)
 {
   SSLNetVConnection * netvc = ssl_netvc_cast(event, edata);
-  Continuation * plugin;
 
   Debug("ssl",
       "[SSLNextProtocolAccept:mainEvent] event %d netvc %p", event, netvc);
-
-  MUTEX_LOCK(lock, this->mutex, this_ethread());
 
   switch (event) {
   case NET_EVENT_ACCEPT:
@@ -75,25 +146,12 @@ SSLNextProtocolAccept::mainEvent(int event, void * edata)
     // the endpoint that there is an accept to handle until the read completes
     // and we know which protocol was negotiated.
     netvc->registerNextProtocolSet(&this->protoset);
-    netvc->do_io(VIO::READ, this, 0, this->buffer, 0);
-    return EVENT_CONT;
-  case VC_EVENT_READ_COMPLETE:
-    ink_release_assert(netvc != NULL);
-    plugin = netvc->endpoint();
-    if (plugin) {
-      send_plugin_event(plugin, NET_EVENT_ACCEPT, netvc);
-    } else if (this->endpoint) {
-      // Route to the default endpoint
-      send_plugin_event(this->endpoint, NET_EVENT_ACCEPT, netvc);
-    } else {
-      // No handler, what should we do? Best to just kill the VC while we can.
-      netvc->do_io(VIO::CLOSE);
-    }
+    netvc->do_io(VIO::READ, new_SSLNextProtocolTrampoline(netvc->mutex, this), 0, this->buffer, 0);
     return EVENT_CONT;
   case VC_EVENT_INACTIVITY_TIMEOUT:
   case VC_EVENT_ERROR:
-    netvc->do_io(VIO::CLOSE);
   default:
+    netvc->do_io(VIO::CLOSE);
     return EVENT_DONE;
   }
 }
@@ -113,7 +171,7 @@ SSLNextProtocolAccept::unregisterEndpoint(
 }
 
 SSLNextProtocolAccept::SSLNextProtocolAccept(Continuation * ep)
-    : Continuation(new_ProxyMutex()), buffer(new_empty_MIOBuffer()), endpoint(ep)
+    : buffer(new_empty_MIOBuffer()), endpoint(ep)
 {
   SET_HANDLER(&SSLNextProtocolAccept::mainEvent);
 }
