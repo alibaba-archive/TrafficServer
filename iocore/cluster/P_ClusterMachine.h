@@ -143,6 +143,7 @@ extern ProxyMutex *the_cluster_config_mutex;
 //
 extern MachineList *machines_config;
 extern MachineList *cluster_config;
+extern int cluster_active_machine_count;
 
 
 #endif /* _Machine_h */

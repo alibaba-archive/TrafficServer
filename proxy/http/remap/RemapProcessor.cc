@@ -140,6 +140,8 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
       Debug("url_rewrite", "use mapping's overridableHttpConfig");
     }
 
+    s->incActiveConnections();
+
     if (map->cacheControlConfig != NULL) {
       s->cacheControlByRemap = true;
       s->cache_control.revalidate_after = map->cacheControlConfig->revalidate_after;
@@ -174,13 +176,23 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
     return false;
   }
 
-  if (s->http_config_param->max_active_client_connections) {
-    int sval = g_max_active_client_connections;
+  if (!s->txn_conf->allow_anyway) {
+    if (s->http_config_param->max_active_client_connections > 0) {
+      if (g_current_active_client_connections > s->http_config_param->max_active_client_connections) {
+        s->client_connection_enabled = false;
+        s->server_busy = true;
+        return false;
+      }
+    }
 
-    if ((sval > s->http_config_param->max_active_client_connections) && !s->txn_conf->allow_anyway) {
-      s->client_connection_enabled = false;
-      s->server_busy = true;
-      return false;
+    if (s->url_map.getMapping()->overridableHttpConfig != NULL) {
+      if (s->url_map.getMapping()->clientConnectionExceed() ||
+          s->url_map.getMapping()->clientBandWidthExceed())
+      {
+        s->client_connection_enabled = false;
+        s->server_busy = true;
+        return false;
+      }
     }
   }
 

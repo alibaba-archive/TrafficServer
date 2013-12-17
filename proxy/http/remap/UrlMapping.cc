@@ -27,6 +27,30 @@
 #include "UrlMapping.h"
 #include "HttpConfig.h"
 
+void ClientControlStat::incResponseBytes(const int64_t bytes)
+{
+  int64_t total_bytes;
+  int64_t current_time;
+
+  total_bytes = ink_atomic_increment64(&_total_resp_bytes, bytes);
+  current_time = ink_get_hrtime();
+  if (current_time - _last_calc_time >= 1 * HRTIME_SECOND) {
+    int64_t delta_time;
+
+    ink_mutex_acquire(&_lock);
+    delta_time = current_time - _last_calc_time;
+    if (delta_time >= 1 * HRTIME_SECOND) { //should check again in the lock
+      _last_calc_time = current_time;
+      total_bytes += bytes;
+
+      _current_resp_bps = (int64_t)(1.00 * (total_bytes -
+              _last_resp_bytes) / ((delta_time * 1.00) / (HRTIME_SECOND)));
+      _last_resp_bytes = total_bytes;
+    }
+    ink_mutex_release(&_lock);
+  }
+}
+
 /**
  *
 **/
@@ -350,3 +374,4 @@ redirect_tag_str::parse_format_redirect_url(char *url)
   }
   return list;
 }
+

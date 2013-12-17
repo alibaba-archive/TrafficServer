@@ -7855,6 +7855,14 @@ _conf_to_memberp(TSOverridableConfigKey conf,
     typ = OVERRIDABLE_TYPE_INT;
     ret = &overridablehttpConfig->origin_max_connections;
     break;
+  case TS_CONFIG_HTTP_MAX_ACTIVE_CLIENT_CONNECTIONS:
+    typ = OVERRIDABLE_TYPE_INT;
+    ret = &overridablehttpConfig->max_active_client_connections;
+    break;
+  case TS_CONFIG_HTTP_MAX_BANDWIDTH:
+    typ = OVERRIDABLE_TYPE_INT;
+    ret = &overridablehttpConfig->max_bandwidth;
+    break;
   case TS_CONFIG_HTTP_CONNECT_ATTEMPTS_MAX_RETRIES:
     typ = OVERRIDABLE_TYPE_INT;
     ret = &overridablehttpConfig->connect_attempts_max_retries;
@@ -8145,6 +8153,11 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
       cnf = TS_CONFIG_HTTP_ALLOW_ANYWAY;
     break;
 
+  case 31:
+    if (!strncmp(name, "proxy.config.http.max_bandwidth", length))
+      cnf = TS_CONFIG_HTTP_MAX_BANDWIDTH;
+    break;
+
   case 33:
     if (!strncmp(name, "proxy.config.http.cache.fuzz.time", length))
       cnf = TS_CONFIG_HTTP_CACHE_FUZZ_TIME;
@@ -8379,6 +8392,10 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
     case 't':
       if (!strncmp(name, "proxy.config.http.post_connect_attempts_timeout", length))
         cnf = TS_CONFIG_HTTP_POST_CONNECT_ATTEMPTS_TIMEOUT;
+      break;
+    case 's':
+      if (!strncmp(name, "proxy.config.http.max_active_client_connections", length))
+        cnf = TS_CONFIG_HTTP_MAX_ACTIVE_CLIENT_CONNECTIONS;
       break;
     }
     break;

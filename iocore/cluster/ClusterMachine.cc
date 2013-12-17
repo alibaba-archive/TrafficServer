@@ -34,6 +34,7 @@ extern int num_of_cluster_threads;
 
 MachineList *machines_config = NULL;
 MachineList *cluster_config = NULL;
+int cluster_active_machine_count = 1;  //must include myself
 
 ProxyMutex *the_cluster_config_mutex;
 

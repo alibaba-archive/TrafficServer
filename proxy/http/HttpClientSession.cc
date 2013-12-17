@@ -283,13 +283,16 @@ HttpClientSession::do_io_shutdown(ShutdownHowTo_t howto)
 void
 HttpClientSession::do_io_close(int alerrno)
 {
+  if (current_reader != NULL) {
+    current_reader->t_state.decActiveConnections();
+  }
 
   if (read_state == HCS_ACTIVE_READER) {
     HTTP_DECREMENT_DYN_STAT(http_current_client_transactions_stat);
     if (m_active) {
       m_active = false;
       HTTP_DECREMENT_DYN_STAT(http_current_active_client_connections_stat);
-      ink_atomic_increment(&g_max_active_client_connections, -1);
+      ink_atomic_increment(&g_current_active_client_connections, -1);
     }
   }
   // Prevent double closing
@@ -563,7 +566,7 @@ HttpClientSession::attach_server_session(HttpServerSession * ssession, bool tran
     if (m_active) {
       m_active = false;
       HTTP_DECREMENT_DYN_STAT(http_current_active_client_connections_stat);
-      ink_atomic_increment(&g_max_active_client_connections, -1);
+      ink_atomic_increment(&g_current_active_client_connections, -1);
     }
     // Since this our slave, issue an IO to detect a close and
     //  have it call the client session back.  This IO also prevent
@@ -599,14 +602,17 @@ HttpClientSession::release(IOBufferReader * r)
   MgmtInt ka_in = current_reader->t_state.txn_conf->keep_alive_no_activity_timeout_in;
 
   DebugSsn("http_cs", "[%" PRId64 "] session released by sm [%" PRId64 "]", con_id, current_reader->sm_id);
-  current_reader = NULL;
 
   // handling potential keep-alive here
   if (m_active) {
     m_active = false;
     HTTP_DECREMENT_DYN_STAT(http_current_active_client_connections_stat);
-    ink_atomic_increment(&g_max_active_client_connections, -1);
+    ink_atomic_increment(&g_current_active_client_connections, -1);
   }
+
+  current_reader->t_state.decActiveConnections();
+  current_reader = NULL;
+
   // Make sure that the state machine is returning
   //  correct buffer reader
   ink_assert(r == sm_reader);

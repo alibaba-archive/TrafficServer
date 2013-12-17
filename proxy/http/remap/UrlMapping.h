@@ -28,6 +28,7 @@
 #include "Error.h"
 #include "URL.h"
 #include "RemapPluginInfo.h"
+#include "HttpConfig.h"
 
 #ifdef HAVE_PCRE_PCRE_H
 #include <pcre/pcre.h>
@@ -72,8 +73,6 @@ public:
 struct ACLContext;
 class ACLMethodIpCheckList;
 class ACLRefererCheckList;
-struct OverridableHttpConfigParams;
-
 
 class CacheControlConfig
 {
@@ -95,6 +94,50 @@ class CacheControlConfig
     int ttl_in_cache;
     bool never_cache;
 };
+
+class ClientControlStat
+{
+  public:
+    ClientControlStat() : _active_connections(0), _current_resp_bps(0),
+    _total_resp_bytes(0), _last_resp_bytes(0) {
+      _last_calc_time = ink_get_hrtime();
+      ink_mutex_init(&_lock, "ClientControlStat");
+    }
+
+    ~ClientControlStat() {
+      ink_mutex_destroy(&_lock);
+    }
+
+    inline int getActiveConnections() {
+      return _active_connections;
+    }
+
+    inline void incActiveConnections() {
+      ink_atomic_increment(&_active_connections, 1);
+      //fprintf(stderr, "inc: %d\n", ink_atomic_increment(&_active_connections, 1) + 1);
+    }
+
+    inline void decActiveConnections() {
+      ink_atomic_increment(&_active_connections, -1);
+      //fprintf(stderr, "inc: %d\n", ink_atomic_increment(&_active_connections, -1) - 1);
+    }
+
+    inline int getCurrentBps() {
+      return _current_resp_bps;
+    }
+
+    void incResponseBytes(const int64_t bytes);
+
+  private:
+    ink_mutex _lock;
+    volatile int _active_connections;
+    volatile int64_t _current_resp_bps;
+    volatile int64_t _total_resp_bytes;
+    int64_t _last_resp_bytes;
+    int64_t _last_calc_time; //last time to calculate BPS
+};
+
+extern int cluster_active_machine_count;
 
 /**
  * Used to store the mapping for class UrlRewrite
@@ -180,6 +223,63 @@ public:
     *(_rawToUrlStr + url_len) = '\0';
   }
 
+  inline void incActiveConnections() {
+    if (overridableHttpConfig == NULL) {
+      return;
+    }
+    if (overridableHttpConfig->max_active_client_connections <= 0) {
+      return;
+    }
+
+    clientControlStat.incActiveConnections();
+  }
+
+  inline void decActiveConnections() {
+    if (overridableHttpConfig == NULL) {
+      return;
+    }
+    if (overridableHttpConfig->max_active_client_connections <= 0) {
+      return;
+    }
+
+    clientControlStat.decActiveConnections();
+  }
+
+  inline void incResponseBytes(const int64_t bytes) {
+    if (overridableHttpConfig == NULL) {
+      return;
+    }
+    if (overridableHttpConfig->max_bandwidth <= 0) {
+      return;
+    }
+
+    clientControlStat.incResponseBytes(bytes);
+  }
+
+  inline bool clientConnectionExceed() {
+    if (overridableHttpConfig == NULL) {
+      return false;
+    }
+    if (overridableHttpConfig->max_active_client_connections <= 0) {
+      return false;
+    }
+
+    return clientControlStat.getActiveConnections() >=
+      overridableHttpConfig->max_active_client_connections;
+  }
+
+  inline bool clientBandWidthExceed() {
+    if (overridableHttpConfig == NULL) {
+      return false;
+    }
+    if (overridableHttpConfig->max_bandwidth <= 0) {
+      return false;
+    }
+
+    return clientControlStat.getCurrentBps() >
+      overridableHttpConfig->max_bandwidth / cluster_active_machine_count;
+  }
+
   URL fromURL;
   URL toUrl; // Default TO-URL (from remap.config)
   bool homePageRedirect;
@@ -191,6 +291,7 @@ public:
   unsigned int plugin_count;
   unsigned int cache_url_convert_plugin_count;
   int regex_type;
+  ClientControlStat clientControlStat;
   LINK(url_mapping, link); // For use with the main Queue linked list holding all the mapping
   OverridableHttpConfigParams *overridableHttpConfig;
   CacheControlConfig *cacheControlConfig;
@@ -224,10 +325,17 @@ public:
   { }
 
 
-  ~UrlMappingContainer() { deleteToURL(); }
+  ~UrlMappingContainer() {
+    deleteToURL();
+  }
 
-  inline URL *getToURL() const { return _toURLPtr; };
-  inline url_mapping *getMapping() const { return _mapping; };
+  inline URL *getToURL() const {
+    return _toURLPtr;
+  }
+
+  inline url_mapping *getMapping() const {
+    return _mapping;
+  }
 
   void set(url_mapping *m) {
     deleteToURL();

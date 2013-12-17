@@ -1071,6 +1071,7 @@ public:
     
     bool api_skip_all_remapping;
     bool cacheControlByRemap;  //if cache control config by remap.config
+    bool needDecActiveConnection;
 
     OverridableHttpConfigParams *txn_conf;
     OverridableHttpConfigParams my_txn_conf; // Storage for plugins, to avoid malloc
@@ -1167,6 +1168,7 @@ public:
         pristine_url(),
         api_skip_all_remapping(false),
         cacheControlByRemap(false),
+        needDecActiveConnection(false),
         txn_conf(NULL)
     {
       int i;
@@ -1269,6 +1271,26 @@ public:
         // Make sure we copy it first.
         memcpy(&my_txn_conf, &http_config_param->oride, sizeof(my_txn_conf));
         txn_conf = &my_txn_conf;
+      }
+    }
+
+    inline void incActiveConnections() {
+      if (!needDecActiveConnection) {
+        needDecActiveConnection = true;
+        url_map.getMapping()->incActiveConnections();
+      }
+    }
+
+    inline void decActiveConnections() {
+      if (needDecActiveConnection) {
+        needDecActiveConnection = false;
+        url_map.getMapping()->decActiveConnections();
+      }
+    }
+
+    inline void incResponseBytes(const int64_t bytes) {
+      if (url_map.getMapping() != NULL) {
+        url_map.getMapping()->incResponseBytes(bytes);
       }
     }
 

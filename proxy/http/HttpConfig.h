@@ -352,7 +352,7 @@ enum
 };
 
 extern RecRawStatBlock *http_rsb;
-extern int g_max_active_client_connections;
+extern volatile int g_current_active_client_connections;
 
 /* Stats should only be accessed using these macros */
 #define HTTP_INCREMENT_DYN_STAT(x) RecIncrRawStat(http_rsb, mutex->thread_holding, (int) x, 1)
@@ -431,7 +431,7 @@ struct OverridableHttpConfigParams {
        transaction_header_active_timeout_in(0),
        transaction_request_active_timeout_in(0),
        transaction_active_timeout_out(0),
-       origin_max_connections(0),
+       origin_max_connections(0), max_active_client_connections(0), max_bandwidth(0),
        connect_attempts_max_retries(0), connect_attempts_max_retries_dead_server(0),
        connect_attempts_rr_retries(0), connect_attempts_timeout(0),
        post_connect_attempts_timeout(0),
@@ -557,6 +557,8 @@ struct OverridableHttpConfigParams {
   MgmtInt transaction_request_active_timeout_in;
   MgmtInt transaction_active_timeout_out;
   MgmtInt origin_max_connections;
+  MgmtInt max_active_client_connections;
+  MgmtInt max_bandwidth;
 
   ////////////////////////////////////
   // origin server connect attempts //

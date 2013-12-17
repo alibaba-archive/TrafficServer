@@ -46,7 +46,7 @@
 #include "ink_unused.h"      /* MAGIC_EDITING_TAG */
 
 /** Time till we free the old stuff after a reconfiguration. */
-#define URL_REWRITE_TIMEOUT            (HRTIME_SECOND * 3600)
+#define URL_REWRITE_TIMEOUT            (HRTIME_SECOND * 4 * 3600)
 
 // Global Ptrs
 static Ptr<ProxyMutex> reconfig_mutex = NULL;

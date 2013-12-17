@@ -273,8 +273,15 @@ machine_config_change(const char *name, RecDataT data_type, RecData data, void *
   cluster_config = l;
   make_cluster_connections(l, old);
 #endif
-  if (old)
+  if (l == NULL) {
+    cluster_active_machine_count = 1;  //must include myself
+  }
+  else {
+    cluster_active_machine_count = l->n + 1;
+  }
+  if (old) {
     free_MachineList(old);
+  }
   return 0;
 }
 
