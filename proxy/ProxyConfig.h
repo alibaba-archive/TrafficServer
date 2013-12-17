@@ -68,6 +68,18 @@ class ConfigProcessor
 {
 public:
   ConfigProcessor();
+  template <typename ClassType, typename ConfigType>
+  struct scoped_config {
+    scoped_config() : ptr(ClassType::acquire()) {}
+    ~scoped_config() { ClassType::release(ptr); }
+
+    operator bool() const { return ptr != 0; }
+    operator ConfigType * () const { return ptr; }
+    const ConfigType * operator->() const { return ptr; }
+
+  private:
+    ConfigType * ptr;
+  };
 
   unsigned int set(unsigned int id, ConfigInfo * info);
   ConfigInfo *get(unsigned int id);
