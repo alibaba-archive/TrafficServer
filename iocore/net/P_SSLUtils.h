@@ -61,4 +61,7 @@ void SSLDebugBufferPrint(const char * tag, const char * buffer, unsigned buflen,
 // Load the SSL certificate configuration.
 bool SSLParseCertificateConfiguration(const SSLConfigParams * params, SSLCertLookup * lookup);
 
+// Return a static string name for a SSL_ERROR constant.
+const char * SSLErrorName(int ssl_error);
+
 #endif /* __P_SSLUTILS_H__ */

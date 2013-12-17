@@ -707,3 +707,24 @@ SSLParseCertificateConfiguration(
   return true;
 }
 
+const char *
+SSLErrorName(int ssl_error)
+{
+  static const char * names[] =  {
+    "SSL_ERROR_NONE",
+    "SSL_ERROR_SSL",
+    "SSL_ERROR_WANT_READ",
+    "SSL_ERROR_WANT_WRITE",
+    "SSL_ERROR_WANT_X509_LOOKUP",
+    "SSL_ERROR_SYSCALL",
+    "SSL_ERROR_ZERO_RETURN",
+    "SSL_ERROR_WANT_CONNECT",
+    "SSL_ERROR_WANT_ACCEPT"
+  };
+
+  if (ssl_error < 0 || ssl_error >= (int)SIZE(names)) {
+    return "unknown SSL error";
+  }
+
+  return names[ssl_error];
+}
