@@ -35,7 +35,7 @@
 struct SSLAddressLookupKey
 {
   explicit
-  SSLAddressLookupKey(const IpEndpoint& ip)
+  SSLAddressLookupKey(const IpEndpoint& ip) : sep(0)
   {
     static const char hextab[16] = {
       '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
@@ -49,6 +49,7 @@ struct SSLAddressLookupKey
     // if there is a certificate on the port.
     nbytes = ats_ip_to_hex(&ip.sa, key, sizeof(key));
     if (port) {
+      sep = nbytes;
       key[nbytes++] = '.';
       key[nbytes++] = hextab[ (port >> 12) & 0x000F ];
       key[nbytes++] = hextab[ (port >>  8) & 0x000F ];
@@ -59,9 +60,12 @@ struct SSLAddressLookupKey
   }
 
   const char * get() const { return key; }
+  void split() { key[sep] = '\0'; }
+  void unsplit() { key[sep] = '.'; }
 
 private:
   char key[(TS_IP6_SIZE * 2) /* hex addr */ + 1 /* dot */ + 4 /* port */ + 1 /* NULL */];
+  unsigned char sep; // offset of address/port separator
 };
 
 struct SSLContextStorage
@@ -106,8 +110,20 @@ SSLCertLookup::findInfoInHash(const char * address) const
 SSL_CTX *
 SSLCertLookup::findInfoInHash(const IpEndpoint& address) const
 {
+  SSL_CTX * ctx;
   SSLAddressLookupKey key(address);
-  return this->ssl_storage->lookup(key.get());
+  // First try the full address.
+  if ((ctx = this->ssl_storage->lookup(key.get()))) {
+    return ctx;
+  }
+
+  // If that failed, try the address without the port.
+  if (address.port()) {
+    key.split();
+    return this->ssl_storage->lookup(key.get());
+  }
+
+  return NULL;
 }
 
 bool
