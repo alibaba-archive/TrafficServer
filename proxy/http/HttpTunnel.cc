@@ -1189,7 +1189,14 @@ bool HttpTunnel::consumer_handler(int event, HttpTunnelConsumer * c)
   Debug("http_tunnel", "[%" PRId64 "] consumer_handler [%s %s]", sm->sm_id, c->name, HttpDebugNames::get_event_name(event));
 
   ink_assert(c->alive == true);
+  ink_assert(c->write_vio);
 
+  int64_t last_write = c->write_vio->ndone - c->bytes_written;
+  if (last_write > 0) {
+    if (c->vc_type == HT_HTTP_CLIENT)
+      sm->t_state.incResponseBytes(last_write);
+    c->bytes_written += last_write;
+  }
   switch (event) {
   case VC_EVENT_WRITE_READY:
     // Data consumed, reenable producer
@@ -1232,8 +1239,6 @@ bool HttpTunnel::consumer_handler(int event, HttpTunnelConsumer * c)
     ink_assert(c->alive);
     ink_assert(c->buffer_reader);
     c->alive = false;
-
-    c->bytes_written = c->write_vio ? c->write_vio->ndone : 0;
 
     // Interesting tunnel event, call SM
     jump_point = c->vc_handler;
