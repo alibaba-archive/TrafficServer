@@ -49,6 +49,28 @@ typedef SSL_METHOD * ink_ssl_method_t;
 static ProxyMutex ** sslMutexArray;
 static bool open_ssl_initialized = false;
 
+struct ats_file_bio
+{
+    ats_file_bio(const char * path, const char * mode)
+      : bio(BIO_new_file(path, mode)) {
+    }
+
+    ~ats_file_bio() {
+        (void)BIO_set_close(bio, BIO_CLOSE);
+        BIO_free(bio);
+    }
+
+    operator bool() const {
+        return bio != NULL;
+    }
+
+    BIO * bio;
+
+private:
+    ats_file_bio(const ats_file_bio&);
+    ats_file_bio& operator=(const ats_file_bio&);
+};
+
 static unsigned long
 SSL_pthreads_thread_id()
 {
@@ -74,45 +96,32 @@ SSL_locking_callback(int mode, int type, const char * file, int line)
   }
 }
 
-static int
-SSL_CTX_add_extra_chain_cert_file(SSL_CTX * ctx, const char *file)
+static bool
+SSL_CTX_add_extra_chain_cert_file(SSL_CTX * ctx, const char *chainfile)
 {
-  BIO *in;
-  int ret = 0;
-  X509 *x = NULL;
+  X509 *cert;
+  ats_file_bio bio(chainfile, "r");
 
-  in = BIO_new(BIO_s_file_internal());
-  if (in == NULL) {
-    SSLerr(SSL_F_SSL_USE_CERTIFICATE_FILE, ERR_R_BUF_LIB);
-    goto end;
+  if (!bio) {
+    return false;
   }
 
-  if (BIO_read_filename(in, file) <= 0) {
-    SSLerr(SSL_F_SSL_USE_CERTIFICATE_FILE, ERR_R_SYS_LIB);
-    goto end;
-  }
+  for (;;) {
+    cert = PEM_read_bio_X509_AUX(bio.bio, NULL, NULL, NULL);
 
-  // j = ERR_R_PEM_LIB;
-  while ((x = PEM_read_bio_X509(in, NULL, ctx->default_passwd_callback, ctx->default_passwd_callback_userdata)) != NULL) {
-    ret = SSL_CTX_add_extra_chain_cert(ctx, x);
-    if (!ret) {
-        X509_free(x);
-        BIO_free(in);
- return -1;
-     }
+    if (!cert) {
+      // No more the certificates in this file.
+      break;
     }
-/*  x = PEM_read_bio_X509(in, NULL, ctx->default_passwd_callback, ctx->default_passwd_callback_userdata);
-  if (x == NULL) {
-    SSLerr(SSL_F_SSL_USE_CERTIFICATE_FILE, j);
-    goto end;
+
+    // This transfers ownership of the cert (X509) to the SSL context, if successful.
+    if (!SSL_CTX_add_extra_chain_cert(ctx, cert)) {
+      X509_free(cert);
+      return false;
+    }
   }
 
-  ret = SSL_CTX_add_extra_chain_cert(ctx, x);*/
-end:
-  //  if (x != NULL) X509_free(x);
-  if (in != NULL)
-    BIO_free(in);
-  return (ret);
+  return true;
 }
 
 #if TS_USE_TLS_SNI
@@ -294,7 +303,7 @@ SSLInitServerContext(
 
   if (serverCaCertPtr) {
     xptr<char> completeServerCaCertPath(Layout::relative_to(params->serverCACertPath, serverCaCertPtr));
-    if (SSL_CTX_add_extra_chain_cert_file(ctx, completeServerCaCertPath) <= 0) {
+    if (!SSL_CTX_add_extra_chain_cert_file(ctx, completeServerCaCertPath)) {
       Error ("SSL ERROR: Cannot use server certificate chain file: %s", (const char *)completeServerCaCertPath);
       goto fail;
     }
@@ -321,7 +330,7 @@ SSLInitServerContext(
 
   if (params->serverCertChainPath) {
     xptr<char> completeServerCaCertPath(Layout::relative_to(params->serverCACertPath, params->serverCertChainPath));
-    if (SSL_CTX_add_extra_chain_cert_file(ctx, params->serverCertChainPath) <= 0) {
+    if (!SSL_CTX_add_extra_chain_cert_file(ctx, params->serverCertChainPath)) {
       Error ("SSL ERROR: Cannot use server certificate chain file: %s", (const char *)completeServerCaCertPath);
       goto fail;
     }
@@ -444,41 +453,6 @@ SSLInitClientContext(const SSLConfigParams * params)
   return client_ctx;
 }
 
-struct ats_x509_certificate
-{
-  explicit ats_x509_certificate(X509 * x) : x509(x) {}
-  ~ats_x509_certificate() { if (x509) X509_free(x509); }
-  operator bool() const { return x509 != NULL; }
-
-  X509 * x509;
-
-private:
-  ats_x509_certificate(const ats_x509_certificate&);
-  ats_x509_certificate& operator=(const ats_x509_certificate&);
-};
-
-struct ats_file_bio
-{
-    ats_file_bio(const char * path, const char * mode)
-      : bio(BIO_new_file(path, mode)) {
-    }
-
-    ~ats_file_bio() {
-        (void)BIO_set_close(bio, BIO_CLOSE);
-        BIO_free(bio);
-    }
-
-    operator bool() const {
-        return bio != NULL;
-    }
-
-    BIO * bio;
-
-private:
-    ats_file_bio(const ats_file_bio&);
-    ats_file_bio& operator=(const ats_file_bio&);
-};
-
 static char *
 asn1_strdup(ASN1_STRING * s)
 {
@@ -499,10 +473,10 @@ ssl_index_certificate(SSLCertLookup * lookup, SSL_CTX * ctx, const char * certfi
   X509_NAME * subject = NULL;
 
   ats_file_bio bio(certfile, "r");
-  ats_x509_certificate certificate(PEM_read_bio_X509_AUX(bio.bio, NULL, NULL, NULL));
+  X509* cert = PEM_read_bio_X509_AUX(bio.bio, NULL, NULL, NULL);
 
   // Insert a key for the subject CN.
-  subject = X509_get_subject_name(certificate.x509);
+  subject = X509_get_subject_name(cert);
   if (subject) {
     int pos = -1;
     for (;;) {
@@ -522,7 +496,7 @@ ssl_index_certificate(SSLCertLookup * lookup, SSL_CTX * ctx, const char * certfi
 
 #if HAVE_OPENSSL_TS_H
   // Traverse the subjectAltNames (if any) and insert additional keys for the SSL context.
-  GENERAL_NAMES * names = (GENERAL_NAMES *)X509_get_ext_d2i(certificate.x509, NID_subject_alt_name, NULL, NULL);
+  GENERAL_NAMES * names = (GENERAL_NAMES *)X509_get_ext_d2i(cert, NID_subject_alt_name, NULL, NULL);
   if (names) {
     unsigned count = sk_GENERAL_NAME_num(names);
     for (unsigned i = 0; i < count; ++i) {
@@ -539,7 +513,7 @@ ssl_index_certificate(SSLCertLookup * lookup, SSL_CTX * ctx, const char * certfi
     GENERAL_NAMES_free(names);
   }
 #endif // HAVE_OPENSSL_TS_H
-
+  X509_free(cert);
 }
 
 static void
