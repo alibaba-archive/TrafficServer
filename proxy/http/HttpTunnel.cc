@@ -1189,9 +1189,8 @@ bool HttpTunnel::consumer_handler(int event, HttpTunnelConsumer * c)
   Debug("http_tunnel", "[%" PRId64 "] consumer_handler [%s %s]", sm->sm_id, c->name, HttpDebugNames::get_event_name(event));
 
   ink_assert(c->alive == true);
-  ink_assert(c->write_vio);
 
-  int64_t last_write = c->write_vio->ndone - c->bytes_written;
+  int64_t last_write = c->write_vio ? (c->write_vio->ndone - c->bytes_written) : 0;
   if (last_write > 0) {
     if (c->vc_type == HT_HTTP_CLIENT)
       sm->t_state.incResponseBytes(last_write);
