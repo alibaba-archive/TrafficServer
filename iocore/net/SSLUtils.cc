@@ -294,6 +294,9 @@ SSLInitServerContext(
 
   SSL_CTX_set_quiet_shutdown(ctx, 1);
 
+  // XXX OpenSSL recommends that we should use SSL_CTX_use_certificate_chain_file() here. That API
+  // also loads only the first certificate, but it allows the intermediate CA certificate chain to
+  // be in the same file. SSL_CTX_use_certificate_chain_file() was added in OpenSSL 0.9.3.
   completeServerCertPath = Layout::relative_to(params->serverCertPathOnly, serverCertPtr);
 
   if (SSL_CTX_use_certificate_file(ctx, completeServerCertPath, SSL_FILETYPE_PEM) <= 0) {
@@ -301,10 +304,20 @@ SSLInitServerContext(
     goto fail;
   }
 
-  if (serverCaCertPtr) {
-    xptr<char> completeServerCaCertPath(Layout::relative_to(params->serverCACertPath, serverCaCertPtr));
+  // First, load any CA chains from the global chain file.
+  if (params->serverCertChainFilename) {
+    xptr<char> completeServerCaCertPath(Layout::relative_to(params->serverCertPathOnly, params->serverCertChainFilename));
     if (!SSL_CTX_add_extra_chain_cert_file(ctx, completeServerCaCertPath)) {
-      Error ("SSL ERROR: Cannot use server certificate chain file: %s", (const char *)completeServerCaCertPath);
+      SSLError("failed to load global certificate chain from %s", (const char *)completeServerCaCertPath);
+      goto fail;
+    }
+  }
+
+  // Now, load any additional certificate chains specified in this entry.
+  if (serverCaCertPtr) {
+    xptr<char> completeServerCertChainPath(Layout::relative_to(params->serverCertPathOnly, serverCaCertPtr));
+    if (!SSL_CTX_add_extra_chain_cert_file(ctx, completeServerCertChainPath)) {
+      SSLError ("Cannot use server certificate chain file: %s", (const char *)completeServerCertChainPath);
       goto fail;
     }
   }
@@ -312,28 +325,17 @@ SSLInitServerContext(
   if (serverKeyPtr == NULL) {
     // assume private key is contained in cert obtained from multicert file.
     if (SSL_CTX_use_PrivateKey_file(ctx, completeServerCertPath, SSL_FILETYPE_PEM) <= 0) {
-      Error("SSL ERROR: Cannot use server private key file: %s", (const char *)completeServerCertPath);
+      SSLError("Cannot use server private key file: %s", (const char *)completeServerCertPath);
+      goto fail;
+    }
+  } else if (params->serverKeyPathOnly != NULL) {
+    xptr<char> completeServerKeyPath(Layout::get()->relative_to(params->serverKeyPathOnly, serverKeyPtr));
+    if (SSL_CTX_use_PrivateKey_file(ctx, completeServerKeyPath, SSL_FILETYPE_PEM) <= 0) {
+      SSLError("Cannot use server private key file: %s", (const char *)completeServerKeyPath);
       goto fail;
     }
   } else {
-    if (params->serverKeyPathOnly != NULL) {
-      xptr<char> completeServerKeyPath(Layout::get()->relative_to(params->serverKeyPathOnly, serverKeyPtr));
-      if (SSL_CTX_use_PrivateKey_file(ctx, completeServerKeyPath, SSL_FILETYPE_PEM) <= 0) {
-        Error("SSL ERROR: Cannot use server private key file: %s", (const char *)completeServerKeyPath);
-        goto fail;
-      }
-    } else {
-      SSLError("Empty ssl private key path in records.config.");
-    }
-
-  }
-
-  if (params->serverCertChainPath) {
-    xptr<char> completeServerCaCertPath(Layout::relative_to(params->serverCACertPath, params->serverCertChainPath));
-    if (!SSL_CTX_add_extra_chain_cert_file(ctx, params->serverCertChainPath)) {
-      Error ("SSL ERROR: Cannot use server certificate chain file: %s", (const char *)completeServerCaCertPath);
-      goto fail;
-    }
+    SSLError("Empty ssl private key path in records.config.");
   }
 
   if (!SSL_CTX_check_private_key(ctx)) {

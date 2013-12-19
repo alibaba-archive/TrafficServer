@@ -47,7 +47,7 @@ static Ptr<ProxyMutex> ssl_certificate_mutex = NULL;
 SSLConfigParams::SSLConfigParams()
 {
   serverCertPathOnly =
-    serverCertChainPath =
+    serverCertChainFilename =
     configFilePath =
     serverCACertFilename = serverCACertPath =
     clientCertPath = clientKeyPath =
@@ -70,7 +70,7 @@ SSLConfigParams::~SSLConfigParams()
 void
 SSLConfigParams::cleanup()
 {
-  ats_free_null(serverCertChainPath);
+  ats_free_null(serverCertChainFilename);
   ats_free_null(serverCACertFilename);
   ats_free_null(serverCACertPath);
   ats_free_null(clientCertPath);
@@ -115,7 +115,7 @@ set_paths_helper(const char *path, const char *filename, char **final_path, char
 void
 SSLConfigParams::initialize()
 {
-  char serverCertRelativePath[PATH_NAME_MAX] = "";
+  char *serverCertRelativePath = NULL;
   char *ssl_server_private_key_path = NULL;
   char *CACertRelativePath = NULL;
   char *ssl_client_cert_filename = NULL;
@@ -159,13 +159,10 @@ SSLConfigParams::initialize()
 #endif
   }
 
-  IOCORE_ReadConfigString(serverCertRelativePath, "proxy.config.ssl.server.cert.path", PATH_NAME_MAX);
+  IOCORE_ReadConfigStringAlloc(serverCertChainFilename, "proxy.config.ssl.server.cert_chain.filename");
+  IOCORE_ReadConfigStringAlloc(serverCertRelativePath, "proxy.config.ssl.server.cert.path");
   set_paths_helper(serverCertRelativePath, NULL, &serverCertPathOnly, NULL);
-
-  char *cert_chain = NULL;
-  IOCORE_ReadConfigStringAlloc(cert_chain, "proxy.config.ssl.server.cert_chain.filename");
-  set_paths_helper(serverCertRelativePath, cert_chain, NULL, &serverCertChainPath);
-  ats_free(cert_chain);
+  ats_free(serverCertRelativePath);
 
   IOCORE_ReadConfigStringAlloc(multicert_config_file, "proxy.config.ssl.server.multicert.filename");
   set_paths_helper(Layout::get()->sysconfdir, multicert_config_file, NULL, &configFilePath);

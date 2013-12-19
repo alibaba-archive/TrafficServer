@@ -59,7 +59,7 @@ struct SSLConfigParams : public ConfigInfo
   void cleanup();
 
   char *serverCertPathOnly;
-  char *serverCertChainPath;
+  char *serverCertChainFilename;;
   char *serverKeyPathOnly;
   char *serverCACertFilename;
   char *serverCACertPath;
