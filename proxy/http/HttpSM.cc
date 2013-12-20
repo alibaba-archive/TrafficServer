@@ -4327,7 +4327,7 @@ HttpSM::do_http_server_open(bool raw)
 
   if (raw == false && t_state.txn_conf->share_server_sessions &&
       (t_state.txn_conf->keep_alive_post_out == 1 || t_state.hdr_info.request_content_length == 0) &&
-      ua_session != NULL && is_private()) {
+      ua_session != NULL && !is_private()) {
     shared_result = httpSessionManager.acquire_session(this,    // state machine
                                                        &t_state.current.server->addr.sa,    // ip + port
                                                        t_state.current.server->name,    // hostname
