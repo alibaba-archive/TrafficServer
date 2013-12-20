@@ -33,6 +33,9 @@
 #if HAVE_OPENSSL_TS_H
 #include <openssl/ts.h>
 #endif
+#if HAVE_OPENSSL_EC_H
+#include <openssl/ec.h>
+#endif
 
 // ssl_multicert.config field names:
 #define SSL_IP_TAG            "dest_ip"
@@ -184,6 +187,26 @@ ssl_context_enable_sni(SSL_CTX * ctx, SSLCertLookup * lookup)
   NOWARN_UNUSED(ctx);
   NOWARN_UNUSED(lookup);
 #endif /* TS_USE_TLS_SNI */
+
+  return ctx;
+}
+
+static SSL_CTX *
+ssl_context_enable_ecdh(SSL_CTX * ctx)
+{
+#if TS_USE_TLS_ECKEY
+
+#if defined(SSL_CTRL_SET_ECDH_AUTO)
+  SSL_CTX_set_ecdh_auto(ctx, 1);
+#elif defined(HAVE_EC_KEY_NEW_BY_CURVE_NAME) && defined(NID_X9_62_prime256v1)
+  EC_KEY * ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+
+  if (ecdh) {
+    SSL_CTX_set_tmp_ecdh(ctx, ecdh);
+    EC_KEY_free(ecdh);
+  }
+#endif
+#endif
 
   return ctx;
 }
@@ -382,7 +405,7 @@ SSLInitServerContext(
     }
   }
 
-  return ctx;
+  return ssl_context_enable_ecdh(ctx);
 
 fail:
   SSL_CTX_free(ctx);
