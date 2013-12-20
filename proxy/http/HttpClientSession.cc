@@ -283,11 +283,11 @@ HttpClientSession::do_io_shutdown(ShutdownHowTo_t howto)
 void
 HttpClientSession::do_io_close(int alerrno)
 {
-  if (current_reader != NULL) {
-    current_reader->t_state.decActiveConnections();
-  }
-
   if (read_state == HCS_ACTIVE_READER) {
+    if (current_reader != NULL) {
+      current_reader->t_state.decActiveConnections();
+    }
+
     HTTP_DECREMENT_DYN_STAT(http_current_client_transactions_stat);
     if (m_active) {
       m_active = false;
