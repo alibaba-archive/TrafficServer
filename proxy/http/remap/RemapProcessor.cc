@@ -131,10 +131,9 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
 
   if (mapping_found) {
     request_header->mark_target_dirty();
-
     url_mapping *map = s->url_map.getMapping();
     if ((map != NULL) && (map->overridableHttpConfig != NULL) &&
-        (s->txn_conf != &s->my_txn_conf))
+        (s->txn_conf != s->my_txn_conf))
     {
       s->txn_conf = map->overridableHttpConfig;
       Debug("url_rewrite", "use mapping's overridableHttpConfig");

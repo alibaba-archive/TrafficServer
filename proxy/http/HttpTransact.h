@@ -924,11 +924,17 @@ public:
     HttpConfigParams *http_config_param;
     CacheLookupInfo cache_info;
     bool force_dns;
+    bool is_revalidation_necessary;     //Added to check if revalidation is necessary - YTS Team, yamsat
+    bool request_will_not_selfloop;     // To determine if process done - YTS Team, yamsat
+    bool cdn_remap_complete;
+    bool first_dns_lookup;
+    bool backdoor_request;      // internal
+    bool cop_test_page;         // internal
+    bool icp_lookup_success;    // in
+
     DNSLookupInfo dns_info;
     RedirectInfo redirect_info;
     unsigned int updated_server_version;
-    bool is_revalidation_necessary;     //Added to check if revalidation is necessary - YTS Team, yamsat
-    bool request_will_not_selfloop;     // To determine if process done - YTS Team, yamsat
     ConnectionAttributes client_info;
     ConnectionAttributes icp_info;
     ConnectionAttributes parent_info;
@@ -950,8 +956,6 @@ public:
     // Sandbox of Variables
     StateMachineAction_t cdn_saved_next_action;
     void (*cdn_saved_transact_return_point) (State* s);
-    bool cdn_remap_complete;
-    bool first_dns_lookup;
 
     ParentConfigParams *parent_params;
     ParentResult parent_result;
@@ -959,8 +963,6 @@ public:
     CacheControlResult cache_control;
     CacheLookupResult_t cache_lookup_result;
     // FilterResult             content_control;
-    bool backdoor_request;      // internal
-    bool cop_test_page;         // internal
 
     StateMachineAction_t next_action;   // out
     StateMachineAction_t api_next_action;       // out
@@ -971,7 +973,6 @@ public:
     int64_t internal_msg_buffer_fast_allocator_size;
     int64_t internal_msg_buffer_index;      // out
 
-    bool icp_lookup_success;    // in
     struct sockaddr_in icp_ip_result;   // in
 
     int scheme;                 // out
@@ -1000,25 +1001,14 @@ public:
     // for Range: to avoid write transfomed Range response into cache
     RangeSetup_t range_setup;
 
-    // for negative caching
-    bool negative_caching;
-
-    // for srv lookup
-    bool srv_lookup;
     // for authenticated content caching
     CacheAuth_t www_auth_content;
-
-    // new ACL filtering result (calculated immediately after remap)
-    bool client_connection_enabled;
-    bool server_busy;
-    bool acl_filtering_performed;
 
     // INK API/Remap API plugin interface
     remap_plugin_info::_tsremap_os_response *fp_tsremap_os_response;
     void* remap_plugin_instance;
     HTTPStatus http_return_code;
     int return_xbuf_size;
-    bool return_xbuf_plain;
     char return_xbuf[HTTP_TRANSACT_STATE_MAX_XBUF_SIZE];
     void *user_args[HTTP_SSN_TXN_MAX_USER_ARG];
 
@@ -1033,6 +1023,19 @@ public:
     // These ptrs are deallocate when transaction is over.
     HdrHeapSDKHandle *cache_req_hdr_heap_handle;
     HdrHeapSDKHandle *cache_resp_hdr_heap_handle;
+
+    // for negative caching
+    bool negative_caching;
+
+    // for srv lookup
+    bool srv_lookup;
+
+    // new ACL filtering result (calculated immediately after remap)
+    bool client_connection_enabled;
+    bool server_busy;
+    bool acl_filtering_performed;
+    bool return_xbuf_plain;
+
     bool api_release_server_session;
     bool api_cleanup_cache_read;
     bool api_skip_cache_lookup;
@@ -1044,11 +1047,20 @@ public:
     bool api_req_cacheable;
     bool api_resp_cacheable;
     bool api_server_addr_set;
+    bool stale_icp_lookup;
+
+    bool reverse_proxy;
+    bool url_remap_success;
+    bool already_downgraded;
+    
+    bool api_skip_all_remapping;
+    bool cacheControlByRemap;  //if cache control config by remap.config
+    bool needDecActiveConnection;
+
     UpdateCachedObject_t api_update_cached_object;
     LockUrl_t api_lock_url;
     StateMachineAction_t saved_update_next_action;
     CacheAction_t saved_update_cache_action;
-    bool stale_icp_lookup;
 
     // Remap plugin processor support
     UrlMappingContainer url_map;
@@ -1061,20 +1073,11 @@ public:
     int congestion_congested_or_failed;
     int congestion_connection_opened;
 
-    bool reverse_proxy;
-    bool url_remap_success;
-    char *remap_redirect;
     unsigned int filter_mask;
-
-    bool already_downgraded;
-    URL pristine_url;  // pristine url is the url before remap
-    
-    bool api_skip_all_remapping;
-    bool cacheControlByRemap;  //if cache control config by remap.config
-    bool needDecActiveConnection;
-
+    char *remap_redirect;
     OverridableHttpConfigParams *txn_conf;
-    OverridableHttpConfigParams my_txn_conf; // Storage for plugins, to avoid malloc
+    OverridableHttpConfigParams *my_txn_conf; //Storage for plugins
+    URL pristine_url;  // pristine url is the url before remap
     
     // Methods
     void
@@ -1086,21 +1089,25 @@ public:
 
     // Constructor
     State()
-      : m_magic(HTTP_TRANSACT_MAGIC_ALIVE), state_machine(NULL), http_config_param(NULL), force_dns(false),
-        updated_server_version(HostDBApplicationInfo::HTTP_VERSION_UNDEFINED), is_revalidation_necessary(false),
+      : m_magic(HTTP_TRANSACT_MAGIC_ALIVE), state_machine(NULL),
+        http_config_param(NULL),
+        force_dns(false),
+        is_revalidation_necessary(false),
         request_will_not_selfloop(false),       //YTS Team, yamsat
+        cdn_remap_complete(false),
+        first_dns_lookup(true),
+        backdoor_request(false),
+        cop_test_page(false),
+        icp_lookup_success(false),
+        updated_server_version(HostDBApplicationInfo::HTTP_VERSION_UNDEFINED),
         source(SOURCE_NONE),
         pre_transform_source(SOURCE_NONE),
         req_flavor(REQ_FLAVOR_FWDPROXY),
         pending_work(NULL),
         cdn_saved_next_action(STATE_MACHINE_ACTION_UNDEFINED),
         cdn_saved_transact_return_point(NULL),
-        cdn_remap_complete(false),
-        first_dns_lookup(true),
         parent_params(NULL),
         cache_lookup_result(CACHE_LOOKUP_NONE),
-        backdoor_request(false),
-        cop_test_page(false),
         next_action(STATE_MACHINE_ACTION_UNDEFINED),
         api_next_action(STATE_MACHINE_ACTION_UNDEFINED),
         transact_return_point(NULL),
@@ -1109,7 +1116,6 @@ public:
         internal_msg_buffer_size(0),
         internal_msg_buffer_fast_allocator_size(-1),
         internal_msg_buffer_index(0),
-        icp_lookup_success(false),
         scheme(-1),
         next_hop_scheme(scheme),
         orig_scheme(scheme),
@@ -1125,23 +1131,23 @@ public:
         first_stats(),
         current_stats(NULL),
         range_setup(RANGE_NONE),
-        negative_caching(false),
-        srv_lookup(false),
         www_auth_content(CACHE_AUTH_NONE),
-        client_connection_enabled(true),
-        server_busy(false),
-        acl_filtering_performed(false),
         fp_tsremap_os_response(NULL),
         remap_plugin_instance(0),
         http_return_code(HTTP_STATUS_NONE),
         return_xbuf_size(0),
-        return_xbuf_plain(false),
         api_txn_active_timeout_value(-1),
         api_txn_connect_timeout_value(-1),
         api_txn_dns_timeout_value(-1),
         api_txn_no_activity_timeout_value(-1),
         cache_req_hdr_heap_handle(NULL),
         cache_resp_hdr_heap_handle(NULL),
+        negative_caching(false),
+        srv_lookup(false),
+        client_connection_enabled(true),
+        server_busy(false),
+        acl_filtering_performed(false),
+        return_xbuf_plain(false),
         api_release_server_session(false),
         api_cleanup_cache_read(false),
         api_skip_cache_lookup(false),
@@ -1153,23 +1159,28 @@ public:
         api_req_cacheable(false),
         api_resp_cacheable(false),
         api_server_addr_set(false),
+        stale_icp_lookup(false),
+        reverse_proxy(false),
+        url_remap_success(false),
+        already_downgraded(false),
+        api_skip_all_remapping(false),
+        cacheControlByRemap(false),
+        needDecActiveConnection(false),
         api_update_cached_object(UPDATE_CACHED_OBJECT_NONE),
         api_lock_url(LOCK_URL_FIRST),
         saved_update_next_action(STATE_MACHINE_ACTION_UNDEFINED),
         saved_update_cache_action(CACHE_DO_UNDEFINED),
-        stale_icp_lookup(false),
         url_map(),
         pCongestionEntry(NULL),
         congest_saved_next_action(STATE_MACHINE_ACTION_UNDEFINED),
         congestion_control_crat(0),
         congestion_congested_or_failed(0),
         congestion_connection_opened(0),
-        reverse_proxy(false), url_remap_success(false), remap_redirect(NULL), filter_mask(0), already_downgraded(false),
-        pristine_url(),
-        api_skip_all_remapping(false),
-        cacheControlByRemap(false),
-        needDecActiveConnection(false),
-        txn_conf(NULL)
+        filter_mask(0),
+        remap_redirect(NULL),
+        txn_conf(NULL),
+        my_txn_conf(NULL),
+        pristine_url()
     {
       int i;
       char *via_ptr = via_string;
@@ -1260,6 +1271,10 @@ public:
       if (remap_redirect != NULL) {
         ats_free(remap_redirect);
       }
+      if (my_txn_conf != NULL) {
+        ats_free(my_txn_conf);
+      }
+
       return;
     }
 
@@ -1267,10 +1282,11 @@ public:
     void
     setup_per_txn_configs()
     {
-      if (txn_conf != &my_txn_conf) {
+      if (my_txn_conf == NULL) {
         // Make sure we copy it first.
-        memcpy(&my_txn_conf, &http_config_param->oride, sizeof(my_txn_conf));
-        txn_conf = &my_txn_conf;
+        my_txn_conf = (OverridableHttpConfigParams *)ats_malloc(sizeof(OverridableHttpConfigParams));
+        memcpy(my_txn_conf, &http_config_param->oride, sizeof(OverridableHttpConfigParams));
+        txn_conf = my_txn_conf;
       }
     }
 

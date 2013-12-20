@@ -263,10 +263,11 @@ public:
       return cache_sm.get_lookup_url();
   }
 
-
   int64_t sm_id;
   unsigned int magic;
 
+  bool post_failed;             //Added to identify post failure
+  bool debug_on;              //Transaction specific debug flag
   //YTS Team, yamsat Plugin
   bool enable_redirection;      //To check if redirection is enabled
   bool api_enable_redirection;  //To check if redirection is enabled
@@ -274,12 +275,10 @@ public:
   int redirect_url_len;
   int redirection_tries;        //To monitor number of redirections
   int64_t transfered_bytes;         //Added to calculate POST data
-  bool post_failed;             //Added to identify post failure
-  bool debug_on;              //Transaction specific debug flag
 
   //Taobao, for t-ts-slice Plugin
-  short slice_idx;
   uint64_t global_idx;
+  short slice_idx;
 
   // Tunneling request to plugin
   HttpPluginTunnel_t plugin_tunnel_type;
