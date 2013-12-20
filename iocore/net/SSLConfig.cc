@@ -41,6 +41,7 @@
 
 int SSLConfig::configid = 0;
 int SSLCertificateConfig::configid = 0;
+int SSLConfigParams::ssl_maxrecord = 0;
 
 static Ptr<ProxyMutex> ssl_certificate_mutex = NULL;
 
@@ -180,6 +181,9 @@ SSLConfigParams::initialize()
   // SSL session cache configurations
   IOCORE_ReadConfigInteger(ssl_session_cache, "proxy.config.ssl.session_cache");
   IOCORE_ReadConfigInteger(ssl_session_cache_size, "proxy.config.ssl.session_cache.size");
+
+  // SSL record size
+  REC_EstablishStaticConfigInt32(ssl_maxrecord, "proxy.config.ssl.max_record_size");
 
   // ++++++++++++++++++++++++ Client part ++++++++++++++++++++
   client_verify_depth = 7;
