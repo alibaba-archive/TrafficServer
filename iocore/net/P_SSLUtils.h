@@ -52,6 +52,9 @@ SSL_CTX * SSLInitClientContext(const SSLConfigParams * param);
 // Initialize the SSL library.
 void SSLInitializeLibrary();
 
+// Release SSL_CTX and the associated data
+void SSLReleaseContext(SSL_CTX* ctx);
+
 // Log an SSL error.
 void SSLError(const char *errStr, bool critical = true);
 
