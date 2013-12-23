@@ -98,31 +98,28 @@ void free_SSLNextProtocolTrampoline(SSLNextProtocolTrampoline *p)
 inline int
 SSLNextProtocolTrampoline::ioCompletionEvent(int event, void * edata)
 {
-  VIO * vio;
+  VIO * vio = static_cast<VIO *>(edata);
+  SSLNetVConnection * netvc = dynamic_cast<SSLNetVConnection *>(vio->vc_server);;
   Continuation * plugin;
-  SSLNetVConnection * netvc;
 
-  switch (event) {
-  case VC_EVENT_INACTIVITY_TIMEOUT:
-  case VC_EVENT_READ_COMPLETE:
-  case VC_EVENT_ERROR:
-    vio = static_cast<VIO *>(edata);
-    break;
-  default:
-    return EVENT_ERROR;
-  }
-
-  netvc = dynamic_cast<SSLNetVConnection *>(vio->vc_server);
   ink_assert(netvc != NULL);
 
-  plugin = netvc->endpoint();
-  if (plugin) {
-    send_plugin_event(plugin, NET_EVENT_ACCEPT, netvc);
-  } else if (npnParent->endpoint) {
-    // Route to the default endpoint
-    send_plugin_event(npnParent->endpoint, NET_EVENT_ACCEPT, netvc);
-  } else {
-    // No handler, what should we do? Best to just kill the VC while we can.
+  switch (event) {
+  case VC_EVENT_READ_COMPLETE:
+    plugin = netvc->endpoint();
+    if (plugin) {
+      send_plugin_event(plugin, NET_EVENT_ACCEPT, netvc);
+    } else if (npnParent->endpoint) {
+      // Route to the default endpoint
+      send_plugin_event(npnParent->endpoint, NET_EVENT_ACCEPT, netvc);
+    } else {
+      // No handler, what should we do? Best to just kill the VC while we can.
+      netvc->do_io(VIO::CLOSE);
+    }
+    break;
+  case VC_EVENT_INACTIVITY_TIMEOUT:
+  case VC_EVENT_ERROR:
+  default:
     netvc->do_io(VIO::CLOSE);
   }
 
