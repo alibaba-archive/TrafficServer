@@ -320,7 +320,7 @@ NetAccept::do_blocking_accept(EThread * t)
     vc->set_is_transparent(server.f_inbound_transparent);
     vc->mutex = new_ProxyMutex();
     vc->action_ = *action_;
-    vc->pt = spdy_accept ? BEGIN_SPDY_PROBE : NONE_SPDY_PROBE;
+    vc->pt = (spdy_accept && vc->getSSLHandShakeComplete()) ? BEGIN_SPDY_PROBE : NONE_SPDY_PROBE;
     SET_CONTINUATION_HANDLER(vc, (NetVConnHandler) & UnixNetVConnection::acceptEvent);
     //eventProcessor.schedule_imm(vc, getEtype());
     eventProcessor.schedule_imm_signal(vc, getEtype());
