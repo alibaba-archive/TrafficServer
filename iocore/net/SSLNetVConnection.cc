@@ -185,7 +185,7 @@ SSLNetVConnection::net_read_io(NetHandler *nh, EThread *lthread)
   int ret;
   int64_t r = 0;
   int64_t bytes = 0;
-  int64_t ntodo = 0;
+
   NetState *s = &this->read;
   MIOBufferAccessor &buf = s->vio.buffer;
 
@@ -203,7 +203,7 @@ SSLNetVConnection::net_read_io(NetHandler *nh, EThread *lthread)
   }
 
   ink_debug_assert(buf.writer());
-
+  int64_t ntodo = s->vio.ntodo();
   // This function will always return true unless
   // vc is an SSLNetVConnection.
   if (!getSSLHandShakeComplete()) {
@@ -243,7 +243,6 @@ SSLNetVConnection::net_read_io(NetHandler *nh, EThread *lthread)
   }
 
   // If there is nothing to do, disable connection
-  ntodo = s->vio.ntodo();
   if (ntodo <= 0) {
     read_disable(nh, this);
     return;
