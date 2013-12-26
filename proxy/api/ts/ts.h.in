@@ -2807,7 +2807,7 @@ extern "C"
   tsapi void TSIOBufferDestroy(TSIOBuffer bufp);
   tsapi TSIOBufferBlock TSIOBufferStart(TSIOBuffer bufp);
   tsapi int64_t TSIOBufferCopy(TSIOBuffer bufp, TSIOBufferReader readerp, int64_t length, int64_t offset);
-
+  tsapi void TSIOBufferReaderCopy(TSIOBufferReader readerp, const void *buf, int64_t length);
   /**
       Writes length bytes of data contained in the string buf to the
       TSIOBuffer bufp. Returns the number of bytes of data successfully
