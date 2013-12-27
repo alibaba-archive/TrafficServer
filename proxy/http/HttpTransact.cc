@@ -6006,7 +6006,7 @@ HttpTransact::is_stale_cache_response_returnable(State* s)
   cc_mask = (MIME_COOKED_MASK_CC_MUST_REVALIDATE |
              MIME_COOKED_MASK_CC_PROXY_REVALIDATE |
              MIME_COOKED_MASK_CC_NEED_REVALIDATE_ONCE |
-             MIME_COOKED_MASK_CC_NO_CACHE | MIME_COOKED_MASK_CC_NO_STORE | MIME_COOKED_MASK_CC_S_MAXAGE);
+             MIME_COOKED_MASK_CC_NO_CACHE | MIME_COOKED_MASK_CC_NO_STORE);
   if ((cached_response->get_cooked_cc_mask() & cc_mask) || cached_response->is_pragma_no_cache_set()) {
     DebugTxn("http_trans", "[is_stale_cache_response_returnable] " "document headers prevent serving stale");
     return false;
