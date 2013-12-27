@@ -748,7 +748,7 @@ int getFileContentEx(const char *filename, char *buff, \
 	if (*size <= 0)
 	{
 		Error("file: "__FILE__", line: %d, " \
-			"invalid size: "INT64_PRINTF_FORMAT, \
+			"invalid size: %"PRId64"", \
 			__LINE__, *size);
 		return EINVAL;
 	}
@@ -1112,7 +1112,7 @@ int parse_bytes(char *pStr, const int default_unit_bytes, int64_t *bytes)
 	if (*bytes < 0)
 	{
 		Error("file: "__FILE__", line: %d, " \
-			"bytes: "INT64_PRINTF_FORMAT" < 0", \
+			"bytes: %"PRId64" < 0", \
 			__LINE__, *bytes);
 		return EINVAL;
 	}

@@ -630,7 +630,7 @@ int get_response_session(const MsgHeader *pHeader,
     if ((*ppMachineSessions)->is_myself) { //request by me
       if (IS_SESSION_EMPTY(pSession->session_id)) {
         Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
-            "client sessionEntry: %16lX:%lX not exist, func_id: %d",
+            "client sessionEntry: %"PRId64":%"PRId64" not exist, func_id: %d",
             __LINE__, pHeader->session_id.ids[0],
             pHeader->session_id.ids[1], pHeader->func_id);
         *sessionEntry = NULL;
@@ -651,7 +651,7 @@ int get_response_session(const MsgHeader *pHeader,
         result = ENOENT;
 
         Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
-            "server sessionEntry: %08X:%u:%ld not exist, msg seq: %u, " \
+            "server sessionEntry: %08X:%u:%"PRId64" not exist, msg seq: %u, " \
             "func_id: %d, data_len: %d",
             __LINE__, pHeader->session_id.fields.ip,
             pHeader->session_id.fields.timestamp,
@@ -706,7 +706,7 @@ int get_response_session(const MsgHeader *pHeader,
         pTail->next = pSession;
 
         Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
-            "sessionEntry: %08X:%u:%ld, chain count: %d",
+            "sessionEntry: %08X:%u:%"PRId64", chain count: %d",
             __LINE__, pHeader->session_id.fields.ip,
             pHeader->session_id.fields.timestamp,
             pHeader->session_id.ids[1], chain_count + 1);
@@ -723,7 +723,7 @@ int get_response_session(const MsgHeader *pHeader,
     }
 
     Debug(CLUSTER_DEBUG_TAG, "file: "__FILE__", line: %d, " \
-        "sessionEntry: %08X:%u:%ld, position occupied by %08X:%u:%ld, "
+        "sessionEntry: %08X:%u:%"PRId64", position occupied by %08X:%u:%"PRId64", "
         "quest by me: %d, time distance: %u, func_id: %d",
         __LINE__, pHeader->session_id.fields.ip,
         pHeader->session_id.fields.timestamp, pHeader->session_id.ids[1],
