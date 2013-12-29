@@ -65,7 +65,7 @@ typedef const SSL_METHOD * ink_ssl_method_t;
 typedef SSL_METHOD * ink_ssl_method_t;
 #endif
 
-static ProxyMutex ** sslMutexArray;
+static ink_mutex * sslMutexArray;
 static bool open_ssl_initialized = false;
 
 struct ssl_ticket_key_t
@@ -118,14 +118,7 @@ SSL_locking_callback(int mode, int type, const char * file, int line)
 
   ink_debug_assert(type < CRYPTO_num_locks());
 
-  if (mode & CRYPTO_LOCK) {
-    MUTEX_TAKE_LOCK(sslMutexArray[type], this_ethread());
-  } else if (mode & CRYPTO_UNLOCK) {
-    MUTEX_UNTAKE_LOCK(sslMutexArray[type], this_ethread());
-  } else {
-    Debug("ssl", "invalid SSL locking mode 0x%x", mode);
-    ink_debug_assert(0);
-  }
+  (mode & CRYPTO_LOCK) ? ink_mutex_acquire(&sslMutexArray[type]) : ink_mutex_release(&sslMutexArray[type]);
 }
 
 static bool
@@ -299,10 +292,10 @@ SSLInitializeLibrary()
     SSL_load_error_strings();
     SSL_library_init();
 
-    sslMutexArray = (ProxyMutex **) OPENSSL_malloc(CRYPTO_num_locks() * sizeof(ProxyMutex *));
+    sslMutexArray = (ink_mutex *) OPENSSL_malloc(CRYPTO_num_locks() * sizeof(ink_mutex));
 
     for (int i = 0; i < CRYPTO_num_locks(); i++) {
-      sslMutexArray[i] = new_ProxyMutex();
+      ink_mutex_init(&sslMutexArray[i], "sslMutexArray");
     }
 
     CRYPTO_set_locking_callback(SSL_locking_callback);
