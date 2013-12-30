@@ -399,6 +399,19 @@ TS_ARG_ENABLE_VAR([use], [reclaimable_freelist])
 AC_SUBST(use_reclaimable_freelist)
 
 #
+# Options for SPDY
+#
+AC_MSG_CHECKING([whether to enable spdy])
+AC_ARG_ENABLE([spdy],
+	[AS_HELP_STRING([--enable-spdy], [turn on spdy protocol])],
+	[],
+	[enable_spdy="no"])
+AC_MSG_RESULT([$enable_spdy])
+TS_ARG_ENABLE_VAR([has], [spdy])
+AC_SUBST(has_spdy)
+AM_CONDITIONAL([BUILD_SPDY], [test 0 -ne $has_spdy])
+
+#
 # Configure how many stats to allocate for plugins. Default is 512.
 #
 AC_ARG_WITH([max-api-stats],
@@ -1090,6 +1103,12 @@ AC_SUBST(arg_max)
 #
 # Check for libreadline/libedit
 AX_LIB_READLINE
+
+#
+# Check for spdylay library
+if test "x${enable_spdy}" = "xyes"; then
+  PKG_CHECK_MODULES([SPDYLAY],[libspdylay])
+fi
 
 # -----------------------------------------------------------------------------
 # 5. CHECK FOR HEADER FILES
