@@ -46,7 +46,7 @@ AC_ARG_WITH(openssl, [AC_HELP_STRING([--with-openssl=DIR],[use a specific OpenSS
         ;;
       *)
         openssl_include="$withval/include"
-        openssl_ldflags="$withval/lib"
+        openssl_ldflags="$withval/lib64"
         AC_MSG_CHECKING(checking for OpenSSL includes in $withval)
         ;;
       esac
@@ -71,7 +71,7 @@ if test "x$openssl_base_dir" = "x"; then
   else
     enable_openssl=yes
     openssl_include="$openssl_base_dir/include"
-    openssl_ldflags="$openssl_base_dir/lib"
+    openssl_ldflags="$openssl_base_dir/lib64"
     AC_MSG_RESULT([${openssl_base_dir}])
   fi
 else
