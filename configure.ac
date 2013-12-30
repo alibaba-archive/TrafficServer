@@ -390,7 +390,7 @@ if test "x${enable_freelist}" = "xyes"; then
 				[turn on reclaimable freelist, this option is effective
 				 only when freelist is enable])],
 		[],
-		[enable_recalimable_freelist="yes"])
+		[enable_reclaimable_freelist="no"])
   AC_MSG_RESULT([$enable_reclaimable_freelist])
 else
   enable_reclaimable_freelist="no"
