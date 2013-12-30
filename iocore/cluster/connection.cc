@@ -69,6 +69,9 @@ SocketContextsByMachine *g_machine_sockets = NULL;  //[dest ip % MAX_MACHINE_COU
 
 void *connect_worker_entrance(void *arg);
 
+static void free_connect_sock_context(SocketContext *pSockContext,
+    const bool needLock);
+
 static int remove_connection(SocketContext *pSockContext, const bool needLock)
 {
   ConnectContext **ppConnection;
@@ -517,9 +520,19 @@ static int connection_handler(ConnectContext *pConnectContext, const bool needLo
 
   remove_connection(pSockContext, needLock);
   if (result == 0) {
-    result = machine_add_connection(pSockContext);
-    if (result == 0) {
-      machine_up_notify(pSockContext->machine);
+    if (cache_clustering_enabled > 0) {
+      result = machine_add_connection(pSockContext);
+      if (result == 0) {
+        machine_up_notify(pSockContext->machine);
+      }
+    }
+    else {
+      result = EAGAIN;
+      if (pSockContext->connect_type == CONNECT_TYPE_CLIENT) {
+        close_connection(pSockContext);
+        free_connect_sock_context(pSockContext, needLock);
+        return result;
+      }
     }
   }
 
@@ -744,16 +757,18 @@ int connection_init()
 {
   int result;
   int bytes;
+  SocketContextsByMachine *machine_sockets;
 
 	bytes = sizeof(SocketContextsByMachine) * MAX_MACHINE_COUNT;
-	g_machine_sockets = (SocketContextsByMachine *)malloc(bytes);
-	if (g_machine_sockets == NULL) {
+	machine_sockets = (SocketContextsByMachine *)malloc(bytes);
+	if (machine_sockets == NULL) {
 		Error("file: "__FILE__", line: %d, " \
 			"malloc %d bytes fail, errno: %d, error info: %s", \
 			__LINE__, bytes, errno, strerror(errno));
 		return errno != 0 ? errno : ENOMEM;
 	}
-	memset(g_machine_sockets, 0, bytes);
+	memset(machine_sockets, 0, bytes);
+  g_machine_sockets = machine_sockets;
 
   connect_thread_context.alloc_size = MAX_MACHINE_COUNT *
     g_connections_per_machine + 1;
@@ -1109,6 +1124,48 @@ int connection_manager_start(pthread_t *tid)
   return 0;
 }
 
+static int close_all_connections()
+{
+  ConnectContext **ppConnection;
+  ConnectContext **ppConnectionEnd;
+  SocketContext *pSockContext;
+  int count;
+
+  count = 0;
+	pthread_mutex_lock(&connect_thread_context.lock);
+  ppConnectionEnd = connect_thread_context.connections +
+    connect_thread_context.connection_count;
+  ppConnection = connect_thread_context.connections;
+  while (ppConnection < ppConnectionEnd) {
+    if ((*ppConnection)->is_accept) {
+      ppConnection++;
+      continue;
+    }
+
+    pSockContext = (*ppConnection)->pSockContext;
+
+    close_connection(pSockContext);
+    if (remove_connection(pSockContext, false) == 0) {  //removed
+      ppConnectionEnd = connect_thread_context.connections +
+        connect_thread_context.connection_count;
+    }
+    else {
+      ppConnection++;
+    }
+
+    if (pSockContext->connect_type == CONNECT_TYPE_SERVER) {
+      free_accept_sock_context(pSockContext);
+    }
+    else {
+      free_connect_sock_context(pSockContext, false);
+    }
+    count++;
+  }
+	pthread_mutex_unlock(&connect_thread_context.lock);
+
+  return count;
+}
+
 static int close_timeout_connections()
 {
 #define MAX_TIMEOUT_SOCKET_COUNT  64
@@ -1408,6 +1465,13 @@ void *connect_worker_entrance(void *arg)
 #endif
 
   while (g_continue_flag) {
+    if (cache_clustering_enabled <= 0) {
+      close_all_connections();
+      while (cache_clustering_enabled <= 0) {
+        sleep(1);
+      }
+    }
+
     if (CURRENT_TIME() - last_cluster_stat_time > 1) {
       log_session_stat();
       log_nio_stats();
@@ -1575,5 +1639,46 @@ SocketContext *get_socket_context(const ClusterMachine *machine)
 	}
 
   return pSocketContextArray->contexts[context_index];
+}
+
+int get_connected_socket_contexts(struct worker_thread_context *
+    thread_context, SocketContext **socketContexts, const int max_count)
+{
+  SocketContextArray *pSocketContextArray;
+  SocketContext *pSocketContext;
+  int machine_id;
+  int count;
+  int i;
+  unsigned int k;
+
+  if (g_machine_sockets == NULL) {  //not init yet!
+    return 0;
+  }
+
+  count = 0;
+  pthread_mutex_lock(&connect_thread_context.lock);
+  for (i=0; i<g_machine_count; i++) {
+    if ((machine_id=get_machine_index(g_machines[i].ip)) < 0) {
+      continue;
+    }
+
+    pSocketContextArray = &g_machine_sockets[machine_id].connected_list;
+    for (k=0; k<pSocketContextArray->count; k++) {
+      pSocketContext = pSocketContextArray->contexts[k];
+      if (pSocketContext->thread_context == thread_context) {
+        if (count + 1 > max_count) {
+          break;
+        }
+        socketContexts[count++] = pSocketContext;
+      }
+    }
+
+    if (k < pSocketContextArray->count) {  //buffer full
+      break;
+    }
+  }
+  pthread_mutex_unlock(&connect_thread_context.lock);
+
+  return count;
 }
 

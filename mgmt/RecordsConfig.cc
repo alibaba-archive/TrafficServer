@@ -246,6 +246,8 @@ RecordElement RecordsConfig[] = {
   //# 1 is full clustering, 2 is mgmt only, 3 is no clustering
   {RECT_LOCAL, "proxy.local.cluster.type", RECD_INT, "3", RECU_RESTART_TM, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
+  {RECT_LOCAL, "proxy.local.cluster.enabled", RECD_INT, "1", RECU_DYNAMIC, RR_NULL, RECC_INT, "[0-1]", RECA_NULL}
+  ,
   {RECT_CONFIG, "proxy.config.cluster.rsport", RECD_INT, "8088", RECU_NULL, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.cluster.mcport", RECD_INT, "8089", RECU_DYNAMIC, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}

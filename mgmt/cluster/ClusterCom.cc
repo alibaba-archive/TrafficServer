@@ -47,6 +47,7 @@
 
 int MultiCastMessages = 0;
 long LastHighestDelta = -1L;
+int cluster_enabled = 1;
 
 
 void *
@@ -68,6 +69,17 @@ drainIncomingChannel_broadcast(void *arg)
   lmgmt->syslogThrInit();
 
   for (;;) {                    /* Loop draining mgmt network channels */
+    if (!cluster_enabled) {
+      if (lmgmt->ccom->receive_fd > 0) {
+        close(lmgmt->ccom->receive_fd);
+      }
+      lmgmt->ccom->receive_fd = -1;
+
+      while (!cluster_enabled) {
+        sleep(1);
+      }
+    }
+
     // linux: set tv.tv_set in select() loop, since linux's select()
     // will update tv with the amount of time not slept (most other
     // implementations do not do this)
@@ -116,7 +128,7 @@ drainIncomingChannel_broadcast(void *arg)
     }
   }
   return ret;
-}                               /* End drainIncomingChannel */
+}                               /* End drainIncomingChannel_broadcast */
 
 /*
  * drainIncomingChannel
@@ -1163,7 +1175,6 @@ ClusterCom::handleMultiCastFilePacket(char *last, char *ip)
     }
 
     if (configFiles->getRollbackObj(file, &rb)) {
-
       our_ver = rb->getCurrentVersion();
       if (ver > our_ver) {      /* Their version is newer */
         /*
@@ -1345,6 +1356,11 @@ ClusterCom::sendSharedData(bool send_proxy_heart_beat)
   time_t now;
 
   if (cluster_type == NO_CLUSTER) {
+    return true;
+  }
+
+  if (!cluster_enabled) {
+    last_shared_send = 0;
     return true;
   }
 

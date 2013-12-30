@@ -184,6 +184,7 @@ public:
 
 };                              /* End class ClusterCom */
 
+extern int cluster_enabled;
 struct in_addr *mgmt_sortipaddrs(int num, struct in_addr **list);
 
 #endif /* _CLUSTER_COM_H */

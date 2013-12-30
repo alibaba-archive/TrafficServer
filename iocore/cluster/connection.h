@@ -49,6 +49,9 @@ int make_connection(SocketContext *pSockContext);
 int add_machine_sock_context(SocketContext *pSockContext);
 int remove_machine_sock_context(SocketContext *pSockContext);
 
+int get_connected_socket_contexts(struct worker_thread_context *
+    thread_context, SocketContext **socketContexts, const int max_count);
+
 #ifdef __cplusplus
 }
 #endif

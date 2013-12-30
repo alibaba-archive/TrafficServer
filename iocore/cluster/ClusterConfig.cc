@@ -241,7 +241,6 @@ int
 machine_config_change(const char *name, RecDataT data_type, RecData data, void *cookie)
 {
   NOWARN_UNUSED(name);
-  NOWARN_UNUSED(data);
   NOWARN_UNUSED(data_type);
   // Handle changes to the cluster.config or machines.config
   // file.  cluster.config is the list of machines in the
@@ -252,6 +251,11 @@ machine_config_change(const char *name, RecDataT data_type, RecData data, void *
   //
 
   char *filename = (char *) data.rec_string;
+  if (cache_clustering_enabled <= 0) {
+    Note("cluster not enabled, do NOT load %s", filename);
+    return 0;
+  }
+
   MachineList *l = read_MachineList(filename);
   MachineList *old = NULL;
 #ifdef USE_SEPARATE_MACHINE_CONFIG

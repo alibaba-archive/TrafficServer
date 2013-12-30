@@ -494,6 +494,33 @@ cluster_ping_config_cb(const char *name, RecDataT data_type, RecData data, void 
   return 0;
 }
 
+static int
+cluster_enabled_config_cb(const char *name, RecDataT data_type, RecData data, void *cookie)
+{
+  NOWARN_UNUSED(name);
+  NOWARN_UNUSED(data_type);
+  NOWARN_UNUSED(cookie);
+
+  if (data.rec_int == 1) {
+    if (cache_clustering_enabled == -2) {
+      cache_clustering_enabled = 1;
+      clusterProcessor.compute_cluster_mode();
+      if (cache_clustering_enabled > 0) {
+        do_machine_config_change((void *) CLUSTER_CONFIG, "proxy.config.cluster.cluster_configuration");
+      }
+      Note("cache clustering enabled");
+    }
+  }
+  else {
+    if (cache_clustering_enabled > 0) {
+      cache_clustering_enabled = -2;
+      Note("cache clustering disabled");
+    }
+  }
+
+  return 0;
+}
+
 int
 ClusterProcessor::init()
 {
@@ -788,6 +815,8 @@ ClusterProcessor::init()
     num_of_cluster_connections = num_of_cluster_threads;
   }
 
+  REC_RegisterConfigUpdateFunc("proxy.local.cluster.enabled", cluster_enabled_config_cb, NULL);
+
   IOCORE_EstablishStaticConfigInt32(CacheClusterMonitorEnabled, "proxy.config.cluster.enable_monitor");
   IOCORE_EstablishStaticConfigInt32(CacheClusterMonitorIntervalSecs, "proxy.config.cluster.monitor_interval_secs");
   IOCORE_ReadConfigInteger(cluster_receive_buffer_size, "proxy.config.cluster.receive_buffer_size");
@@ -873,9 +902,16 @@ ClusterProcessor::init()
 
     result = connection_manager_init(cluster_ip.sin.sin_addr.s_addr, cluster_port);
     if (result == 0) {
-      cache_clustering_enabled = 1;
-      Note("cache clustering enabled");
-      compute_cluster_mode();
+      int enabled;
+      IOCORE_ReadConfigInteger(enabled, "proxy.local.cluster.enabled");
+      if (enabled) {
+        cache_clustering_enabled = 1;
+        Note("cache clustering enabled");
+        compute_cluster_mode();
+      }
+      else {
+        cache_clustering_enabled = -2;
+      }
     }
     else {
       cache_clustering_enabled = 0;
@@ -1017,7 +1053,7 @@ ClusterProcessor::compute_cluster_mode()
       Note("RPC only cache clustering");
     }
   } else {
-    if (cache_clustering_enabled < 0) {
+    if (cache_clustering_enabled == -1) {
       cache_clustering_enabled = 1;
       Note("RPC only cache clustering disabled");
     }

@@ -1542,6 +1542,33 @@ inline static int64_t get_current_time()
   } while (0)
 
 
+static int close_active_connections(struct worker_thread_context *
+    pThreadContext)
+{
+#define MAX_SOCKET_CONTEXTS 1024
+
+  SocketContext *socketContexts[MAX_SOCKET_CONTEXTS];
+  int count;
+  int i;
+  int result;
+
+  result = 0;
+  do {
+    count = get_connected_socket_contexts(pThreadContext, socketContexts,
+        MAX_SOCKET_CONTEXTS);
+    if (count == 0) {
+      return result;
+    }
+
+    for (i=0; i<count; i++) {
+      close_socket(socketContexts[i]);
+    }
+    result += count;
+  } while (count == MAX_SOCKET_CONTEXTS);
+
+  return result;
+}
+
 static void *work_thread_entrance(void* arg)
 {
 #define MIN_USLEEP_TIME 100
@@ -1563,10 +1590,20 @@ static void *work_thread_entrance(void* arg)
   char name[32];
   sprintf(name, "[ET_CLUSTER %d]", (int)(pThreadContext -
         g_worker_thread_contexts) + 1);
-  prctl(PR_SET_NAME, name, 0, 0, 0); 
+  prctl(PR_SET_NAME, name, 0, 0, 0);
 #endif
 
 	while (g_continue_flag) {
+    if (cache_clustering_enabled <= 0) {
+      close_active_connections(pThreadContext);
+      sleep(1);
+      close_active_connections(pThreadContext);  //try again
+
+      while (cache_clustering_enabled <= 0) {  //waiting for enabled
+        sleep(1);
+      }
+    }
+
     loop_start_time = get_current_time();
 #ifdef DEBUG
     deal_start_time = loop_start_time;

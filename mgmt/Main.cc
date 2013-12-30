@@ -737,6 +737,8 @@ main(int argc, char **argv)
                group_addr, "224.0.1.0 - 239.255.255.255");
   }
 
+  REC_EstablishStaticConfigInt32(cluster_enabled, "proxy.local.cluster.enabled");
+
   /* TODO: Do we really need to init cluster communication? */
   lmgmt->initCCom(cluster_port, group_addr, cluster_server_port);       /* Setup cluster communication */
 

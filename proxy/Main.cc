@@ -142,7 +142,6 @@ int auto_clear_hostdb_flag = 0;
 int lock_process = DEFAULT_LOCK_PROCESS;
 extern int fds_limit;
 extern int cluster_port_number;
-extern int cache_clustering_enabled;
 char cluster_host[MAXDNAME + 1] = DEFAULT_CLUSTER_HOST;
 
 //         = DEFAULT_CLUSTER_PORT_NUMBER;
@@ -1605,14 +1604,9 @@ main(int argc, char **argv)
   // on a thread changes require special consideration to allow
   // minimial Cache Clustering functionality.
   //////////////////////////////////////////////////////////////////////
-  RecInt cluster_type;
-  cache_clustering_enabled = 0;
-
-  if (RecGetRecordInt("proxy.local.cluster.type", &cluster_type) == REC_ERR_OKAY) {
-    if (cluster_type == 1)
-      cache_clustering_enabled = 1;
-  }
-  Note("cache clustering %s", cache_clustering_enabled ? "enabled" : "disabled");
+  RecInt cluster_type = 0;
+  RecGetRecordInt("proxy.local.cluster.type", &cluster_type);
+  Note("cache clustering %s", cluster_type == 1 ? "enabled" : "disabled");
 
   // Initialize New Stat system
   initialize_all_global_stats();
