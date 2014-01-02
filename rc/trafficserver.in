@@ -267,17 +267,17 @@ case "$1" in
                 /usr/bin/killall trafficrecovery.sh >/dev/null 2>&1
 
                 RECORD_FILENAME='/etc/trafficserver/records.config'
-                TYPE_CLUSTER='LOCAL proxy.local.cluster.type INT 1'
+                CLUSTER_ENABLED='LOCAL proxy.local.cluster.enabled INT 1'
                 BAK_FILENAME="${RECORD_FILENAME}.bak"
                 /bin/cp -f $RECORD_FILENAME $BAK_FILENAME
 
-                TYPE_ALONE='LOCAL proxy.local.cluster.type INT 3'
-                /bin/sed -i "s/$TYPE_CLUSTER/$TYPE_ALONE/" $RECORD_FILENAME
+                CLUSTER_DISABLED='LOCAL proxy.local.cluster.enabled INT 0'
+                /bin/sed -i "s/$CLUSTER_ENABLED/$CLUSTER_DISABLED/" $RECORD_FILENAME
                 printf '%s' '0' > $NOTIFY_FILENAME && /bin/chmod 0777 $NOTIFY_FILENAME
 
                 action "Saft starting ${TS_PACKAGE_NAME}:" forkdaemon $TC_DAEMON $TC_DAEMON_ARGS
 
-                /bin/sed -i "s/$TYPE_ALONE/$TYPE_CLUSTER/" $RECORD_FILENAME
+                /bin/sed -i "s/$CLUSTER_DISABLED/$CLUSTER_ENABLED/" $RECORD_FILENAME
                 /usr/bin/trafficrecovery.sh &
               fi
             fi
@@ -475,12 +475,16 @@ case "$1" in
       if [ "x$content" = 'x0' ]; then
         echo "can't activate $NAME, the content of $NOTIFY_FILENAME must be 1"
       else
+        /usr/bin/traffic_line -s proxy.local.cluster.enabled -v 1
+        sleep 10
         activate $NAME
       fi
       ;;
     deactivate)
-        deactivate $NAME
-        ;;
+      deactivate $NAME
+      sleep 10
+      /usr/bin/traffic_line -s proxy.local.cluster.enabled -v 0
+      ;;
     *)
         if [ "$DISTRIB_ID" = "ubuntu" -o "$DISTRIB_ID" = "debian" ] ; then
             echo "Usage: $SCRIPTNAME {start|stop|restart}" >&2

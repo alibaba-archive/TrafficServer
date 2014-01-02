@@ -19,9 +19,6 @@ while [ 1 -eq 1 ]; do
   fi
 done
 
-sleep 5
-$bin_prefix/traffic_line -L
-sleep 5
 $run_prefix/trafficserver activate
 
 echo "traffic recovery done"
