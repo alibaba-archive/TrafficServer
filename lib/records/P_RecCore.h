@@ -107,4 +107,6 @@ void RecDumpRecordsHt(RecT rec_type = RECT_NULL);
 void
 RecDumpRecords(RecT rec_type, RecDumpEntryCb callback, void *edata);
 
+int write_to_rec_config_file(textBuffer *tb);
+
 #endif

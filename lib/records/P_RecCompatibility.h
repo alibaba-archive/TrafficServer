@@ -39,12 +39,13 @@ typedef int RecHandle;
 
 RecHandle RecFileOpenR(const char *file);
 RecHandle RecFileOpenW(const char *file);
-void RecFileClose(RecHandle h_file);
+int RecFileClose(RecHandle h_file);
 int RecFileRead(RecHandle h_file, char *buf, int size, int *bytes_read);
 int RecFileWrite(RecHandle h_file, char *buf, int size, int *bytes_written);
 int RecFileImport_Xmalloc(const char *file, char **file_buf, int *file_size);
 int RecFileGetSize(RecHandle h_file);
 int RecFileExists(const char *file);
+int RecFileSync(RecHandle h_file);
 
 //-------------------------------------------------------------------------
 // RecPipe
