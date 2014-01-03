@@ -52,9 +52,9 @@ struct FlowControl
 {
   Event *e_flowctl;
   ink_hrtime t_start;
-  unsigned int s_except;
+  uint64_t bps_max;
 
-  FlowControl(): e_flowctl(0), t_start(0), s_except(0)
+  FlowControl(): e_flowctl(0), t_start(0), bps_max(0)
   {
   }
 
@@ -64,7 +64,7 @@ struct FlowControl
       e_flowctl = 0;
     }
     t_start = 0;
-    s_except = 0;
+    bps_max = 0;
   }
 };
 
@@ -272,7 +272,7 @@ public:
 
   virtual ink_hrtime get_inactivity_timeout();
   virtual ink_hrtime get_active_timeout();
-  virtual void set_flow_ctl(int op, unsigned int flowctr = 0);
+  virtual void set_flow_ctl(int op, uint64_t flowctr = 0);
   virtual void cancel_flow_ctl(int op);
 
   virtual void set_local_addr();
@@ -393,7 +393,7 @@ UnixNetVConnection::set_tcp_init_cwnd(int init_cwnd)
 }
 
 TS_INLINE void
-UnixNetVConnection::set_flow_ctl(int op, unsigned int flowctr)
+UnixNetVConnection::set_flow_ctl(int op, uint64_t flowctr)
 {
   ink_debug_assert(op == VIO::READ || op == VIO::WRITE);
 
@@ -401,7 +401,7 @@ UnixNetVConnection::set_flow_ctl(int op, unsigned int flowctr)
 
   ink_debug_assert(fct->e_flowctl == NULL);
 
-  fct->s_except = flowctr;
+  fct->bps_max = flowctr;
   fct->t_start = ink_get_hrtime();
 }
 
@@ -410,7 +410,7 @@ UnixNetVConnection::cancel_flow_ctl(int op)
 {
   ink_debug_assert(op == VIO::READ || op == VIO::WRITE);
 
-  FlowControl *fct = (op == 1) ? &read_fct : &write_fct;
+  FlowControl *fct = (op == VIO::READ) ? &read_fct : &write_fct;
   fct->reset();
 }
 

@@ -114,7 +114,7 @@ public:
   virtual int set_tcp_init_cwnd(int init_cwnd);
   virtual void apply_options();
 
-  virtual void set_flow_ctl(int op, unsigned int flow_contorl);
+  virtual void set_flow_ctl(int op, uint64_t flow_contorl);
   virtual void cancel_flow_ctl(int op);
   virtual bool get_data(int id, void *data);
   virtual bool set_data(int id, void *data);

@@ -404,10 +404,10 @@ public:
   /** @set the flowctr in read/write side of the vconnect in bytes/s
   * op = VIO::READ, flow_ctl for read
   * op = VIO::WRITE, flow_ctl for write
-  * flowctr > 0, set flow_ctr on the op side
+  * flowctr > 0, max bps on the op side
   * flowctr = 0, no flow_ctr on the op side
   */
-  virtual void set_flow_ctl(int op, unsigned int flowctr = 0) = 0;
+  virtual void set_flow_ctl(int op, uint64_t flowctr = 0) = 0;
 
   virtual void cancel_flow_ctl(int op) = 0;
 

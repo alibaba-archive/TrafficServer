@@ -919,7 +919,7 @@ PluginVC::apply_options()
 }
 
 void
-PluginVC::set_flow_ctl(int op, unsigned int flow_contorl)
+PluginVC::set_flow_ctl(int op, uint64_t flow_contorl)
 {
 
 }

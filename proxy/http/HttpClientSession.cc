@@ -603,6 +603,9 @@ HttpClientSession::release(IOBufferReader * r)
 
   DebugSsn("http_cs", "[%" PRId64 "] session released by sm [%" PRId64 "]", con_id, current_reader->sm_id);
 
+  client_vc->cancel_flow_ctl(VIO::READ);
+  client_vc->cancel_flow_ctl(VIO::WRITE);
+
   // handling potential keep-alive here
   if (m_active) {
     m_active = false;

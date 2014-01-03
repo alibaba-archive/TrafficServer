@@ -406,10 +406,10 @@ read_from_net(NetHandler *nh, UnixNetVConnection *vc, EThread *thread)
     return;
   }
   // re caculate the flow control
-  if (vc->read_fct.s_except) {
+  if (vc->read_fct.bps_max) {
     ink_debug_assert(!vc->read_fct.e_flowctl);
     ink_hrtime now = ink_get_hrtime();
-    ink_hrtime next_time = vc->read_fct.t_start + 8 * s->vio.ndone * HRTIME_SECONDS(1) / vc->read_fct.s_except - now;
+    ink_hrtime next_time = vc->read_fct.t_start + 8 * s->vio.ndone * HRTIME_SECONDS(1) / vc->read_fct.bps_max - now;
     if (next_time > HRTIME_MSECONDS(50)) {
       vc->read_fct.e_flowctl = vc->thread->schedule_in_local(vc, next_time);
       read_disable(nh, vc);
@@ -578,10 +578,10 @@ write_to_net_io(NetHandler *nh, UnixNetVConnection *vc, EThread *thread)
       }
     }
     // re caculate the flow control
-    if (vc->write_fct.s_except) {
+    if (vc->write_fct.bps_max) {
       ink_debug_assert(!vc->write_fct.e_flowctl);
       ink_hrtime now = ink_get_hrtime();
-      ink_hrtime next_time = vc->write_fct.t_start + 8 * s->vio.ndone * HRTIME_SECONDS(1) / vc->write_fct.s_except - now;
+      ink_hrtime next_time = vc->write_fct.t_start + 8 * s->vio.ndone * HRTIME_SECONDS(1) / vc->write_fct.bps_max - now;
       if (next_time > HRTIME_MSECONDS(50)) {
         vc->write_fct.e_flowctl = vc->thread->schedule_in_local(vc, next_time);
         write_disable(nh, vc);
