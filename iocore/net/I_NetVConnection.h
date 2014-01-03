@@ -401,6 +401,16 @@ public:
   /** @return current inactivity_timeout value in nanosecs */
   virtual ink_hrtime get_inactivity_timeout() = 0;
 
+  /** @set the flowctr in read/write side of the vconnect in bytes/s
+  * op = VIO::READ, flow_ctl for read
+  * op = VIO::WRITE, flow_ctl for write
+  * flowctr > 0, set flow_ctr on the op side
+  * flowctr = 0, no flow_ctr on the op side
+  */
+  virtual void set_flow_ctl(int op, unsigned int flowctr = 0) = 0;
+
+  virtual void cancel_flow_ctl(int op) = 0;
+
   /** Returns local sockaddr storage. */
   sockaddr const* get_local_addr();
 

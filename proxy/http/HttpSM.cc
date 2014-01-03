@@ -3320,6 +3320,7 @@ HttpSM::tunnel_handler_post_ua(int event, HttpTunnelProducer * p)
 {
   STATE_ENTER(&HttpSM::tunnel_handler_post_ua, event);
   client_request_body_bytes = p->init_bytes_done + p->bytes_read;
+  ua_session->get_netvc()->cancel_flow_ctl(1);
 
   switch (event) {
   case VC_EVENT_EOS:

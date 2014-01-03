@@ -48,6 +48,26 @@ enum ProbeType
   END_SPDY_PROBE
 };
 
+struct FlowControl
+{
+  Event *e_flowctl;
+  ink_hrtime t_start;
+  unsigned int s_except;
+
+  FlowControl(): e_flowctl(0), t_start(0), s_except(0)
+  {
+  }
+
+  void reset() {
+    if (e_flowctl) {
+      e_flowctl->cancel();
+      e_flowctl = 0;
+    }
+    t_start = 0;
+    s_except = 0;
+  }
+};
+
 TS_INLINE void
 NetVCOptions::reset()
 {
@@ -241,6 +261,8 @@ public:
   OOB_callback *oob_ptr;
   bool from_accept_thread;
   ProbeType pt;
+  FlowControl read_fct;
+  FlowControl write_fct;
 
   int startEvent(int event, Event *e);
   int acceptEvent(int event, Event *e);
@@ -250,6 +272,8 @@ public:
 
   virtual ink_hrtime get_inactivity_timeout();
   virtual ink_hrtime get_active_timeout();
+  virtual void set_flow_ctl(int op, unsigned int flowctr = 0);
+  virtual void cancel_flow_ctl(int op);
 
   virtual void set_local_addr();
   virtual void set_remote_addr();
@@ -366,6 +390,28 @@ UnixNetVConnection::set_tcp_init_cwnd(int init_cwnd)
   Debug("socket", "Setting TCP initial congestion window %d -> unsupported", init_cwnd);
   return -1;
 #endif
+}
+
+TS_INLINE void
+UnixNetVConnection::set_flow_ctl(int op, unsigned int flowctr)
+{
+  ink_debug_assert(op == VIO::READ || op == VIO::WRITE);
+
+  FlowControl *fct = (op == VIO::READ) ? &read_fct : &write_fct;
+
+  ink_debug_assert(fct->e_flowctl == NULL);
+
+  fct->s_except = flowctr;
+  fct->t_start = ink_get_hrtime();
+}
+
+TS_INLINE void
+UnixNetVConnection::cancel_flow_ctl(int op)
+{
+  ink_debug_assert(op == VIO::READ || op == VIO::WRITE);
+
+  FlowControl *fct = (op == 1) ? &read_fct : &write_fct;
+  fct->reset();
 }
 
 TS_INLINE UnixNetVConnection::~UnixNetVConnection() { }

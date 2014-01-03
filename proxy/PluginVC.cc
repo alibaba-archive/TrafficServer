@@ -918,6 +918,18 @@ PluginVC::apply_options()
   // do nothing
 }
 
+void
+PluginVC::set_flow_ctl(int op, unsigned int flow_contorl)
+{
+
+}
+
+void
+PluginVC::cancel_flow_ctl(int op)
+{
+
+}
+
 bool
 PluginVC::get_data(int id, void *data)
 {

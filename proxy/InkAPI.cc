@@ -7734,6 +7734,14 @@ _conf_to_memberp(TSOverridableConfigKey conf,
     typ = OVERRIDABLE_TYPE_INT;
     ret = &overridablehttpConfig->sock_packet_tos_out;
     break;
+  case TS_CONFIG_NET_SOCK_FLOW_CTL_IN:
+    typ = OVERRIDABLE_TYPE_INT;
+    ret = &overridablehttpConfig->sock_flow_control_in;
+    break;
+  case TS_CONFIG_NET_SOCK_FLOW_CTL_OUT:
+    typ = OVERRIDABLE_TYPE_INT;
+    ret = &overridablehttpConfig->sock_flow_control_out;
+    break;
   case TS_CONFIG_HTTP_FORWARD_PROXY_AUTH_TO_PARENT:
     ret = &overridablehttpConfig->fwd_proxy_auth_to_parent;
     break;
@@ -8197,6 +8205,10 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
       else if (!strncmp(name, "proxy.config.net.sock_packet_mark_out", length))
         cnf = TS_CONFIG_NET_SOCK_PACKET_MARK_OUT;
       break;
+    case 'n':
+      if (!strncmp(name, "proxy.config.net.sock_flow_control_in", length))
+        cnf = TS_CONFIG_NET_SOCK_FLOW_CTL_IN;
+      break;
     }
     break;
 
@@ -8209,6 +8221,10 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
     case 's':
       if (!strncmp(name, "proxy.config.http.send_http11_requests", length))
         cnf = TS_CONFIG_HTTP_SEND_HTTP11_REQUESTS;
+      break;
+    case 't':
+      if (!strncmp(name, "proxy.config.net.sock_flow_control_out", length))
+        cnf = TS_CONFIG_NET_SOCK_FLOW_CTL_OUT;
       break;
     }
     break;

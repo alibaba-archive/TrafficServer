@@ -869,7 +869,10 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_CONFIG, "proxy.config.net.sock_mss_in", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
-
+  {RECT_CONFIG, "proxy.config.net.sock_flow_control_in", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.net.sock_flow_control_out", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
   //##############################################################################
   //#
   //# Cluster Subsystem

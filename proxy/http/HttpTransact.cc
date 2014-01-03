@@ -5823,6 +5823,9 @@ HttpTransact::initialize_state_variables_from_request(State* s, HTTPHdr* obsolet
 
   // set the rww config
   s->cache_info.config.max_rww_delay = (int) s->txn_conf->cache_max_rww_delay;
+  // special case for flow control
+  s->state_machine->ua_session->get_netvc()->set_flow_ctl(VIO::READ, (int) s->txn_conf->sock_flow_control_in);
+  s->state_machine->ua_session->get_netvc()->set_flow_ctl(VIO::WRITE, (int) s->txn_conf->sock_flow_control_out);
 }
 
 void

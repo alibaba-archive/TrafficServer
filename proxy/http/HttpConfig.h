@@ -438,6 +438,7 @@ struct OverridableHttpConfigParams {
        down_server_timeout(0), client_abort_threshold(0),
        freshness_fuzz_time(0), freshness_fuzz_min_time(0),
        max_cache_open_read_retries(0), cache_open_read_retry_time(0),
+       sock_flow_control_in(0), sock_flow_control_out(0),
 
        // Strings / floats must come last
        proxy_response_server_string(NULL), proxy_response_server_string_len(0),
@@ -581,6 +582,9 @@ struct OverridableHttpConfigParams {
   // open read failure retries.
   MgmtInt max_cache_open_read_retries;
   MgmtInt cache_open_read_retry_time;   // time is in mseconds
+
+  MgmtInt sock_flow_control_in;
+  MgmtInt sock_flow_control_out;
 
   // IMPORTANT: Here comes all strings / floats configs.
 
