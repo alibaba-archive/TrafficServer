@@ -46,6 +46,7 @@ doxygen:
 
 asf-distdir:
 	@$(am__remove_distdir)
+	rm -rf $(distdir).tar.bz2
 	test -d .git && git clone . $(distdir) || svn export . $(distdir)
 	cd $(distdir) && autoreconf -i
 	rm -rf $(distdir)/autom4te.cache $(distdir)/.git
