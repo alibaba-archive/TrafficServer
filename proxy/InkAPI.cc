@@ -7502,6 +7502,14 @@ TSHttpTxnSliceInfoSet(TSHttpTxn txnp, uint64_t global_idx, short slice_idx)
   ((HttpSM *)txnp)->global_idx = global_idx;
 }
 
+void
+TSHttpTxnNetProtoTypeSet(TSHttpTxn txnp, TSNetProtoType proto_type)
+{
+  sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
+
+  ((HttpSM *)txnp)->proto_type = (NetProtoType)proto_type;
+}
+
 char*
 TSFetchRespGet(TSHttpTxn txnp, int *length)
 {

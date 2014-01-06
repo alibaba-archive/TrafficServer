@@ -81,6 +81,15 @@ extern "C"
 #define TS_DEPRECATED
 #endif
 
+   typedef enum
+   {
+     TS_NET_PROTO_HTTP = 0,
+     TS_NET_PROTO_HTTP_SSL,
+     TS_NET_PROTO_HTTP_SPDY,
+     TS_NET_PROTO_HTTP_SPDY_SSL,
+     TS_NET_PROTO_MAX
+   } TSNetProtoType;
+
   /**
       The following struct is used by TSPluginRegister(). It stores
       registration information about the plugin.
@@ -3221,6 +3230,9 @@ extern "C"
 
   /* Set the slice info for t-ts-slice plugin */
   tsapi void TSHttpTxnSliceInfoSet(TSHttpTxn txnp, uint64_t global_idx, short slice_idx);
+
+  /* Set protocol type */
+  tsapi void TSHttpTxnNetProtoTypeSet(TSHttpTxn txnp, TSNetProtoType proto_type);
 
   /* Get current HTTP connection stats */
   tsapi int TSHttpCurrentClientConnectionsGet(void);

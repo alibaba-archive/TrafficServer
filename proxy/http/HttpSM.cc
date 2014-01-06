@@ -314,7 +314,7 @@ HttpSM::HttpSM()
     post_failed(false), debug_on(false),
     //YTS Team, yamsat Plugin
     enable_redirection(false), api_enable_redirection(true), redirect_url(NULL), redirect_url_len(0), redirection_tries(0), transfered_bytes(0),
-    global_idx(0), slice_idx(0),
+    global_idx(0), slice_idx(0), proto_type(NET_PROTO_HTTP),
     plugin_tunnel_type(HTTP_NO_PLUGIN_TUNNEL),
     plugin_tunnel(NULL),
     reentrancy_count(0),

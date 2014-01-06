@@ -280,6 +280,8 @@ public:
   uint64_t global_idx;
   short slice_idx;
 
+  NetProtoType proto_type;
+
   // Tunneling request to plugin
   HttpPluginTunnel_t plugin_tunnel_type;
   PluginVCCore *plugin_tunnel;
