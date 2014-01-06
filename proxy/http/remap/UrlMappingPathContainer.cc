@@ -85,6 +85,9 @@ UrlMappingPathContainer::Search(URL *request_url, UrlMappingContainer &mapping_c
   }
 
   request_path = request_url->path_get(&request_path_len);
+  if (request_path == NULL) {
+    request_path = "";
+  }
   forl_LL(UrlMappingRegexMatcher, path_regex, _path_regex_list) {
     if (path_regex->getMapping()->getRank() > rank_ceiling) {
       break;
