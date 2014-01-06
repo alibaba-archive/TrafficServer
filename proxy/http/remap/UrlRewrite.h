@@ -190,7 +190,7 @@ public:
   int num_rules_redirect_permanent;
   int num_rules_redirect_temporary;
   int num_rules_forward_with_recv_port;
-  remap_plugin_info *remap_pi_list;
+  static remap_plugin_info *remap_pi_list;
 
 private:
   bool _valid;

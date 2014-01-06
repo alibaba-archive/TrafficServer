@@ -42,6 +42,8 @@
 
 #include "ink_string.h"
 
+remap_plugin_info *UrlRewrite::remap_pi_list = NULL;
+
 extern TSReturnCode
 TSHttpConfigParamSet(OverridableHttpConfigParams *overridableHttpConfig,
         const char* name, int nameLen, const char *value, int valueLen);
@@ -102,7 +104,7 @@ UrlRewrite::UrlRewrite(const char *file_var_in)
    file_var(NULL), ts_name(NULL), http_default_redirect_url(NULL),
    num_rules_forward(0), num_rules_reverse(0),
    num_rules_redirect_permanent(0), num_rules_redirect_temporary(0),
-   num_rules_forward_with_recv_port(0), remap_pi_list(NULL), _valid(false),
+   num_rules_forward_with_recv_port(0), _valid(false),
    _oldDefineCheckers(NULL)
 {
   char *config_file = NULL;
@@ -177,9 +179,6 @@ UrlRewrite::~UrlRewrite()
   DestroyStore(forward_mappings_with_recv_port);
 
   ACLDefineManager::freeDefineCheckers(_oldDefineCheckers);
-
-  if (this->remap_pi_list)
-      this->remap_pi_list->delete_my_list();
 
   _valid = false;
 }
