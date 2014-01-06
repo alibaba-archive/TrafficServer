@@ -268,7 +268,6 @@ int
 LogHost::preproc_and_try_delete (LogBuffer *lb)
 {
   int ret = -1;
-  int bytes;
 
   if (lb == NULL) {
     Note("Cannot write LogBuffer to LogHost %s; LogBuffer is NULL", name());
@@ -290,11 +289,8 @@ LogHost::preproc_and_try_delete (LogBuffer *lb)
   // make sure we're connected & authenticated
 
   if (!connected(NOPING)) {
-    if (!connect ()) {
-      Note("Cannot write LogBuffer to LogHost %s; not connected", name());
-      orphan_write_and_try_delete(lb);
-      return -1;
-    }
+    if (!connect ())
+      goto done;
   }
 
   // try sending the logbuffer
@@ -303,15 +299,9 @@ LogHost::preproc_and_try_delete (LogBuffer *lb)
   bytes_to_send = buffer_header->byte_count;
   // lb->convert_to_network_order();
   bytes_sent = m_sock->write (m_sock_fd, buffer_header, bytes_to_send);
-  if (bytes_to_send != bytes_sent) {
-    Note("Bad write to LogHost %s; bad send count %d/%d",
-        name(), bytes_sent, bytes_to_send);
-    disconnect();
-    // TODO: We currently don't try to make the log buffers handle little vs big endian. TS-1156.
-    // lb->convert_to_host_order ();
-    orphan_write_and_try_delete(lb);
-    return -1;
-  }
+  if (bytes_to_send != bytes_sent)
+    goto done;
+
   ret = 0;
 
 #else // !defined(IOCORE_LOG_COLLATION)
@@ -321,20 +311,10 @@ LogHost::preproc_and_try_delete (LogBuffer *lb)
     ink_assert(m_log_collation_client_sm != NULL);
   }
 
-  // send log_buffer; orphan if necessary
-  bytes = m_log_collation_client_sm->send(lb);
-  if (bytes <= 0) {
-#ifndef TS_MICRO
-    orphan_write_and_try_delete(lb);
-#if defined(LOG_BUFFER_TRACKING)
-    Debug("log-buftrak", "[%d]LogHost::preproc_and_try_delete - orphan write complete",
-        lb->header()->id);
-#endif // defined(LOG_BUFFER_TRACKING)
-    return -1;
-#else
-    Note("Starting dropping log buffer due to overloading");
+  // send log_buffer;
+  if (m_log_collation_client_sm->send(lb) <= 0) {
+    ret = -1;
     goto done;
-#endif // TS_MICRO
   }
 
   return 0;
@@ -469,6 +449,8 @@ LogHostList::preproc_and_try_delete(LogBuffer * lb)
 {
   int ret;
   unsigned nr_host, nr;
+  bool need_orphan = true;
+  LogHost *available_host = NULL;
 
   ink_release_assert(lb->m_references == 0);
 
@@ -477,19 +459,23 @@ LogHostList::preproc_and_try_delete(LogBuffer * lb)
 
   for (LogHost * host = first(); host && nr; host = next(host)) {
     LogHost *lh = host;
+    available_host = lh;
 
     do {
       ink_atomic_increment(&lb->m_references, 1);
       ret = lh->preproc_and_try_delete(lb);
+      need_orphan = need_orphan && (ret < 0);
     } while (ret < 0 && (lh = lh->failover_link.next));
 
-    LogBuffer::destroy(lb);
     nr--;
   }
 
-  if (nr_host == 0)
-    delete lb;
+  if (need_orphan && available_host) {
+    ink_atomic_increment(&lb->m_references, 1);
+    available_host->orphan_write_and_try_delete(lb);
+  }
 
+  LogBuffer::destroy(lb);
   return 0;
 }
 
