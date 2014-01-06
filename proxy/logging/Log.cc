@@ -411,6 +411,23 @@ Log::init_fields()
   global_field_list.add(field, false);
   ink_hash_table_insert(field_symbol_hash, "fgi", field);
 
+
+
+  Ptr<LogFieldAliasTable> proto_type_map = NEW(new LogFieldAliasTable);
+  proto_type_map->init(4,
+                       NET_PROTO_HTTP, "HTTP",
+                       NET_PROTO_HTTP_SSL, "HTTP_SSL",
+                       NET_PROTO_HTTP_SPDY, "HTTP_SPDY",
+                       NET_PROTO_HTTP_SPDY_SSL, "HTTP_SPDY_SSL");
+
+  field = NEW(new LogField("client_req_proto_type", "cqpt",
+                           LogField::sINT,
+                           &LogAccess::marshal_client_req_proto_type,
+                           &LogAccess::unmarshal_client_req_proto_type,
+                           (Ptr<LogFieldAliasMap>) proto_type_map));
+  global_field_list.add(field, false);
+  ink_hash_table_insert(field_symbol_hash, "cqpt", field);
+
   field = NEW (new LogField ("client_auth_user_name", "caun",
                              LogField::STRING,
                              &LogAccess::marshal_client_auth_user_name,

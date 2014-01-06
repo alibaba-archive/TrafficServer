@@ -90,6 +90,12 @@ LogAccess::marshal_file_global_index(char *buf)
 }
 
 int
+LogAccess::marshal_client_req_proto_type(char *buf)
+{
+  DEFAULT_INT_FIELD;
+}
+
+int
 LogAccess::marshal_client_host_ip(char *buf)
 {
   DEFAULT_IP_FIELD;
@@ -1360,6 +1366,16 @@ LogAccess::unmarshal_cache_write_code(char **buf, char *dest, int len, Ptr<LogFi
   ink_assert(dest != NULL);
 
   return (LogAccess::unmarshal_with_map(unmarshal_int(buf), dest, len, map, "UNKNOWN_CACHE_WRITE_CODE"));
+}
+
+int
+LogAccess::unmarshal_client_req_proto_type(char **buf, char *dest, int len, Ptr<LogFieldAliasMap> map)
+{
+  ink_assert(buf != NULL);
+  ink_assert(*buf != NULL);
+  ink_assert(dest != NULL);
+
+  return (LogAccess::unmarshal_with_map(unmarshal_int(buf), dest, len, map, "UNKNOWN_PROTO_TYPE"));
 }
 
 int

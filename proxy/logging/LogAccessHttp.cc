@@ -160,6 +160,15 @@ LogAccessHttp::marshal_file_global_index(char *buf)
 }
 
 int
+LogAccessHttp::marshal_client_req_proto_type(char *buf)
+{
+  if (buf) {
+    marshal_int(buf, m_http_sm->proto_type);
+  }
+  return INK_MIN_ALIGN;
+}
+
+int
 LogAccessHttp::marshal_client_host_ip(char *buf)
 {
   return marshal_ip(buf, &m_http_sm->t_state.client_info.addr.sa);
