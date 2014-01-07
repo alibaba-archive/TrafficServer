@@ -127,7 +127,7 @@ ssl_read_from_net(NetHandler * nh, UnixNetVConnection * vc, EThread * lthread, i
           // not EOF
           event = SSL_READ_ERROR;
           ret = errno;
-          Error("[SSL_NetVConnection::ssl_read_from_net] SSL_ERROR_SYSCALL, underlying IO error: %s", strerror(errno));
+          Debug("ssl", "[SSL_NetVConnection::ssl_read_from_net] SSL_ERROR_SYSCALL, underlying IO error: %s", strerror(errno));
         } else {
           // then EOF observed, treat it as EOS
           event = SSL_READ_EOS;
@@ -144,7 +144,7 @@ ssl_read_from_net(NetHandler * nh, UnixNetVConnection * vc, EThread * lthread, i
         ERR_error_string(ERR_get_error(), err_string);
         event = SSL_READ_ERROR;
         ret = errno;
-        Error("[SSL_NetVConnection::ssl_read_from_net] SSL_ERROR_SSL %s", err_string);
+        Debug("ssl", "[SSL_NetVConnection::ssl_read_from_net] SSL_ERROR_SSL %s", err_string);
         break;
       }
       }                         // switch
@@ -408,7 +408,6 @@ SSLNetVConnection::load_buffer_and_write(int64_t towrite, int64_t &wattempted, i
     default:
       r = -errno;
       Debug("ssl", "SSL_write-SSL_ERROR_SSL");
-      SSLError("SSL_write");
       break;
     }
     return (r);
@@ -471,7 +470,6 @@ SSLNetVConnection::sslStartHandShake(int event, int &err)
       this->ssl = make_ssl_connection(lookup->defaultContext(), this);
       if (this->ssl == NULL) {
         Debug("ssl", "SSLNetVConnection::sslServerHandShakeEvent, ssl create failed");
-        SSLError("SSL_StartHandShake");
         return EVENT_ERROR;
       }
     }
@@ -619,7 +617,7 @@ SSLNetVConnection::sslClientHandShakeEvent(int &err)
   case SSL_ERROR_SSL:
   default:
     err = errno;
-    SSLError("sslClientHandShakeEvent");
+    Debug("ssl", "SSLNetVConnection::sslClientHandShakeEvent, ssl_error");
     return EVENT_ERROR;
     break;
 
