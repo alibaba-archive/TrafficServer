@@ -1803,7 +1803,7 @@ UrlRewrite::_regexMappingLookup(UrlMappingRegexList &regex_mappings, URL *reques
 
         URL *expanded_url = mapping_container.createNewToURL();
         if (expanded_url->parse(new_url, new_url_len) == PARSE_ERROR) {
-          Warning("parse fail, url: %.*s", new_url_len, new_url);
+          Debug("url_rewrite_regex", "parse fail, url: %.*s", new_url_len, new_url);
           break;
         }
 
