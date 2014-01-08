@@ -100,7 +100,11 @@ libhttp_remap_a_SOURCES = \
 	parser/IncludeDirective.h  \
 	parser/IncludeDirective.cc \
 	parser/IncludeParams.h   \
-	parser/IncludeParams.cc
+	parser/IncludeParams.cc  \
+	parser/ScriptDirective.h  \
+	parser/ScriptDirective.cc \
+	parser/ScriptParams.h     \
+	parser/ScriptParams.cc
 
 if STATIC_LIBTS
    which_libts = $(top_builddir)/lib/ts/.libs/libtsutil.a

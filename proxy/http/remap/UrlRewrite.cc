@@ -962,6 +962,9 @@ UrlRewrite::BuildTable()
     return result;
   }
 
+  StringBuffer sb;
+  rootParams.toString(&sb);
+
   ACLDefineManager *defineManager = ACLDefineManager::getInstance();
   if ((result=defineManager->init(&rootParams)) != 0) {
     return result;

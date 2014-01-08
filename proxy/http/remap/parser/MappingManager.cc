@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "SchemeParams.h"
+#include "ScriptParams.h"
 #include "MappingManager.h"
 
 int MappingManager::loadCheckLists(const DirectiveParams *rootParams,
@@ -364,8 +365,13 @@ int MappingManager::loadMappingUrls(MappingEntry *mappingEntry,
 int MappingManager::loadPlugins(MappingEntry *mappingEntry,
     const MappingParams *mappingParams)
 {
+#define MAX_SCRIPT_COUNT  10
   int result;
+  int scriptCount;
   const PluginParams *pluginParams;
+  const ScriptParams *scriptParams;
+  const ScriptParams *scriptParamsArray[MAX_SCRIPT_COUNT];
+  StringValue script;
   const DirectiveParams *children = mappingParams->getChildren();
   while (children != NULL) {
     if ((pluginParams=dynamic_cast<const PluginParams *>(
@@ -375,17 +381,53 @@ int MappingManager::loadPlugins(MappingEntry *mappingEntry,
         return result;
       }
 
-      const PluginInfo *pluginInfo = pluginParams->getPluginInfo();
-      if (!mappingEntry->_plugins.checkSize()) {
-        return ENOMEM;
+      if ((result=mappingEntry->addPlugin(pluginParams->getPluginInfo()))
+          != 0)
+      {
+        return result;
+      }
+    }
+
+    if ((scriptParams=dynamic_cast<const ScriptParams *>(
+            children)) != NULL)
+    {
+      scriptCount = 0;
+      scriptParamsArray[scriptCount++] = scriptParams;
+      children = children->next();
+      while (children != NULL && (scriptParams=dynamic_cast
+            <const ScriptParams *>(children)) != NULL)
+      {
+        if (scriptCount >= MAX_SCRIPT_COUNT) {
+          return ENOSPC;
+        }
+
+        scriptParamsArray[scriptCount++] = scriptParams;
+        children = children->next();
       }
 
-      if (pluginInfo->duplicate(mappingEntry->_plugins.items +
-            mappingEntry->_plugins.count) == NULL)
+      if (!ScriptParams::checkScriptPhases(scriptParamsArray,
+            scriptCount))
       {
-        return ENOMEM;
+        return EINVAL;
       }
-      mappingEntry->_plugins.count++;
+
+      if ((result=ScriptParams::generateScript(scriptParamsArray,
+          scriptCount, &script)) != 0)
+      {
+        return result;
+      }
+
+      PluginInfo pluginInfo;
+      pluginInfo.filename.length = sizeof(LUA_PLUGIN_FILENAME) - 1;
+      pluginInfo.filename.str = LUA_PLUGIN_FILENAME;
+      pluginInfo.paramCount = 1;
+      pluginInfo.params[0] = script;
+      if ((result=mappingEntry->addPlugin(&pluginInfo)) != 0) {
+        return result;
+      }
+      script.free();
+
+      continue;
     }
 
     children = children->next();

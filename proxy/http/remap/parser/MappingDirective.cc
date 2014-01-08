@@ -2,6 +2,7 @@
 #include "ACLDirective.h"
 #include "ConfigDirective.h"
 #include "PluginDirective.h"
+#include "ScriptDirective.h"
 #include "MappingParams.h"
 
 MappingDirective::MappingDirective(const char *name) :
@@ -11,6 +12,7 @@ MappingDirective::MappingDirective(const char *name) :
   this->_children[index++] = new ACLDirective();
   this->_children[index++] = new ConfigDirective();
   this->_children[index++] = new PluginDirective();
+  this->_children[index++] = new ScriptDirective();
   this->_childrenCount = index;
 }
 

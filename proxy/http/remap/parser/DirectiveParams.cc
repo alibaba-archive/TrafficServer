@@ -205,7 +205,7 @@ void DirectiveParams::toString(StringBuffer *sb)
   int len;
   DirectiveParams *parent;
 
-  if (sb->checkSize(2048) != 0) {
+  if (sb->checkSize(8 * 1024) != 0) {
     return;
   }
 
@@ -224,6 +224,11 @@ void DirectiveParams::toString(StringBuffer *sb)
   if (_parent != NULL) {  //root is virtual, do NOT need output
     toString(sb->str + sb->length, &len);
     sb->length += len;
+  }
+
+  if (_directive->getChildrenCount() == 0) {  //NOT a container
+    *(sb->str + sb->length++) = '\n';
+    return;
   }
 
   if (_bBlock) {

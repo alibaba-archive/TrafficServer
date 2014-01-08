@@ -133,6 +133,8 @@ class MappingEntry {
       return redirectUrl;
     }
 
+    int addPlugin(const PluginInfo *pluginInfo);
+
     void print();
 
   protected:

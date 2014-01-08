@@ -191,7 +191,7 @@ int PluginParamParams::parse(const char *blockStart, const char *blockEnd)
   }
 
   /*
-  printf("paramValue.str raw(%d): %.*s\n", _paramValue.length, 
+  printf("paramValue.str raw(%d): %.*s\n", _paramValue.length,
       _paramValue.length, _paramValue.str);
   */
 
@@ -202,19 +202,19 @@ const char *PluginParamParams::toString(char *buff, int *len)
 {
   *len = sprintf(buff, "%s ", _directive->getName());
   if (_base64) {
-    *len += sprintf(buff, "%s ", BASE64_DIRECTIVE_STR);
+    *len += sprintf(buff + *len, "%s ", BASE64_DIRECTIVE_STR);
   }
 
   if (_bBlock) {
     if (_base64) {
-      *len += sprintf(buff, "{ %.*s }", _base64Value.length, _base64Value.str);
+      *len += sprintf(buff + *len, "{ %.*s }", _base64Value.length, _base64Value.str);
     }
     else {
-      *len += sprintf(buff, "{ %.*s }", _paramValue.length, _paramValue.str);
+      *len += sprintf(buff + *len, "{ %.*s }", _paramValue.length, _paramValue.str);
     }
   }
   else {
-    *len += sprintf(buff, "%.*s", _paramValue.length, _paramValue.str);
+    *len += sprintf(buff + *len, "%.*s", _paramValue.length, _paramValue.str);
   }
 
   return (const char *)buff;

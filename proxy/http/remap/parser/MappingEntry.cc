@@ -75,3 +75,19 @@ void MappingEntry::print()
   printf("}\n");
 }
 
+int MappingEntry::addPlugin(const PluginInfo *pluginInfo)
+{
+      if (!_plugins.checkSize()) {
+        return ENOMEM;
+      }
+
+      if (pluginInfo->duplicate(_plugins.items +
+            _plugins.count) == NULL)
+      {
+        return ENOMEM;
+      }
+      _plugins.count++;
+
+      return 0;
+}
+

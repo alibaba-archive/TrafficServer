@@ -30,6 +30,7 @@
 #define DIRECTVIE_NAME_CONFIG       "config"
 #define DIRECTVIE_NAME_CONFIG_SET   "set"
 #define DIRECTVIE_NAME_INCLUDE      "include"
+#define DIRECTVIE_NAME_SCRIPT       "script"
 
 #define DIRECTVIE_NAME_ACL_METHOD       "method"
 #define DIRECTVIE_NAME_ACL_SRC_IP       "src_ip"
