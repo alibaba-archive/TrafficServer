@@ -28,6 +28,7 @@ AM_CPPFLAGS = \
   -I$(top_srcdir)/lib/records \
   -I$(top_srcdir)/lib/ts \
   -I$(top_srcdir)/proxy \
+  -I$(top_srcdir)/proxy/api \
   -I$(top_srcdir)/proxy/hdrs \
   -I$(top_srcdir)/mgmt \
   -I$(top_srcdir)/mgmt/preparse \
@@ -116,6 +117,16 @@ libinknet_a_SOURCES = \
   UnixUDPConnection.cc \
   UnixUDPNet.cc \
   Inline.cc
+
+if BUILD_SPDY
+libinknet_a_SOURCES += \
+  P_SpdyCallbacks.h \
+  P_SpdyCommon.h \
+  P_SpdySM.h \
+  SpdyCallbacks.cc \
+  SpdyCommon.cc \
+  SpdySM.cc
+endif
 
 if BUILD_TESTS
   libinknet_a_SOURCES += NetVCTest.cc \

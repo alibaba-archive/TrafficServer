@@ -485,20 +485,20 @@ FetchSM::ext_lanuch()
 void
 FetchSM::ext_write_data(const void *data, size_t len)
 {
-  if (header_done && (fetch_flags & TS_FETCH_FLAGS_NEWLOCK)) {
+  if (fetch_flags & TS_FETCH_FLAGS_NEWLOCK) {
     MUTEX_TAKE_LOCK(mutex, this_ethread());
   }
 
   req_buffer->write(data, len);
 
   //
-  // Before header_done, FetchSM may not
-  // be initialized.
+  // When http_vc is NULL,
+  // FetchSM should not be launched.
   //
-  if (header_done)
+  if (http_vc)
     write_vio->reenable();
 
-  if (header_done && (fetch_flags & TS_FETCH_FLAGS_NEWLOCK)) {
+  if (fetch_flags & TS_FETCH_FLAGS_NEWLOCK) {
     MUTEX_UNTAKE_LOCK(mutex, this_ethread());
   }
 }

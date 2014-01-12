@@ -43,6 +43,7 @@ public:
 
   void init_comm()
   {
+    http_vc = NULL;
     recursion = 0;
     req_finished = 0;
     resp_finished = 0;
