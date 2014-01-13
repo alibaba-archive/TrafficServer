@@ -80,6 +80,8 @@ static volatile int64_t max_usleep_time_used = 0;
 static volatile int64_t max_callback_time_used = 0;
 #endif
 
+volatile int64_t cluster_current_out_bps = 0;
+
 inline int get_iovec(IOBufferBlock *blocks, IOVec *iovec, int size) {
   int niov;
   IOBufferBlock *b = blocks;
@@ -275,7 +277,7 @@ void log_nio_stats()
   int time_pass = CURRENT_TIME() - last_calc_bps_time;
   if (time_pass > 0) {
     double io_busy_ratio;
-    int64_t nio_current_bps = 8 * (sum.send_bytes - last_send_bytes) / time_pass;
+    cluster_current_out_bps = 8 * (sum.send_bytes - last_send_bytes) / time_pass;
     last_calc_bps_time = CURRENT_TIME();
     last_send_bytes = sum.send_bytes;
 
@@ -284,12 +286,12 @@ void log_nio_stats()
       io_loop_interval = cluster_min_loop_interval;
     }
     else {
-      if (nio_current_bps < cluster_flow_ctrl_min_bps) {
+      if (cluster_current_out_bps < cluster_flow_ctrl_min_bps) {
         send_wait_time = cluster_send_min_wait_time * HRTIME_USECOND;
         io_loop_interval = cluster_min_loop_interval;
       }
       else {
-        io_busy_ratio = (double)nio_current_bps / (double)cluster_flow_ctrl_max_bps;
+        io_busy_ratio = (double)cluster_current_out_bps / (double)cluster_flow_ctrl_max_bps;
         if (io_busy_ratio > 1.0) {
           io_busy_ratio = 1.0;
         }
