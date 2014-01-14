@@ -142,6 +142,8 @@ public:
 
   static HTTPStatus match_response_to_request_conditionals(HTTPHdr * ua_request, HTTPHdr * c_response);
 
+  static bool do_strings_match_strongly(const char *raw_tag_field,
+      int raw_tag_field_len, const char *comma_sep_tag_list, int comma_sep_tag_list_len);
 };
 
 #endif

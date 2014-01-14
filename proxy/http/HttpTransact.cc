@@ -151,7 +151,7 @@ inline static bool
 is_request_conditional(HTTPHdr* header)
 {
   uint64_t mask = (MIME_PRESENCE_IF_UNMODIFIED_SINCE |
-                 MIME_PRESENCE_IF_MODIFIED_SINCE | MIME_PRESENCE_IF_RANGE |
+                 MIME_PRESENCE_IF_MODIFIED_SINCE |
                  MIME_PRESENCE_IF_MATCH | MIME_PRESENCE_IF_NONE_MATCH);
   return (header->presence(mask) && (header->method_get_wksidx() == HTTP_WKSIDX_GET));
 }
@@ -2238,7 +2238,7 @@ HttpTransact::issue_revalidate(State* s)
   case HTTP_STATUS_OK:         // 200
     // don't conditionalize if we are configured to repeat the clients
     //   conditionals
-    if (s->txn_conf->cache_when_to_revalidate == 4)
+    if (s->txn_conf->cache_when_to_revalidate == 4 || s->range_setup == RANGE_NOT_HANDLED)
       break;
     // ok, request is either a conditional or does not have a no-cache.
     //   (or is method that we don't conditionalize but lookup the
@@ -2556,9 +2556,6 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
     s->www_auth_content = send_revalidate ? CACHE_AUTH_STALE : CACHE_AUTH_FRESH;
     send_revalidate = true;
   }
-  if (send_revalidate && s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE)) {
-    s->range_setup = RANGE_REVALIDATE;
-  }
 
   DebugTxn("http_trans", "CacheOpenRead --- needs_auth          = %d", needs_authenticate);
   DebugTxn("http_trans", "CacheOpenRead --- needs_revalidate    = %d", needs_revalidate);
@@ -2645,6 +2642,7 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
           return;
         }
       }
+
       build_request(s, &s->hdr_info.client_request, &s->hdr_info.server_request, s->current.server->http_version);
 
       issue_revalidate(s);
@@ -2787,12 +2785,13 @@ HttpTransact::build_response_from_cache(State* s, HTTPWarningCode warning_code)
       // only if the cached response is a 200 OK
       if (client_response_code == HTTP_STATUS_OK && client_request->presence(MIME_PRESENCE_RANGE)) {
         s->state_machine->do_range_setup_if_necessary();
-        if (s->range_setup == RANGE_NOT_SATISFIABLE && s->http_config_param->reverse_proxy_enabled) {
+        if (s->range_setup == RANGE_NOT_SATISFIABLE) {
           build_error_response(s, HTTP_STATUS_RANGE_NOT_SATISFIABLE, "Requested Range Not Satisfiable","","");
           s->cache_info.action = CACHE_DO_NO_ACTION;
           s->next_action = PROXY_INTERNAL_CACHE_NOOP;
           break;
-        } else if (s->range_setup == RANGE_NOT_SATISFIABLE || s->range_setup == RANGE_NOT_HANDLED) {
+        } else if (s->range_setup == RANGE_NOT_HANDLED &&
+            warning_code != HTTP_WARNING_CODE_REVALIDATION_FAILED) {
           if (is_os_connection_exceed(s)) {
             build_error_response(s, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Server busy", "default", "");
             s->cache_info.action = CACHE_DO_NO_ACTION;
@@ -2911,6 +2910,24 @@ HttpTransact::handle_cache_write_lock(State* s)
       int len;
       const char *value = c_ims->value_get(&len);
       s->hdr_info.server_request.value_set(MIME_FIELD_IF_MODIFIED_SINCE, MIME_LEN_IF_MODIFIED_SINCE, value, len);
+    }
+
+    // special case for range elimination
+    if (s->range_elimination) {
+      s->range_elimination = false;
+      MIMEField *c_range = s->hdr_info.client_request.field_find(MIME_FIELD_RANGE, MIME_LEN_RANGE);
+      ink_debug_assert(c_range);
+      if (c_range) {
+        int len;
+        const char *value = c_range->value_get(&len);
+        s->hdr_info.server_request.value_set(MIME_FIELD_RANGE, MIME_LEN_RANGE, value, len);
+      }
+      MIMEField *if_range = s->hdr_info.client_request.field_find(MIME_FIELD_IF_RANGE, MIME_LEN_IF_RANGE);
+      if (if_range) {
+        int len;
+        const char *value = c_range->value_get(&len);
+        s->hdr_info.server_request.value_set(MIME_FIELD_IF_RANGE, MIME_LEN_IF_RANGE, value, len);
+      }
     }
   }
 
@@ -3893,6 +3910,7 @@ HttpTransact::handle_server_connection_not_open(State* s)
     ink_debug_assert(s->internal_msg_buffer == NULL);
 
     DebugTxn("http_trans", "[hscno] serving stale doc to client");
+    s->source = SOURCE_CACHE;
     build_response_from_cache(s, HTTP_WARNING_CODE_REVALIDATION_FAILED);
   } else {
     handle_server_died(s);
@@ -4176,11 +4194,11 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
     } else if (s->cache_info.action == CACHE_DO_UPDATE && is_request_conditional(&s->hdr_info.server_request)) {
       // CACHE_DO_UPDATE and server response is cacheable
       if (is_request_conditional(&s->hdr_info.client_request)) {
-        if (s->txn_conf->cache_when_to_revalidate != 4)
+        if (s->txn_conf->cache_when_to_revalidate != 4) {
           client_response_code =
             HttpTransactCache::match_response_to_request_conditionals(&s->hdr_info.client_request,
                                                                       s->cache_info.object_read->response_get());
-        else
+        } else
           client_response_code = server_response_code;
       } else {
         client_response_code = HTTP_STATUS_OK;
@@ -4202,12 +4220,6 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
           s->cache_info.action = CACHE_DO_UPDATE;
           s->next_action = SERVER_READ;
         } else {
-          if (s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE)) {
-            s->state_machine->do_range_setup_if_necessary();
-            // Note that even if the Range request is not satisfiable, we
-            // update and serve this cache. This will give a 200 response to
-            // a bad client, but allows us to avoid pegging the origin (e.g. abuse).
-          }
           s->cache_info.action = CACHE_DO_SERVE_AND_UPDATE;
           s->next_action = SERVE_FROM_CACHE;
         }
@@ -4237,6 +4249,13 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
       }
     }
 
+    if (s->next_action == SERVE_FROM_CACHE && client_response_code == HTTP_STATUS_OK &&
+        s->method == HTTP_WKSIDX_GET && s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE)) {
+      s->state_machine->do_range_setup_if_necessary();
+      // Note that even if the Range request is not satisfiable, we
+      // update and serve this cache. This will give a 200 response to
+      // a bad client, but allows us to avoid pegging the origin (e.g. abuse).
+    }
     break;
 
   case HTTP_STATUS_HTTPVER_NOT_SUPPORTED:      // 505
@@ -4300,7 +4319,7 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
 
       if (is_request_conditional(&s->hdr_info.client_request) &&
           HttpTransactCache::match_response_to_request_conditionals(&s->hdr_info.client_request,
-                                                                    s->cache_info.object_read->response_get()) == HTTP_STATUS_NOT_MODIFIED) {
+              s->cache_info.object_read->response_get()) == HTTP_STATUS_NOT_MODIFIED) {
         s->next_action = HttpTransact::PROXY_INTERNAL_CACHE_UPDATE_HEADERS;
         client_response_code = HTTP_STATUS_NOT_MODIFIED;
       } else {
@@ -4310,9 +4329,15 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
         } else {
           s->cache_info.action = CACHE_DO_SERVE_AND_UPDATE;
           s->next_action = HttpTransact::SERVE_FROM_CACHE;
+          if (client_response_code == HTTP_STATUS_OK &&
+              s->cache_info.object_read->response_get()->status_get() == HTTP_STATUS_OK &&
+              s->method == HTTP_WKSIDX_GET &&
+              s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE)) {
+            s->state_machine->do_range_setup_if_necessary();
+          }
         }
 
-        client_response_code = HTTP_STATUS_OK;
+        client_response_code = s->cache_info.object_read->response_get()->status_get();
       }
 
       ink_debug_assert(base_response->valid());
@@ -4413,13 +4438,22 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
 
           resp->set_expires(exp_time);
         }
-      } else if (is_request_conditional(&s->hdr_info.client_request) && server_response_code == HTTP_STATUS_OK) {
-        DebugTxn("http_trans", "[hcoofsr] conditional request, 200 " "response, send back 304 if possible");
-        client_response_code =
-          HttpTransactCache::match_response_to_request_conditionals(&s->hdr_info.client_request,
-                                                                    &s->hdr_info.server_response);
-
-        if ((client_response_code == HTTP_STATUS_NOT_MODIFIED) || (client_response_code == HTTP_STATUS_PRECONDITION_FAILED)) {
+      } else if (server_response_code == HTTP_STATUS_OK) {
+        if (is_request_conditional(&s->hdr_info.client_request)) {
+          DebugTxn("http_trans", "[hcoofsr] conditional request, 200 " "response, send back 304 if possible");
+          client_response_code =
+              HttpTransactCache::match_response_to_request_conditionals(
+                  &s->hdr_info.client_request, &s->hdr_info.server_response);
+        } else if (s->range_elimination) {
+          s->state_machine->do_range_setup_if_necessary(true);
+          if (s->range_setup == RANGE_NOT_SATISFIABLE) {
+            DebugTxn("http_trans", "[hcoofsr] range request, 200 " "response, send back 416 if possible");
+            client_response_code = HTTP_STATUS_RANGE_NOT_SATISFIABLE;
+          }
+        }
+        if ((client_response_code == HTTP_STATUS_NOT_MODIFIED)
+            || (client_response_code == HTTP_STATUS_PRECONDITION_FAILED)
+            || (client_response_code == HTTP_STATUS_RANGE_NOT_SATISFIABLE)) {
           switch (s->cache_info.action) {
           case CACHE_DO_WRITE:
           case CACHE_DO_REPLACE:
@@ -4485,7 +4519,7 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
   // Do the real work below.
 
   // first update the cached object
-  if ((s->cache_info.action == CACHE_DO_UPDATE) || (s->cache_info.action == CACHE_DO_SERVE_AND_UPDATE)) {
+  if (s->cache_info.action == CACHE_DO_UPDATE || s->cache_info.action == CACHE_DO_SERVE_AND_UPDATE) {
     DebugTxn("http_trans", "[hcoofsr] merge and update cached copy");
     merge_and_update_headers_for_cache_update(s);
     base_response = s->cache_info.object_store.response_get();
@@ -4618,6 +4652,7 @@ HttpTransact::handle_no_cache_operation_on_forward_server_response(State* s)
       s->next_action = PROXY_SEND_ERROR_CACHE_NOOP;
     } else {
       s->already_downgraded = true;
+      s->range_elimination = false;
       s->next_action = how_to_open_connection(s);
     }
     return;
@@ -4628,6 +4663,15 @@ HttpTransact::handle_no_cache_operation_on_forward_server_response(State* s)
     ink_debug_assert(s->cache_info.action == CACHE_DO_NO_ACTION);
     s->next_action = SERVER_READ;
     break;
+  }
+
+  if (s->range_elimination) {
+    Warning("range elimination but no cache operation");
+//    HTTPStatus client_response_code = HTTP_STATUS_OK;
+//    if (is_request_conditional(&s->hdr_info.client_request))
+//      client_response_code = HttpTransactCache::
+//        match_response_to_request_conditionals(&s->hdr_info.client_request, &s->hdr_info.server_response);
+
   }
 
   HTTPHdr *to_warn;
@@ -5946,6 +5990,12 @@ HttpTransact::initialize_state_variables_from_response(State* s, HTTPHdr* incomi
   }
 
   s->current.server->transfer_encoding = NO_TRANSFER_ENCODING;
+
+  // special case for range remove
+  if (s->range_elimination) {
+    if (!s->hdr_info.trust_response_cl)
+      s->range_elimination = false;
+  }
 }
 
 
@@ -6155,12 +6205,6 @@ HttpTransact::is_request_cache_lookupable(State* s, HTTPHdr* incoming)
       SET_VIA_STRING(VIA_DETAIL_TUNNEL, VIA_DETAIL_TUNNEL_URL);
       return false;
     }
-  }
-
-  // Don't cache if it's a RANGE request but the cache is not enabled for RANGE.
-  if (!s->http_config_param->cache_range_lookup && s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE)) {
-    SET_VIA_STRING(VIA_DETAIL_TUNNEL, VIA_DETAIL_TUNNEL_HEADER_FIELD);
-    return false;
   }
 
   if (s->api_skip_cache_lookup) {
@@ -8021,6 +8065,8 @@ HttpTransact::build_request(State* s, HTTPHdr* base_request, HTTPHdr* outgoing_r
         HttpTransactHeaders::remove_conditional_headers(base_request, outgoing_request);
       } else
         DebugTxn("http_trans", "[build_request] " "request like cacheable but keep conditional headers");
+      // remove the range field or not
+      s->state_machine->setup_range_elimination(outgoing_request);
     } else {
       // In this case, we send a conditional request
       // instead of the normal non-conditional request.

@@ -214,10 +214,13 @@ public:
   //  directly from transact
   void do_hostdb_update_if_necessary();
 
-  // Called by transact. Decide if cached response supports Range and
+  // Called by transact. Decide if cached/server response supports Range and
   // setup Range transfomration if so.
   // return true when the Range is unsatisfiable
-  void do_range_setup_if_necessary();
+  void do_range_setup_if_necessary(bool from_server = false);
+
+  // remove the range field when we request to server
+  void setup_range_elimination(HTTPHdr* outgoing_request);
 
   // Called by transact to prevent reset problems
   //  failed PUSH requests

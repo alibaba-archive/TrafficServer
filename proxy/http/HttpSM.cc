@@ -4037,33 +4037,87 @@ HttpSM::do_hostdb_update_if_necessary()
 // hooked to TS_HTTP_RESPONSE_TRANSFORM_HOOK.
 // Then setup Range transformation if necessary
 void
-HttpSM::do_range_setup_if_necessary()
+HttpSM::do_range_setup_if_necessary(bool from_server)
 {
   MIMEField *field;
   RangeTransform *range_trans;
   bool res = false;
 
-  ink_assert(t_state.cache_info.object_read != NULL);
+  ink_assert(t_state.range_setup == HttpTransact::RANGE_NONE &&
+      ((!from_server && t_state.cache_info.object_read != NULL) ||
+      (from_server && t_state.hdr_info.server_response.valid() && t_state.range_elimination)));
 
-  field = t_state.hdr_info.client_request.field_find(MIME_FIELD_RANGE, MIME_LEN_RANGE);
+  int64_t cl;
+  HTTPHdr *resp;
+  HTTPHdr *req = &t_state.hdr_info.client_request;
+
+  if (!from_server) {
+    cl = t_state.cache_info.object_read->object_size_get();
+    resp = t_state.cache_info.object_read->response_get();
+  } else {
+    ink_debug_assert(t_state.range_elimination == true);
+    cl = t_state.hdr_info.trust_response_cl ? t_state.hdr_info.response_content_length : INT64_MAX;
+    resp = &t_state.hdr_info.server_response;
+  }
+
+  field = req->field_find(MIME_FIELD_RANGE, MIME_LEN_RANGE);
   ink_assert(field != NULL);
+  // Handling If-Range header:
+  // As Range && If-Range don't occur often, we want to put the
+  // If-Range code in the end
+  if (req->presence(MIME_PRESENCE_IF_RANGE)) {
+    int raw_len, comma_sep_list_len;
 
-  t_state.range_setup = HttpTransact::RANGE_NONE;
+    const char *if_value = req->value_get(MIME_FIELD_IF_RANGE, MIME_LEN_IF_RANGE, &comma_sep_list_len);
+
+    // this is an ETag, similar to If-Match
+    if (!if_value || if_value[0] == '"' || (comma_sep_list_len > 1 && if_value[1] == '/')) {
+      if (!if_value) {
+        if_value = "";
+        comma_sep_list_len = 0;
+      }
+
+      const char *raw_etags = resp->value_get(MIME_FIELD_ETAG, MIME_LEN_ETAG, &raw_len);
+
+      if (!raw_etags) {
+        raw_etags = "";
+        raw_len = 0;
+      }
+
+      if (!HttpTransactCache::do_strings_match_strongly(raw_etags, raw_len, if_value, comma_sep_list_len)) {
+        t_state.range_setup = HttpTransact::RANGE_NOT_HANDLED;
+        return;
+      }
+    }
+    // this a Date, similar to If-Unmodified-Since
+    else {
+      // lm_value is zero if Last-modified not exists
+      ink_time_t lm_value = resp->get_last_modified();
+
+      // condition fails if Last-modified not exists
+      if ((req->get_if_range_date() < lm_value) || (lm_value == 0)) {
+        t_state.range_setup = HttpTransact::RANGE_NOT_HANDLED;
+        return;
+      }
+    }
+  }
+
   if (t_state.method == HTTP_WKSIDX_GET && t_state.hdr_info.client_request.version_get() == HTTPVersion(1, 1)) {
     if (api_hooks.get(TS_HTTP_RESPONSE_TRANSFORM_HOOK) == NULL) {
       // We may still not do Range if it is out of order Range.
       range_trans = transformProcessor.range_transform(mutex, field,
-                                                       t_state.cache_info.object_read,
+                                                       resp, cl,
                                                        &t_state.hdr_info.transform_response, res);
       if (range_trans != NULL) {
         // special case for single range
-        if (range_trans->m_num_range_fields == 1 && cache_sm.cache_read_vc->is_pread_capable()) {
+        if (!from_server && range_trans->m_num_range_fields == 1 && cache_sm.cache_read_vc->is_pread_capable()) {
           t_state.range_setup = HttpTransact::RANGE_HANDLED_NO_TRANSFORM;
           t_state.single_range._start = range_trans->m_ranges[0]._start;
           t_state.single_range._end = range_trans->m_ranges[0]._end;
           delete range_trans;
           return;
-        }
+        } else if (from_server)
+          t_state.api_info.cache_untransformed = true;
         api_hooks.append(TS_HTTP_RESPONSE_TRANSFORM_HOOK, range_trans);
         t_state.range_setup = HttpTransact::RANGE_TRANSFORM;
       } else if (res)
@@ -4074,6 +4128,28 @@ HttpSM::do_range_setup_if_necessary()
   }
 }
 
+void
+HttpSM::setup_range_elimination(HTTPHdr* outgoing_request)
+{
+  ink_debug_assert(outgoing_request == &t_state.hdr_info.server_request);
+
+  bool range_elimination = (t_state.txn_conf->cache_when_to_revalidate != 4 &&
+      t_state.range_setup == HttpTransact::RANGE_NONE &&
+      t_state.method == HTTP_WKSIDX_GET &&
+      t_state.cache_info.action != HttpTransact::CACHE_DO_NO_ACTION &&
+      outgoing_request->presence(MIME_PRESENCE_RANGE) &&
+      t_state.txn_conf->range_elimination_enabled &&
+      t_state.hdr_info.client_request.version_get() == HTTPVersion(1, 1) &&
+      api_hooks.get(TS_HTTP_SEND_REQUEST_HDR_HOOK) == NULL &&
+      api_hooks.get(TS_HTTP_READ_RESPONSE_HDR_HOOK) == NULL &&
+      api_hooks.get(TS_HTTP_RESPONSE_TRANSFORM_HOOK) == NULL);
+
+  if (range_elimination) {
+    t_state.range_elimination = true;
+    outgoing_request->field_delete(MIME_FIELD_RANGE, MIME_LEN_RANGE);
+    outgoing_request->field_delete(MIME_FIELD_IF_RANGE, MIME_LEN_IF_RANGE);
+  }
+}
 
 void
 HttpSM::do_cache_lookup_and_read()

@@ -417,7 +417,7 @@ struct OverridableHttpConfigParams {
        cache_http(0), cache_force_in_ram(0), cache_cluster_cache_local(0), cache_ignore_client_no_cache(0), cache_ignore_client_cc_max_age(1),
        cache_ims_on_client_no_cache(0), cache_ignore_server_no_cache(0), cache_responses_to_cookies(0),
        cache_ignore_auth(0), cache_urls_that_look_dynamic(0), cache_required_headers(0), // CACHE_REQUIRED_HEADERS_NONE
-       insert_request_via_string(0), insert_response_via_string(0), doc_in_cache_skip_dns(1),
+       insert_request_via_string(0), insert_response_via_string(0), range_elimination_enabled(0), doc_in_cache_skip_dns(1),
        anonymize_insert_client_ip(1),
        negative_caching_lifetime(0),
        sock_recv_buffer_size_out(0), sock_send_buffer_size_out(0), sock_option_flag_out(0),
@@ -515,6 +515,8 @@ struct OverridableHttpConfigParams {
 
   MgmtByte insert_request_via_string;
   MgmtByte insert_response_via_string;
+
+  MgmtByte range_elimination_enabled;
 
   //////////////////////
   //  DOC IN CACHE NO DNS//
@@ -723,7 +725,6 @@ public:
   ///////////////////
   MgmtByte cache_enable_default_vary_headers;
   MgmtByte cache_when_to_add_no_cache_to_msie_requests;
-  MgmtByte cache_range_lookup;
 
   ////////////////////////////////////////////
   // CONNECT ports (used to be == ssl_ports //

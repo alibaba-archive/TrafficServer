@@ -179,7 +179,8 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_CONFIG, "proxy.config.http.post_copy_size", RECD_INT, "2048", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
-
+  {RECT_CONFIG, "proxy.config.http.range_elimination_enabled", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
   //##############################################################################
   //#
   //# Diagnostics
@@ -722,8 +723,6 @@ RecordElement RecordsConfig[] = {
   {RECT_CONFIG, "proxy.config.http.cache.required_headers", RECD_INT, "2", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.http.cache.max_stale_age", RECD_INT, "604800", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
-  ,
-  {RECT_CONFIG, "proxy.config.http.cache.range.lookup", RECD_INT, "1", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
 
   //        ########################

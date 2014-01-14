@@ -46,7 +46,7 @@ typedef struct _RangeRecord
 class RangeTransform:public INKVConnInternal
 {
 public:
-  RangeTransform(ProxyMutex * mutex, MIMEField * range_field, HTTPInfo * cache_obj, HTTPHdr * transform_resp);
+  RangeTransform(ProxyMutex * mutex, MIMEField * range_field, HTTPHdr * resp, int64_t cl, HTTPHdr * transform_resp);
   ~RangeTransform();
 
   void parse_range_and_compare();
@@ -104,7 +104,7 @@ public:
 public:
   VConnection * open(Continuation * cont, APIHook * hooks);
   INKVConnInternal *null_transform(ProxyMutex * mutex);
-  RangeTransform *range_transform(ProxyMutex * mutex, MIMEField * range_field, HTTPInfo * cache_obj,
+  RangeTransform *range_transform(ProxyMutex * mutex, MIMEField * range_field, HTTPHdr * resp, int64_t cl,
                                     HTTPHdr * transform_resp, bool & b);
 };
 

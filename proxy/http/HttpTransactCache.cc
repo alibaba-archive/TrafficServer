@@ -72,8 +72,8 @@ find_etag(const char *raw_tag_field, int raw_tag_field_len, int *length)
   string field_to_match, using strong rules.
 
 */
-inline static bool
-do_strings_match_strongly(const char *raw_tag_field,
+bool
+HttpTransactCache::do_strings_match_strongly(const char *raw_tag_field,
                           int raw_tag_field_len, const char *comma_sep_tag_list, int comma_sep_tag_list_len)
 {
   StrList tag_list;
@@ -1432,50 +1432,6 @@ L1:
   // so return the original response code
   if (response_code != HTTP_STATUS_NONE) {
     return response_code;
-  }
-
-  // Handling If-Range header:
-  // As Range && If-Range don't occur often, we want to put the
-  // If-Range code in the end
-  if (request->presence(MIME_PRESENCE_RANGE) && request->presence(MIME_PRESENCE_IF_RANGE)) {
-    int raw_len, comma_sep_list_len;
-
-    const char *if_value = request->value_get(MIME_FIELD_IF_RANGE,
-                                              MIME_LEN_IF_RANGE,
-                                              &comma_sep_list_len);
-
-    // this is an ETag, similar to If-Match
-    if (!if_value || if_value[0] == '"' || (comma_sep_list_len > 1 && if_value[1] == '/')) {
-      if (!if_value) {
-        if_value = "";
-        comma_sep_list_len = 0;
-      }
-
-      const char *raw_etags = response->value_get(MIME_FIELD_ETAG, MIME_LEN_ETAG, &raw_len);
-
-      if (!raw_etags) {
-        raw_etags = "";
-        raw_len = 0;
-      }
-
-      if (do_strings_match_strongly(raw_etags, raw_len, if_value, comma_sep_list_len)) {
-        return response->status_get();
-      } else {
-        return HTTP_STATUS_RANGE_NOT_SATISFIABLE;
-      }
-    }
-    // this a Date, similar to If-Unmodified-Since
-    else {
-      // lm_value is zero if Last-modified not exists
-      ink_time_t lm_value = response->get_last_modified();
-
-      // condition fails if Last-modified not exists
-      if ((request->get_if_range_date() < lm_value) || (lm_value == 0)) {
-        return HTTP_STATUS_RANGE_NOT_SATISFIABLE;
-      } else {
-        return response->status_get();
-      }
-    }
   }
 
   return response->status_get();

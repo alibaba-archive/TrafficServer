@@ -871,7 +871,7 @@ public:
     HTTPHdr server_response;
     HTTPHdr transform_response;
     HTTPHdr cache_response;
-   int64_t request_content_length;
+    int64_t request_content_length;
     int64_t response_content_length;
     int64_t transform_request_cl;
     int64_t transform_response_cl;
@@ -1032,6 +1032,9 @@ public:
     // for srv lookup
     bool srv_lookup;
 
+    // for range elimination to origin
+    bool range_elimination;
+
     // new ACL filtering result (calculated immediately after remap)
     bool client_connection_enabled;
     bool server_busy;
@@ -1146,6 +1149,7 @@ public:
         cache_resp_hdr_heap_handle(NULL),
         negative_caching(false),
         srv_lookup(false),
+        range_elimination(false),
         client_connection_enabled(true),
         server_busy(false),
         acl_filtering_performed(false),

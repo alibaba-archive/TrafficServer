@@ -7947,6 +7947,9 @@ _conf_to_memberp(TSOverridableConfigKey conf,
   case TS_CONFIG_HTTP_INSERT_RESPONSE_VIA_STR:
     ret = &overridablehttpConfig->insert_response_via_string;
     break;
+  case TS_CONFIG_HTTP_RANGE_ELIMINATION:
+    ret = &overridablehttpConfig->range_elimination_enabled;
+    break;
   case TS_CONFIG_HTTP_CACHE_HEURISTIC_MIN_LIFETIME:
     typ = OVERRIDABLE_TYPE_INT;
     ret = &overridablehttpConfig->cache_heuristic_min_lifetime;
@@ -8464,6 +8467,10 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
     case 'l':
       if (!strncmp(name, "proxy.config.http.cache.cluster_cache_local", length))
         cnf = TS_CONFIG_HTTP_CACHE_CLUSTER_CACHE_LOCAL;
+      break;
+    case 'd':
+      if (!strncmp(name, "proxy.config.http.range_elimination_enabled", length))
+        cnf = TS_CONFIG_HTTP_RANGE_ELIMINATION;
       break;
     }
     break;

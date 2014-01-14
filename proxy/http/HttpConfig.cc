@@ -1341,7 +1341,6 @@ HttpConfig::startup()
   HttpEstablishStaticConfigByte(c.cache_when_to_add_no_cache_to_msie_requests,
                                     "proxy.config.http.cache.when_to_add_no_cache_to_msie_requests");
   HttpEstablishStaticConfigByte(c.oride.cache_required_headers, "proxy.config.http.cache.required_headers");
-  HttpEstablishStaticConfigByte(c.cache_range_lookup, "proxy.config.http.cache.range.lookup");
 
   HttpEstablishStaticConfigStringAlloc(c.connect_ports_string, "proxy.config.http.connect_ports");
 
@@ -1409,6 +1408,7 @@ HttpConfig::startup()
   HttpEstablishStaticConfigByte(c.redirection_enabled, "proxy.config.http.redirection_enabled");
   HttpEstablishStaticConfigLongLong(c.number_of_redirections, "proxy.config.http.number_of_redirections");
   HttpEstablishStaticConfigLongLong(c.post_copy_size, "proxy.config.http.post_copy_size");
+  HttpEstablishStaticConfigByte(c.oride.range_elimination_enabled, "proxy.config.http.range_elimination_enabled");
 
   // Transparency flag.
   char buffer[10];
@@ -1613,7 +1613,6 @@ HttpConfig::reconfigure()
   params->cache_when_to_add_no_cache_to_msie_requests = m_master.cache_when_to_add_no_cache_to_msie_requests;
 
   params->oride.cache_required_headers = m_master.oride.cache_required_headers;
-  params->cache_range_lookup = INT_TO_BOOL(m_master.cache_range_lookup);
 
   params->connect_ports_string = ats_strdup(m_master.connect_ports_string);
   params->connect_ports = parse_ports_list(params->connect_ports_string);
@@ -1663,6 +1662,7 @@ HttpConfig::reconfigure()
   params->redirection_enabled = INT_TO_BOOL(m_master.redirection_enabled);
   params->number_of_redirections = m_master.number_of_redirections;
   params->post_copy_size = m_master.post_copy_size;
+  params->oride.range_elimination_enabled = INT_TO_BOOL(m_master.oride.range_elimination_enabled);
 
   m_id = configProcessor.set(m_id, params);
 
