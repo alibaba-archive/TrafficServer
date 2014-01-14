@@ -33,6 +33,7 @@
 #include "P_Net.h"
 #include "ts.h"
 #include "HttpSM.h"
+#include "HttpTunnel.h"
 
 class FetchSM: public Continuation
 {
@@ -142,6 +143,7 @@ private:
   ProxyMutexPtr cont_mutex;
   HTTPParser http_parser;
   HTTPHdr client_response_hdr;
+  ChunkedHandler chunked_handler;
   TSFetchEvent callback_events;
   TSFetchWakeUpOptions callback_options;
   bool req_finished;

@@ -86,8 +86,7 @@ enum TunnelChunkingAction_t
 
 struct ChunkedHandler
 {
-  enum ChunkedState
-  {
+  enum ChunkedState {
     CHUNK_READ_CHUNK = 0,
     CHUNK_READ_SIZE_START,
     CHUNK_READ_SIZE,
@@ -101,6 +100,14 @@ struct ChunkedHandler
     CHUNK_WRITE_DONE,
     CHUNK_FLOW_CONTROL
   };
+
+  enum Action {
+    ACTION_DOCHUNK = 0,
+    ACTION_DECHUNK,
+    ACTION_PASSTHRU,
+  };
+
+  Action action;
 
   IOBufferReader *chunked_reader;
   MIOBuffer *dechunked_buffer;
@@ -124,7 +131,9 @@ struct ChunkedHandler
 
   ChunkedHandler();
 
-  void init(IOBufferReader * buffer_in, HttpTunnelProducer * p);
+  void init(IOBufferReader *buffer_in, HttpTunnelProducer *p);
+  void init_by_action(IOBufferReader *buffer_in, Action action);
+  void clear();
 
   // Returns true if complete, false otherwise
   bool process_chunked_content();
