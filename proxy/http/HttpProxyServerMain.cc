@@ -220,8 +220,12 @@ start_HttpProxyServer(int accept_threads)
     proto->registerEndpoint(NET_PROTO_HTTP_SPDY, spdy);
 
     if (p.isSSL()) {
+      // HTTP
       ssl->registerEndpoint(TS_NPN_PROTOCOL_HTTP_1_0, http);
       ssl->registerEndpoint(TS_NPN_PROTOCOL_HTTP_1_1, http);
+
+      // SPDY
+      ssl->registerEndpoint(TS_NPN_PROTOCOL_SPDY_3, spdy);
 
 #ifndef TS_NO_API
       ink_scoped_mutex lock(ssl_plugin_mutex);
