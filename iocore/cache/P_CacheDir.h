@@ -70,7 +70,7 @@ struct CacheVC;
 #define CHECK_DIR(_d) ((void)0)
 #endif
 
-#define dir_index(_e, _i) ((Dir*)((char*)(_e)->dir + (SIZEOF_DIR * (_i))))
+#define dir_index(_e, _i) ((Dir*)((char*)(_e)->dir + (SIZEOF_DIR * (uint64_t)(_i))))
 #define dir_assign(_e,_x) do {                \
     (_e)->w[0] = (_x)->w[0];                  \
     (_e)->w[1] = (_x)->w[1];                  \
