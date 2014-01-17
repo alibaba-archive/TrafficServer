@@ -483,7 +483,7 @@ dir_clean_range_ssdvol(off_t start, off_t end, SSDVol *svol)
   Vol *vol = svol->vol;
   int offset = svol - vol->ssd_vols;
 
-  for (int i = 0; i < vol->buckets * DIR_DEPTH * vol->segments; i++) {
+  for (int64_t i = 0; i < vol->buckets * DIR_DEPTH * vol->segments; i++) {
     Dir *e = dir_index(vol, i);
     if (dir_inssd(e) && dir_get_index(e) == offset && !dir_token(e) && 
             dir_offset(e) >= (int64_t)start && dir_offset(e) < (int64_t)end) {
@@ -500,7 +500,7 @@ dir_clean_range_ssdvol(off_t start, off_t end, SSDVol *svol)
 void
 dir_clear_range(off_t start, off_t end, Vol *vol)
 {
-  for (int i = 0; i < vol->buckets * DIR_DEPTH * vol->segments; i++) {
+  for (int64_t i = 0; i < vol->buckets * DIR_DEPTH * vol->segments; i++) {
     Dir *e = dir_index(vol, i);
     if (!dir_token(e) && dir_offset(e) >= (int64_t)start && dir_offset(e) < (int64_t)end) {
       CACHE_DEC_DIR_USED(vol->mutex);
