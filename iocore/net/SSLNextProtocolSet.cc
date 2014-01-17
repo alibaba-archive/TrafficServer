@@ -22,6 +22,7 @@
  */
 
 #include "ink_config.h"
+#include "ts/ts.h"
 #include "libts.h"
 #include "P_SSLNextProtocolSet.h"
 
@@ -131,12 +132,15 @@ SSLNextProtocolSet::unregisterEndpoint(const char * proto, Continuation * ep)
 }
 
 Continuation *
-SSLNextProtocolSet::findEndpoint(const unsigned char * proto, unsigned len) const
+SSLNextProtocolSet::findEndpoint(const unsigned char * proto, unsigned len,
+                                 NetProtoType *proto_type) const
 {
   for (const NextProtocolEndpoint * ep = this->endpoints.head;
         ep != NULL; ep = this->endpoints.next(ep)) {
     size_t sz = strlen(ep->protocol);
     if (sz == len && memcmp(ep->protocol, proto, len) == 0) {
+      if (proto_type)
+        *proto_type = ep->proto_type;
       return ep->endpoint;
     }
   }
@@ -175,6 +179,16 @@ SSLNextProtocolSet::NextProtocolEndpoint::NextProtocolEndpoint(
         const char * proto, Continuation * ep)
   : protocol(proto), endpoint(ep)
 {
+  if (proto == TS_NPN_PROTOCOL_HTTP_1_1 ||
+      proto == TS_NPN_PROTOCOL_HTTP_1_0) {
+    proto_type = NET_PROTO_HTTP_SSL;
+  } else if (proto == TS_NPN_PROTOCOL_SPDY_3 ||
+             proto == TS_NPN_PROTOCOL_SPDY_2 ||
+             proto == TS_NPN_PROTOCOL_SPDY_1) {
+    proto_type = NET_PROTO_HTTP_SPDY_SSL;
+  } else {
+    ink_release_assert(!"Unsupported protocol");
+  }
 }
 
 SSLNextProtocolSet::NextProtocolEndpoint::~NextProtocolEndpoint()

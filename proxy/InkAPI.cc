@@ -6108,6 +6108,12 @@ extern HttpAcceptCont *plugin_http_transparent_accept;
 TSVConn
 TSHttpConnect(sockaddr const* addr)
 {
+  return TSHttpConnectWithProtoType(addr, TS_NET_PROTO_HTTP);
+}
+
+TSVConn
+TSHttpConnectWithProtoType(sockaddr const* addr, TSNetProtoType proto_type)
+{
   sdk_assert(addr);
 
   sdk_assert(ats_is_ip(addr));
@@ -6118,6 +6124,9 @@ TSHttpConnect(sockaddr const* addr)
 
     new_pvc->set_active_addr(addr);
     new_pvc->set_accept_cont(plugin_http_accept);
+
+    new_pvc->active_vc.proto_type = (NetProtoType)proto_type;
+    new_pvc->passive_vc.proto_type = (NetProtoType)proto_type;
 
     PluginVC *return_vc = new_pvc->connect();
 
@@ -7652,6 +7661,22 @@ TSFetchUserDataGet(TSFetchSM fetch_sm)
   sdk_assert(sdk_sanity_check_fetch_sm(fetch_sm) == TS_SUCCESS);
 
   return ((FetchSM*)fetch_sm)->ext_get_user_data();
+}
+
+void
+TSFetchProtoTypeSet(TSFetchSM fetch_sm, TSNetProtoType proto_type)
+{
+  sdk_assert(sdk_sanity_check_fetch_sm(fetch_sm) == TS_SUCCESS);
+
+  ((FetchSM*)fetch_sm)->ext_set_proto_type(proto_type);
+}
+
+TSNetProtoType
+TSFetchProtoTypeGet(TSFetchSM fetch_sm)
+{
+  sdk_assert(sdk_sanity_check_fetch_sm(fetch_sm) == TS_SUCCESS);
+
+  return ((FetchSM*)fetch_sm)->ext_get_proto_type();
 }
 
 TSMBuffer

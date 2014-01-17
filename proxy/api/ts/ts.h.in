@@ -2587,6 +2587,8 @@ extern "C"
    */
   tsapi TSVConn TSHttpConnect(struct sockaddr const* addr);
 
+  tsapi TSVConn TSHttpConnectWithProtoType(struct sockaddr const* addr, TSNetProtoType proto_type);
+
     /* --------------------------------------------------------------------------
      Initiate Transparent Http Connection */
   /**
@@ -2682,6 +2684,17 @@ extern "C"
    * Get user-defined data in FetchSM
    */
   tsapi void* TSFetchUserDataGet(TSFetchSM fetch_sm);
+
+  /*
+   * Set protocol type of FetchSM
+   * The default value is TS_NET_PROTO_HTTP if not set.
+   */
+  tsapi void TSFetchProtoTypeSet(TSFetchSM fetch_sm, TSNetProtoType proto_type);
+
+  /*
+   * Get protocol type in FetchSM
+   */
+  tsapi TSNetProtoType TSFetchProtoTypeGet(TSFetchSM fetch_sm);
 
   /*
    * Get client response hdr mbuffer

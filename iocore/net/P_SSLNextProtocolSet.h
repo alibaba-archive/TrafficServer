@@ -25,6 +25,7 @@
 #define P_SSLNextProtocolSet_H_
 
 #include "List.h"
+#include "I_Net.h"
 
 class Continuation;
 
@@ -39,7 +40,7 @@ public:
   bool advertiseProtocols(const unsigned char ** out, unsigned * len) const;
 
   Continuation * findEndpoint(const char *) const;
-  Continuation * findEndpoint(const unsigned char *, unsigned) const;
+  Continuation * findEndpoint(const unsigned char *, unsigned, NetProtoType *) const;
 
   struct NextProtocolEndpoint
   {
@@ -49,6 +50,7 @@ public:
     ~NextProtocolEndpoint();
 
     const char * protocol;
+    NetProtoType proto_type;
     Continuation * endpoint;
     LINK(NextProtocolEndpoint, link);
 

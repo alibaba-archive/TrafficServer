@@ -1,6 +1,7 @@
 
 #include "P_SpdyCallbacks.h"
 #include "P_SpdySM.h"
+#include "I_Net.h"
 #include <arpa/inet.h>
 
 void
@@ -149,6 +150,7 @@ spdy_fetcher_launch(SpdyRequest *req, TSFetchMethod method)
   int fetch_flags;
   const sockaddr *client_addr;
   SpdySM *sm = req->spdy_sm;
+  NetVConnection *vc = (NetVConnection *)sm->net_vc;
 
   url = req->scheme + "://" + req->host + req->path;
   client_addr = TSNetVConnRemoteAddrGet(sm->net_vc);
@@ -164,6 +166,7 @@ spdy_fetcher_launch(SpdyRequest *req, TSFetchMethod method)
                                 url.c_str(), req->version.c_str(),
                                 client_addr, fetch_flags);
   TSFetchUserDataSet(req->fetch_sm, req);
+  TSFetchProtoTypeSet(req->fetch_sm, (TSNetProtoType)vc->proto_type);
 
   //
   // Set header list

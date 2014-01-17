@@ -526,7 +526,7 @@ SSLNetVConnection::sslServerHandShakeEvent(int &err)
       SSL_get0_next_proto_negotiated(ssl, &proto, &len);
       if (len) {
         if (this->npnSet) {
-          this->npnEndpoint = this->npnSet->findEndpoint(proto, len);
+          this->npnEndpoint = this->npnSet->findEndpoint(proto, len, &this->proto_type);
           this->npnSet = NULL;
         }
         Debug("ssl", "client selected next protocol %.*s", len, proto);

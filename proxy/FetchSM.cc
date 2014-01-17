@@ -72,7 +72,7 @@ FetchSM::httpConnect()
   Debug(DEBUG_TAG, "[%s] calling httpconnect write", __FUNCTION__);
   sockaddr_in addr;
   ats_ip4_set(&addr, _ip, _port);
-  http_vc = TSHttpConnect(ats_ip_sa_cast(&addr));
+  http_vc = TSHttpConnectWithProtoType(ats_ip_sa_cast(&addr), proto_type);
 
   PluginVC *vc = (PluginVC *) http_vc;
 
@@ -582,6 +582,18 @@ void*
 FetchSM::ext_get_user_data()
 {
   return user_data;
+}
+
+void
+FetchSM::ext_set_proto_type(TSNetProtoType ptype)
+{
+  proto_type = ptype;
+}
+
+TSNetProtoType
+FetchSM::ext_get_proto_type()
+{
+  return proto_type;
 }
 
 TSMBuffer
