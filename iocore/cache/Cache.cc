@@ -2225,8 +2225,8 @@ build_vol_hash_table(CacheHostRecord *cp)
   for (int j = 0; j < VOL_HASH_TABLE_SIZE; j++) {
     pos = width / 2 + j * width;  // position to select closest to
     while (pos > rtable[i].rval && i < (int)rtable_size - 1) i++;
-    ttable[j] = rtable[i].vol;
-    gotvol[ttable[j]]++;
+    ttable[j] = mapping[rtable[i].vol];
+    gotvol[rtable[i].vol]++;
   }
   for (int i = 0; i < num_vols; i++) {
     Debug("cache_init", "build_vol_hash_table %d request %d got %d", i, forvol[i], gotvol[i]);
