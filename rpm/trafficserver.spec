@@ -11,7 +11,7 @@ Source0:	%{name}-%{version}.tar.bz2
 URL:		http://trafficserver.apache.org/index.html
 # BuildRoot is only needed for EPEL5:
 #BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
-BuildRequires:	autoconf, automake, libtool, t-openssl-devel, tcl-devel, expat-devel
+BuildRequires:	autoconf, automake, libtool, t-openssl-devel, t-spdylay-devel, tcl-devel, expat-devel
 BuildRequires:	pcre-devel, zlib-devel, xz-devel, gcc-c++
 Provides:	t-cdn-trafficserver, trafficserver_ssd
 
@@ -39,7 +39,15 @@ useradd -r -u 176 -g ats -d / -s /sbin/nologin \
 export CFLAGS="-I/home/a/include $CFLAGS"
 export CXXFLAGS="-I/home/a/include $CXXFLAGS"
 export LDFLAGS="-L/home/a/lib64 $LDFLAGS"
-./configure --enable-layout=Gentoo --libdir=%{_libdir}/trafficserver --with-tcl=%{_libdir} --with-user=ats --with-group=ats  --enable-reclaimable-freelist --with-openssl=/home/a
+export PKG_CONFIG_PATH="/home/a/lib64/pkgconfig"
+./configure --enable-layout=Gentoo \
+	    --libdir=%{_libdir}/trafficserver \
+	    --with-tcl=%{_libdir} \
+	    --with-user=ats \
+	    --with-group=ats \
+	    --enable-reclaimable-freelist \
+	    --enable-spdy \
+	    --with-openssl=/home/a
 make %{?_smp_mflags}
 
 %install
