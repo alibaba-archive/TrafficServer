@@ -268,7 +268,7 @@ Server::listen(bool non_blocking, int recv_bufsize, int send_bufsize, bool trans
   ink_assert(fd == NO_FD);
   int res = 0;
   int namelen;
-  int timeout = 30; // seconds
+  int timeout;
 
   if (!ats_is_ip(&accept_addr)) {
     ats_ip4_set(&addr, INADDR_ANY,0);
@@ -373,7 +373,8 @@ Server::listen(bool non_blocking, int recv_bufsize, int send_bufsize, bool trans
 #endif
   }
 
-#if defined(linux)
+  timeout = 5; // seconds
+#if TS_HAS_SPDY
   if (NetProcessor::accept_mss > 0)
     if ((res = safe_setsockopt(fd, IPPROTO_TCP, TCP_MAXSEG, (char *) &NetProcessor::accept_mss, sizeof(int))) < 0)
       goto Lerror;
