@@ -177,6 +177,7 @@ FetchSM::check_chunked()
           ch->init_by_action(resp_reader, ChunkedHandler::ACTION_DECHUNK);
           ch->dechunked_reader = ch->dechunked_buffer->alloc_reader();
           ch->state = ChunkedHandler::CHUNK_READ_SIZE;
+          resp_reader->dealloc();
         }
         return true;
       }
@@ -239,11 +240,16 @@ FetchSM::InvokePluginExt(int error_event)
     goto out;
   }
 
-  if (!resp_reader->read_avail())
-    goto out;
-
   Debug(DEBUG_TAG, "[%s] chunked:%d, content_len:%ld, recived_len:%ld, avail:%ld\n",
-        __FUNCTION__, resp_is_chunked, resp_content_length, resp_recived_body_len, resp_reader->read_avail());
+        __FUNCTION__, resp_is_chunked, resp_content_length, resp_recived_body_len,
+        resp_is_chunked > 0 ? chunked_handler.chunked_reader->read_avail() : resp_reader->read_avail());
+
+  if (resp_is_chunked > 0) {
+    if (!chunked_handler.chunked_reader->read_avail())
+      goto out;
+  } else if (!resp_reader->read_avail()) {
+      goto out;
+  }
 
   if (!check_chunked()) {
     if (!check_body_done())
@@ -251,14 +257,19 @@ FetchSM::InvokePluginExt(int error_event)
     else
       contp->handleEvent(TS_FETCH_EVENT_EXT_BODY_DONE, this);
   } else if (fetch_flags & TS_FETCH_FLAGS_DECHUNK){
-    event = dechunk_body();
+    do {
+      if (chunked_handler.state == ChunkedHandler::CHUNK_FLOW_CONTROL) {
+        chunked_handler.state = ChunkedHandler::CHUNK_READ_SIZE_START;
+      }
 
-    if (!event) {
-      read_vio->reenable();
-      goto out;
-    }
+      event = dechunk_body();
+      if (!event) {
+        read_vio->reenable();
+        goto out;
+      }
 
-    contp->handleEvent(event, this);
+      contp->handleEvent(event, this);
+    } while (chunked_handler.state == ChunkedHandler::CHUNK_FLOW_CONTROL);
   } else if (check_body_done()){
     contp->handleEvent(TS_FETCH_EVENT_EXT_BODY_DONE, this);
   } else {
@@ -547,7 +558,7 @@ FetchSM::ext_read_data(char *buf, size_t len)
   }
 
   resp_recived_body_len += already;
-  resp_reader->consume(already);
+  TSIOBufferReaderConsume(reader, already);
 
   read_vio->reenable();
   return already;
