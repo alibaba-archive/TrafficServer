@@ -8059,6 +8059,14 @@ _conf_to_memberp(TSOverridableConfigKey conf,
     typ = OVERRIDABLE_TYPE_STRING;
     ret = &overridablehttpConfig->proxy_response_server_string;
     break;
+  case TS_CONFIG_HTTP_CACHE_OPEN_READ_RETRY_TIME:
+    typ = OVERRIDABLE_TYPE_INT;
+    ret = &overridablehttpConfig->cache_open_read_retry_time;
+    break;
+  case TS_CONFIG_HTTP_CACHE_MAX_OPEN_READ_RETRIES:
+    typ = OVERRIDABLE_TYPE_INT;
+    ret = &overridablehttpConfig->max_cache_open_read_retries;
+    break;
 
     // This helps avoiding compiler warnings, yet detect unhandled enum members.
   case TS_CONFIG_NULL:
@@ -8476,10 +8484,18 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
     break;
 
   case 44:
-    if (!strncmp(name, "proxy.config.http.anonymize_remove_client_ip", length))
-      cnf = TS_CONFIG_HTTP_ANONYMIZE_REMOVE_CLIENT_IP;
-    else if (!strncmp(name, "proxy.config.http.anonymize_insert_client_ip", length))
-      cnf = TS_CONFIG_HTTP_ANONYMIZE_INSERT_CLIENT_IP;
+    switch (name[length-1]) {
+    case 'p':
+      if (!strncmp(name, "proxy.config.http.anonymize_remove_client_ip", length))
+        cnf = TS_CONFIG_HTTP_ANONYMIZE_REMOVE_CLIENT_IP;
+      else if (!strncmp(name, "proxy.config.http.anonymize_insert_client_ip", length))
+        cnf = TS_CONFIG_HTTP_ANONYMIZE_INSERT_CLIENT_IP;
+      break;
+    case 'e':
+      if (!strncmp(name, "proxy.config.http.cache.open_read_retry_time", length))
+        cnf = TS_CONFIG_HTTP_CACHE_OPEN_READ_RETRY_TIME;
+      break;
+    }
     break;
 
   case 45:
@@ -8499,6 +8515,8 @@ TSHttpTxnConfigFind(const char* name, int length, TSOverridableConfigKey *conf, 
     case 's':
       if (!strncmp(name, "proxy.config.http.connect_attempts_rr_retries", length))
         cnf = TS_CONFIG_HTTP_CONNECT_ATTEMPTS_RR_RETRIES;
+      else if (!strncmp(name, "proxy.config.http.cache.max_open_read_retries", length))
+        cnf = TS_CONFIG_HTTP_CACHE_MAX_OPEN_READ_RETRIES;
       break;
     }
     break;

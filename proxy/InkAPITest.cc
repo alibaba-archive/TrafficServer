@@ -7591,6 +7591,8 @@ const char *SDK_Overridable_Configs[] = {
   "proxy.config.http.cache.fuzz.probability",
   "proxy.config.net.sock_packet_mark_out",
   "proxy.config.net.sock_packet_tos_out",
+  "proxy.config.http.cache.open_read_retry_time",
+  "proxy.config.http.cache.max_open_read_retries",
 
   NULL
 };
