@@ -58,12 +58,16 @@ ProtocolNetAccept::createSuitableVC(EThread *t, Connection &con)
 
     Debug("spdy", "the first byte:%x", c);
     if (c == 0x80 || c == 0x00) {
+#if TS_HAS_SPDY
       // SPDY protocol
       if (t)
         vc = THREAD_ALLOC(netVCAllocator, t);
       else
         vc = netVCAllocator.alloc();
       vc->proto_type = NET_PROTO_HTTP_SPDY;
+#else
+      return NULL;
+#endif
     } else {
       // HTTP protocol
       if (t)

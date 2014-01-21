@@ -224,8 +224,10 @@ start_HttpProxyServer(int accept_threads)
       ssl->registerEndpoint(TS_NPN_PROTOCOL_HTTP_1_0, http);
       ssl->registerEndpoint(TS_NPN_PROTOCOL_HTTP_1_1, http);
 
+#if TS_HAS_SPDY
       // SPDY
       ssl->registerEndpoint(TS_NPN_PROTOCOL_SPDY_3, spdy);
+#endif
 
 #ifndef TS_NO_API
       ink_scoped_mutex lock(ssl_plugin_mutex);
