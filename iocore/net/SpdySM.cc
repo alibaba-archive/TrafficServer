@@ -277,6 +277,7 @@ spdy_read_fetch_body_callback(spdylay_session *session, int32_t stream_id,
   if (req != sm->req_map[stream_id]) {
     Debug("spdy", "    stream_id:%d, call:%d, req has been deleted, return 0\n",
           stream_id, g_call_cnt);
+    *eof = 1;
     return 0;
   }
 
