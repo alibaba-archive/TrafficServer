@@ -88,6 +88,7 @@ extern "C" int plock(int);
 #include "I_Tasks.h"
 
 #include "HCProcessor.h"
+#include "HotUrlProcessor.h"
 #include <ts/ink_cap.h>
 
 #if TS_HAS_PROFILER
@@ -1828,6 +1829,8 @@ main(int argc, char **argv)
     ats_free(user);
   }
 # endif
+
+  hotUrlProcessor.init();
 
   this_thread()->execute();
 }

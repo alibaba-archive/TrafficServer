@@ -22,6 +22,9 @@
  */
 
 #include "MappingTypes.h"
+#include "HotUrlManager.h"
+#include "HotUrlHistory.h"
+#include "HotUrlStats.h"
 #include "RemapProcessor.h"
 
 RemapProcessor remapProcessor;
@@ -386,6 +389,18 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
     }
   }
 
+  if (HotUrlStats::enabled() && !s->txn_conf->cache_cluster_cache_local) {
+    HttpTransact::SetCacheLookupUrl(s);
+    if (s->cache_info.lookup_url->valid()) {
+      int length;
+      char cache_url[MAX_URL_SIZE];
+      s->cache_info.lookup_url->string_get_buf(cache_url, sizeof(cache_url), &length);
+      if (HotUrlManager::isHotUrl(cache_url, length)) {
+        s->cache_control.cluster_cache_local = true;
+      }
+    }
+  }
+
   return remap_found;
 }
 
@@ -655,6 +670,13 @@ bool RemapProcessor::convert_cache_url(const char *in_url, const int in_url_len,
   if (!found) {
     *out_url = '\0';
     *out_url_len = 0;
+  }
+  else {
+    if (*flags != URL_CONVERT_FLAG_CLUSTER_CACHE_LOCAL) {
+      if (HotUrlHistory::isHotUrl(out_url, *out_url_len)) {
+        *flags = URL_CONVERT_FLAG_CLUSTER_CACHE_LOCAL;
+      }
+    }
   }
 
   return found;

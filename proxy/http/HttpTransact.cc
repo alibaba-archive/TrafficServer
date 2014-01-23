@@ -1805,6 +1805,52 @@ HttpTransact::HandleFiltering(State* s)
 }
 
 void
+HttpTransact::SetCacheLookupUrl(State* s)
+{
+  if (s->cache_info.lookup_url != NULL) {  //already set
+    return;
+  }
+
+  HTTPHdr* incoming_request = &s->hdr_info.client_request;
+
+  if (s->txn_conf->maintain_pristine_host_hdr) {
+    s->cache_info.lookup_url_storage.create(NULL);
+    s->cache_info.lookup_url_storage.copy(incoming_request->url_get());
+    s->cache_info.lookup_url = &s->cache_info.lookup_url_storage;
+    // if the target isn't in the URL, put it in the copy for
+    // cache lookup.
+    incoming_request->set_url_target_from_host_field(s->cache_info.lookup_url);
+  } else {
+    // make sure the target is in the URL.
+    incoming_request->set_url_target_from_host_field();
+    s->cache_info.lookup_url = incoming_request->url_get();
+  }
+
+  // *somebody* wants us to not hack the host header in a reverse proxy setup.
+  // In addition, they want us to reverse proxy for 6000 servers, which vary
+  // the stupid content on the Host header!!!!
+  // We could a) have 6000 alts (barf, puke, vomit) or b) use the original
+  // host header in the url before doing all cache actions (lookups, writes, etc.)
+  if (s->txn_conf->maintain_pristine_host_hdr) {
+    char const* host_hdr;
+    char const* port_hdr;
+    int host_len, port_len;
+    // So, the host header will have the original host header.
+    if (incoming_request->get_host_port_values(&host_hdr, &host_len, &port_hdr, &port_len)) {
+      int port = 0;
+      if (port_hdr) {
+        s->cache_info.lookup_url->host_set(host_hdr, host_len);
+        port = ink_atoi(port_hdr, port_len);
+      } else {
+        s->cache_info.lookup_url->host_set(host_hdr, host_len);
+      }
+      s->cache_info.lookup_url->port_set(port);
+    }
+  }
+  ink_debug_assert(s->cache_info.lookup_url->valid() == true);
+}
+
+void
 HttpTransact::DecideCacheLookup(State* s)
 {
   // Check if a client request is lookupable.
@@ -1839,43 +1885,7 @@ HttpTransact::DecideCacheLookup(State* s)
     ink_debug_assert(s->current.mode != TUNNELLING_PROXY);
 
     if (s->cache_info.lookup_url == NULL) {
-      HTTPHdr* incoming_request = &s->hdr_info.client_request;
-
-      if (s->txn_conf->maintain_pristine_host_hdr) {
-        s->cache_info.lookup_url_storage.create(NULL);
-        s->cache_info.lookup_url_storage.copy(incoming_request->url_get());
-        s->cache_info.lookup_url = &s->cache_info.lookup_url_storage;
-        // if the target isn't in the URL, put it in the copy for
-        // cache lookup.
-        incoming_request->set_url_target_from_host_field(s->cache_info.lookup_url);
-      } else {
-        // make sure the target is in the URL.
-        incoming_request->set_url_target_from_host_field();
-        s->cache_info.lookup_url = incoming_request->url_get();
-      }
-
-      // *somebody* wants us to not hack the host header in a reverse proxy setup.
-      // In addition, they want us to reverse proxy for 6000 servers, which vary
-      // the stupid content on the Host header!!!!
-      // We could a) have 6000 alts (barf, puke, vomit) or b) use the original
-      // host header in the url before doing all cache actions (lookups, writes, etc.)
-      if (s->txn_conf->maintain_pristine_host_hdr) {
-        char const* host_hdr;
-        char const* port_hdr;
-        int host_len, port_len;
-        // So, the host header will have the original host header.
-        if (incoming_request->get_host_port_values(&host_hdr, &host_len, &port_hdr, &port_len)) {
-          int port = 0;
-          if (port_hdr) {
-            s->cache_info.lookup_url->host_set(host_hdr, host_len);
-            port = ink_atoi(port_hdr, port_len);
-          } else {
-            s->cache_info.lookup_url->host_set(host_hdr, host_len);
-          }
-          s->cache_info.lookup_url->port_set(port);
-        }
-      }
-      ink_debug_assert(s->cache_info.lookup_url->valid() == true);
+      SetCacheLookupUrl(s);
     }
     if ((s->method != HTTP_WKSIDX_GET) && (s->method == HTTP_WKSIDX_DELETE || s->method == HTTP_WKSIDX_PURGE)) {
       s->cache_info.action = CACHE_DO_DELETE;

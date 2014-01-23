@@ -1471,6 +1471,7 @@ public:
   static void add_new_stat_block(State* s);
   static void delete_warning_value(HTTPHdr* to_warn, HTTPWarningCode warning_code);
   static bool is_connection_collapse_checks_success(State* s); //YTS Team, yamsat
+  static void SetCacheLookupUrl(State* s);
 };
 
 typedef void (*TransactEntryFunc_t) (HttpTransact::State* s);

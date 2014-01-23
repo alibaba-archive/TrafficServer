@@ -46,6 +46,7 @@
 
 #include "HCUtil.h"
 #include "HCSM.h"
+#include "HotUrlStats.h"
 
 #define DEFAULT_RESPONSE_BUFFER_SIZE_INDEX    6 // 8K
 #define DEFAULT_REQUEST_BUFFER_SIZE_INDEX    6  // 8K
@@ -6346,6 +6347,34 @@ HttpSM::kill_this()
 
     if (t_state.http_config_param->enable_http_stats)
       update_stats();
+
+    if (t_state.cache_info.lookup_url != NULL &&
+        t_state.cache_info.lookup_url->valid() && !(t_state.cop_test_page ||
+          plugin_tunnel_type == HTTP_PLUGIN_AS_INTERCEPT))
+    {
+      char cache_url[MAX_URL_SIZE];
+      int length;
+      t_state.cache_info.lookup_url->host_get(&length);
+      if (length > 0) {
+        t_state.cache_info.lookup_url->string_get_buf(cache_url, sizeof(cache_url), &length);
+        if (length > 0 && length < (int)sizeof(cache_url)) {
+          int64_t write_bytes = client_response_hdr_bytes + client_response_body_bytes;
+          //Note("url: %.*s", length, cache_url);
+          if (write_bytes > 0) {
+            if (milestones.ua_begin_write != 0) {
+              ink_hrtime ua_write_time = ink_get_hrtime() - milestones.ua_begin_write;
+              if (ua_write_time > HotUrlStats::getDetectInterval()) {
+                write_bytes = (int64_t)((double)write_bytes /
+                    ((double)ua_write_time / (double)
+                     HotUrlStats::getDetectInterval()));
+              }
+            }
+
+            HotUrlStats::incSendBytes(cache_url, length, write_bytes);
+          }
+        }
+      }
+    }
 
     HTTP_SM_SET_DEFAULT_HANDLER(NULL);
 

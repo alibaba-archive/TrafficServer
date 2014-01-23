@@ -32,6 +32,7 @@ AM_CPPFLAGS = \
   -I$(top_srcdir)/proxy/hdrs \
   -I$(top_srcdir)/proxy/http \
   -I$(top_srcdir)/proxy/http/healthcheck \
+  -I$(top_srcdir)/proxy/http/hoturls     \
   -I$(top_srcdir)/proxy/http/remap/acl   \
   -I$(top_srcdir)/proxy/http/remap/parser
 

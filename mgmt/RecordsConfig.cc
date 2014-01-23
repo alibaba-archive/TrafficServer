@@ -2104,6 +2104,26 @@ RecordElement RecordsConfig[] = {
   {RECT_CONFIG, "proxy.config.remap.num_remap_threads", RECD_INT, "1", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
 
+  //############
+  //#
+  //# hot urls detect
+  //#
+  //############
+  {RECT_CONFIG, "proxy.config.http.hoturls.max_count", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_INT, "[0-100]", RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.http.hoturls.detect_interval_secs", RECD_INT, "10", RECU_NULL, RR_NULL, RECC_INT, "[1-300]", RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.http.hoturls.detect_on_bps", RECD_INT, "524288000", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.http.hoturls.detect_on_bps_ratio", RECD_FLOAT, "0.5", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.http.hoturls.single_url_bps_ratio", RECD_FLOAT, "0.2", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.http.hoturls.multi_url_bps_ratio", RECD_FLOAT, "0.3", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.http.hoturls.keep_days", RECD_INT, "1", RECU_NULL, RR_NULL, RECC_INT, "[1-31]", RECA_NULL}
+  ,
+
   //##############################################################################
   //#
   //# The End

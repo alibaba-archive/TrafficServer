@@ -25,6 +25,7 @@
 #include "libts.h"
 
 #ifndef _HTTP_CONNECTION_COUNT_H_
+#define _HTTP_CONNECTION_COUNT_H_
 
 #define HOST_HASH_TABLE_SIZE  1361
 #define MAX_HOST_COUNT_PER_BUCKET  256  //must be power of 2

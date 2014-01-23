@@ -7437,21 +7437,26 @@ TSCacheUrlSet(TSHttpTxn txnp, const char *url, int length)
   sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
 
   HttpSM *sm = (HttpSM *) txnp;
-  Debug("cache_url", "[TSCacheUrlSet]");
-
-  if (sm->t_state.cache_info.lookup_url == NULL) {
-    Debug("cache_url", "[TSCacheUrlSet] changing the cache url to: %s", url);
-
-    if (length == -1)
-      length = strlen(url);
-
-    sm->t_state.cache_info.lookup_url_storage.create(NULL);
-    sm->t_state.cache_info.lookup_url = &(sm->t_state.cache_info.lookup_url_storage);
-    sm->t_state.cache_info.lookup_url->parse(url, length);
-    return TS_SUCCESS;
+  if (sm->t_state.cache_info.lookup_url != NULL) {
+    if (sm->t_state.cache_info.lookup_url == &(sm->t_state.cache_info.lookup_url_storage)) {
+      sm->t_state.cache_info.lookup_url_storage.destroy();
+    }
   }
 
-  return TS_ERROR;
+  Debug("cache_url", "[TSCacheUrlSet] changing the cache url to: %s", url);
+
+  if (length == -1) {
+    length = strlen(url);
+  }
+
+  sm->t_state.cache_info.lookup_url_storage.create(NULL);
+  sm->t_state.cache_info.lookup_url = &(sm->t_state.cache_info.lookup_url_storage);
+  if (sm->t_state.cache_info.lookup_url->parse(url, length) == PARSE_ERROR) {
+    return TS_ERROR;
+  }
+  else {
+    return TS_SUCCESS;
+  }
 }
 
 void

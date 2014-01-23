@@ -39,6 +39,7 @@ AM_CPPFLAGS = \
   -I$(srcdir)/logging \
   -I$(srcdir)/http/remap  \
   -I$(srcdir)/http/healthcheck \
+  -I$(srcdir)/http/hoturls  \
   -I$(srcdir)/hdrs \
   -I$(top_srcdir)/mgmt \
   -I$(top_srcdir)/mgmt/preparse \
@@ -144,6 +145,7 @@ traffic_server_LDADD = \
   http/libhttp.a \
   http/remap/libhttp_remap.a \
   http/healthcheck/libhttp_healthcheck.a \
+  http/hoturls/libhttp_hoturls.a \
   congest/libCongestionControl.a \
   logging/liblogging.a \
   logging/liblogcollation.a \
@@ -246,6 +248,7 @@ traffic_sac_LDADD = \
   http/libhttp.a \
   http/remap/libhttp_remap.a \
   http/healthcheck/libhttp_healthcheck.a \
+  http/hoturls/libhttp_hoturls.a \
   congest/libCongestionControl.a \
   logging/liblogging.a \
   logging/liblogcollation.a \
