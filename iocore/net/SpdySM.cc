@@ -230,7 +230,10 @@ spdy_process_fetch(TSEvent event, SpdySM *sm, void *edata)
 
   default:
     Debug("spdy", "----[FETCH ERROR]\n");
-    req->fetch_sm = NULL;
+    if (req->fetch_body_completed)
+      ret = 0; // Ignore fetch errors after FETCH BODY DONE
+    else
+      req->fetch_sm = NULL;
     break;
   }
 
