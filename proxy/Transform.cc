@@ -905,7 +905,7 @@ RangeTransform::parse_range_and_compare()
     }
   }
 
-  if (m_num_range_fields > 0) {
+  if (prev_good_range >= 0 && m_num_range_fields > 0) {
     m_unsatisfiable_range = false;
   }
 }

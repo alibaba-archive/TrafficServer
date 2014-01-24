@@ -4252,9 +4252,19 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
     if (s->next_action == SERVE_FROM_CACHE && client_response_code == HTTP_STATUS_OK &&
         s->method == HTTP_WKSIDX_GET && s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE)) {
       s->state_machine->do_range_setup_if_necessary();
-      // Note that even if the Range request is not satisfiable, we
-      // update and serve this cache. This will give a 200 response to
-      // a bad client, but allows us to avoid pegging the origin (e.g. abuse).
+
+      if (s->range_setup == RANGE_NOT_SATISFIABLE) {
+        client_response_code = HTTP_STATUS_RANGE_NOT_SATISFIABLE;
+        if (s->txn_conf->cache_when_to_revalidate != 4) {
+          s->cache_info.action = CACHE_DO_UPDATE;
+          s->next_action = PROXY_INTERNAL_CACHE_UPDATE_HEADERS;
+          /* base_response will be set after updating headers below */
+        } else {
+          s->cache_info.action = CACHE_DO_NO_ACTION;
+          s->next_action = PROXY_INTERNAL_CACHE_NOOP;
+          base_response = &s->hdr_info.server_response;
+        }
+      }
     }
     break;
 
@@ -4537,7 +4547,9 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
     set_headers_for_cache_write(s, &s->cache_info.object_store, &s->hdr_info.server_request, &s->hdr_info.server_response);
   }
   // 304, 412, and 416 responses are handled here
-  if ((client_response_code == HTTP_STATUS_NOT_MODIFIED) || (client_response_code == HTTP_STATUS_PRECONDITION_FAILED)) {
+  if ((client_response_code == HTTP_STATUS_NOT_MODIFIED)
+        || (client_response_code == HTTP_STATUS_PRECONDITION_FAILED)
+        || (client_response_code == HTTP_STATUS_RANGE_NOT_SATISFIABLE)) {
     // Because we are decoupling User-Agent validation from
     //  Traffic Server validation just build a regular 304
     //  if the exception of adding prepending the VIA
@@ -4567,7 +4579,12 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
       HttpTransactHeaders::insert_warning_header(s->http_config_param, &s->hdr_info.client_response,
                                                  HTTP_WARNING_CODE_MISC_WARNING, warn_text, strlen(warn_text));
     }
-
+    if (client_response_code == HTTP_STATUS_RANGE_NOT_SATISFIABLE) {
+      s->hdr_info.client_response.value_set(MIME_FIELD_CACHE_CONTROL, MIME_LEN_CACHE_CONTROL, "no-store", 8);
+      // Make sure there are no Expires and Last-Modified headers.
+      s->hdr_info.client_response.field_delete(MIME_FIELD_EXPIRES, MIME_LEN_EXPIRES);
+      s->hdr_info.client_response.field_delete(MIME_FIELD_LAST_MODIFIED, MIME_LEN_LAST_MODIFIED);
+    }
     if (!s->cop_test_page)
       DUMP_HEADER("http_hdrs", &s->hdr_info.client_response, s->state_machine_id, "Proxy's Response (Client Conditionals)");
     return;

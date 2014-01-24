@@ -4096,7 +4096,7 @@ HttpSM::do_range_setup_if_necessary(bool from_server)
 
       // condition fails if Last-modified not exists
       if ((req->get_if_range_date() < lm_value) || (lm_value == 0)) {
-        t_state.range_setup = HttpTransact::RANGE_NOT_HANDLED;
+        t_state.range_setup = HttpTransact::RANGE_NONE;
         return;
       }
     }
