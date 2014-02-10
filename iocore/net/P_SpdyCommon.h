@@ -29,7 +29,7 @@ using namespace std;
 #define SPDYD_SERVER    "ATS Spdylay/" SPDYLAY_VERSION
 
 #define atomic_fetch_and_add(a, b)  __sync_fetch_and_add(&a, b)
-#define atomic_fetch_and_sub(a, b)  __sync_fetch_and_add(&a, b)
+#define atomic_fetch_and_sub(a, b)  __sync_fetch_and_sub(&a, b)
 #define atomic_inc(a)   atomic_fetch_and_add(a, 1)
 #define atomic_dec(a)   atomic_fetch_and_sub(a, 1)
 

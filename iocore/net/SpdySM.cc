@@ -2,6 +2,9 @@
 
 #include "P_SpdySM.h"
 
+ClassAllocator<SpdySM> spdySMAllocator("SpdySMAllocator");
+ClassAllocator<SpdyRequest> spdyRequestAllocator("SpdyRequestAllocator");
+
 static int spdy_main_handler(TSCont contp, TSEvent event, void *edata);
 static int spdy_start_handler(TSCont contp, TSEvent event, void *edata);
 static int spdy_default_handler(TSCont contp, TSEvent event, void *edata);
@@ -11,8 +14,10 @@ static int spdy_process_fetch(TSEvent event, SpdySM *sm, void *edata);
 static int spdy_process_fetch_header(TSEvent event, SpdySM *sm, TSFetchSM fetch_sm);
 static int spdy_process_fetch_body(TSEvent event, SpdySM *sm, TSFetchSM fetch_sm);
 static uint64_t g_sm_id;
+static uint64_t g_sm_cnt;
 
-SpdyRequest::~SpdyRequest()
+void
+SpdyRequest::clear()
 {
   if (fetch_sm)
     TSFetchDestroy(fetch_sm);
@@ -22,14 +27,31 @@ SpdyRequest::~SpdyRequest()
   Debug("spdy", "****Delete Request[%" PRIu64 ":%d]\n", spdy_sm->sm_id, stream_id);
 }
 
+SpdySM::SpdySM():
+  net_vc(NULL), contp(NULL),
+  req_buffer(NULL), req_reader(NULL),
+  resp_buffer(NULL), resp_reader(NULL),
+  read_vio(NULL), write_vio(NULL), session(NULL)
+{}
+
 SpdySM::SpdySM(TSVConn conn):
-  net_vc(conn), contp(NULL),
+  net_vc(NULL), contp(NULL),
   req_buffer(NULL), req_reader(NULL),
   resp_buffer(NULL), resp_reader(NULL),
   read_vio(NULL), write_vio(NULL), session(NULL)
 
 {
+  init(conn);
+}
+
+void
+SpdySM::init(TSVConn conn)
+{
   int r;
+
+  net_vc = conn;
+  req_map.clear();
+
   r = spdylay_session_server_new(&session, SPDY_CFG.spdy.version,
                                  &SPDY_CFG.spdy.callbacks, this);
   ink_release_assert(r == 0);
@@ -38,8 +60,10 @@ SpdySM::SpdySM(TSVConn conn):
   start_time = TShrtime();
 }
 
-SpdySM::~SpdySM()
+void
+SpdySM::clear()
 {
+  uint64_t nr_pending;
   //
   // SpdyRequest depends on SpdySM,
   // we should delete it firstly to avoid race.
@@ -48,7 +72,8 @@ SpdySM::~SpdySM()
   map<int, SpdyRequest*>::iterator endIter = req_map.end();
   for(; iter != endIter; ++iter) {
     SpdyRequest *req = iter->second;
-    delete req;
+    req->clear();
+    spdyRequestAllocator.free(req);
   }
   req_map.clear();
 
@@ -87,7 +112,9 @@ SpdySM::~SpdySM()
     session = NULL;
   }
 
-  Debug("spdy", "****Delete SpdySM[%" PRIu64"]\n", sm_id);
+  nr_pending = atomic_dec(g_sm_cnt);
+  Debug("spdy-free", "****Delete SpdySM[%"PRIu64"], nr_pending:%"PRIu64"\n",
+        sm_id, --nr_pending);
 }
 
 void
@@ -95,7 +122,9 @@ spdy_sm_create(TSVConn cont)
 {
   SpdySM  *sm;
 
-  sm = new SpdySM(cont);
+  sm = spdySMAllocator.alloc();
+  sm->init(cont);
+  atomic_inc(g_sm_cnt);
 
   sm->contp = TSContCreate(spdy_main_handler, TSMutexCreate());
   TSContDataSet(sm->contp, sm);
@@ -164,7 +193,8 @@ spdy_default_handler(TSCont contp, TSEvent event, void *edata)
   }
 
   if (ret) {
-    delete sm;
+    sm->clear();
+    spdySMAllocator.free(sm);
   }
 
   return 0;
@@ -240,7 +270,8 @@ spdy_process_fetch(TSEvent event, SpdySM *sm, void *edata)
   if (ret) {
     spdy_prepare_status_response(sm, req->stream_id, STATUS_500);
     sm->req_map.erase(req->stream_id);
-    delete req;
+    req->clear();
+    spdyRequestAllocator.free(req);
   }
 
   return 0;
@@ -312,7 +343,8 @@ spdy_read_fetch_body_callback(spdylay_session *session, int32_t stream_id,
       }
       *eof = 1;
       sm->req_map.erase(stream_id);
-      delete req;
+      req->clear();
+      spdyRequestAllocator.free(req);
     } else if (already == 0) {
       req->need_resume_data = true;
       return SPDYLAY_ERR_DEFERRED;

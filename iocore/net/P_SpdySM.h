@@ -14,17 +14,39 @@ typedef int (*SpdySMHandler) (TSCont contp, TSEvent event, void *data);
 class SpdyRequest
 {
 public:
-  SpdyRequest(SpdySM *sm, int id):
-    spdy_sm(sm), stream_id(id), fetch_sm(NULL),
+  SpdyRequest():
+    spdy_sm(NULL), stream_id(-1), fetch_sm(NULL),
     has_submitted_data(false), need_resume_data(false),
     fetch_data_len(0), delta_window_size(0),
     fetch_body_completed(false)
   {
+  }
+
+  SpdyRequest(SpdySM *sm, int id):
+    spdy_sm(NULL), stream_id(-1), fetch_sm(NULL),
+    has_submitted_data(false), need_resume_data(false),
+    fetch_data_len(0), delta_window_size(0),
+    fetch_body_completed(false)
+  {
+    init(sm, id);
+  }
+
+  ~SpdyRequest()
+  {
+    clear();
+  }
+
+  void init(SpdySM *sm, int id)
+  {
+    spdy_sm = sm;
+    stream_id = id;
+    headers.clear();
+
     MD5_Init(&recv_md5);
     start_time = TShrtime();
   }
 
-  ~SpdyRequest();
+  void clear();
 
   void append_nv(char **nv)
   {
@@ -61,10 +83,15 @@ class SpdySM
 
 public:
 
+  SpdySM();
   SpdySM(TSVConn conn);
-  ~SpdySM();
+  ~SpdySM()
+  {
+    clear();
+  }
 
-  void init();
+  void init(TSVConn conn);
+  void clear();
 
 public:
 
@@ -94,6 +121,9 @@ public:
 
 
 void spdy_sm_create(TSVConn cont);
+
+extern ClassAllocator<SpdySM> spdySMAllocator;
+extern ClassAllocator<SpdyRequest> spdyRequestAllocator;
 
 #endif
 
