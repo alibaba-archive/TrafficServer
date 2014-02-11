@@ -209,20 +209,6 @@ spdy_recv_callback(spdylay_session *session, uint8_t *buf, size_t length,
 
   SpdySM  *sm = (SpdySM*)user_data;
 
-  switch (sm->event) {
-
-  case TS_EVENT_VCONN_READ_READY:
-  case TS_EVENT_VCONN_READ_COMPLETE:
-    break;
-
-  case TS_EVENT_VCONN_EOS:
-  case TS_EVENT_VCONN_INACTIVITY_TIMEOUT:
-    return SPDYLAY_ERR_EOF;
-
-  default:
-    return SPDYLAY_ERR_CALLBACK_FAILURE;
-  };
-
   already = 0;
   blk = TSIOBufferReaderStart(sm->req_reader);
 

@@ -64,6 +64,7 @@ void
 SpdySM::clear()
 {
   uint64_t nr_pending;
+  int last_event = event;
   //
   // SpdyRequest depends on SpdySM,
   // we should delete it firstly to avoid race.
@@ -113,8 +114,8 @@ SpdySM::clear()
   }
 
   nr_pending = atomic_dec(g_sm_cnt);
-  Debug("spdy-free", "****Delete SpdySM[%"PRIu64"], nr_pending:%"PRIu64"\n",
-        sm_id, --nr_pending);
+  Debug("spdy-free", "****Delete SpdySM[%"PRIu64"], last event:%d, nr_pending:%"PRIu64"\n",
+        sm_id, last_event, --nr_pending);
 }
 
 void
@@ -181,17 +182,29 @@ spdy_default_handler(TSCont contp, TSEvent event, void *edata)
 {
   int ret = 0;
   SpdySM  *sm = (SpdySM*)TSContDataGet(contp);
+  sm->event = event;
 
   if (edata == sm->read_vio) {
     Debug("spdy", "++++[READ EVENT]\n");
+    if (event != TS_EVENT_VCONN_READ_READY &&
+        event != TS_EVENT_VCONN_READ_COMPLETE) {
+      ret = -1;
+      goto out;
+    }
     ret = spdy_process_read(event, sm);
   } else if (edata == sm->write_vio) {
     Debug("spdy", "----[WRITE EVENT]\n");
+    if (event != TS_EVENT_VCONN_WRITE_READY &&
+        event != TS_EVENT_VCONN_WRITE_COMPLETE) {
+      ret = -1;
+      goto out;
+    }
     ret = spdy_process_write(event, sm);
   } else {
     ret = spdy_process_fetch(event, sm, edata);
   }
 
+out:
   if (ret) {
     sm->clear();
     spdySMAllocator.free(sm);
@@ -203,7 +216,6 @@ spdy_default_handler(TSCont contp, TSEvent event, void *edata)
 static int
 spdy_process_read(TSEvent event, SpdySM *sm)
 {
-  sm->event = event;
   return spdylay_session_recv(sm->session);
 }
 
@@ -211,8 +223,6 @@ static int
 spdy_process_write(TSEvent event, SpdySM *sm)
 {
   int ret;
-
-  sm->event = event;
 
   ret = spdylay_session_send(sm->session);
 
