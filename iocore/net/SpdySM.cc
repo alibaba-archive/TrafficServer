@@ -1,6 +1,7 @@
 
 
 #include "P_SpdySM.h"
+#include "I_Net.h"
 
 ClassAllocator<SpdySM> spdySMAllocator("SpdySMAllocator");
 ClassAllocator<SpdyRequest> spdyRequestAllocator("SpdyRequestAllocator");
@@ -122,6 +123,7 @@ void
 spdy_sm_create(TSVConn cont)
 {
   SpdySM  *sm;
+  NetVConnection *netvc = (NetVConnection *)cont;
 
   sm = spdySMAllocator.alloc();
   sm->init(cont);
@@ -129,6 +131,8 @@ spdy_sm_create(TSVConn cont)
 
   sm->contp = TSContCreate(spdy_main_handler, TSMutexCreate());
   TSContDataSet(sm->contp, sm);
+
+  netvc->set_inactivity_timeout(HRTIME_SECONDS(SPDY_CFG.accept_no_activity_timeout));
 
   sm->current_handler = &spdy_start_handler;
   TSContSchedule(sm->contp, 0, TS_THREAD_POOL_DEFAULT);       // schedule now
@@ -181,8 +185,11 @@ static int
 spdy_default_handler(TSCont contp, TSEvent event, void *edata)
 {
   int ret = 0;
+  bool from_fetch = false;
+  NetVConnection *netvc;
   SpdySM  *sm = (SpdySM*)TSContDataGet(contp);
   sm->event = event;
+  netvc = (NetVConnection *)sm->net_vc;
 
   if (edata == sm->read_vio) {
     Debug("spdy", "++++[READ EVENT]\n");
@@ -201,13 +208,18 @@ spdy_default_handler(TSCont contp, TSEvent event, void *edata)
     }
     ret = spdy_process_write(event, sm);
   } else {
+    from_fetch = true;
     ret = spdy_process_fetch(event, sm, edata);
   }
 
+  Debug("spdy-event", "++++SpdySM[%"PRIu64"], EVENT:%d, ret:%d, nr_pending:%"PRIu64"\n",
+        sm->sm_id, event, ret, g_sm_cnt);
 out:
   if (ret) {
     sm->clear();
     spdySMAllocator.free(sm);
+  } else if (!from_fetch) {
+    netvc->set_inactivity_timeout(HRTIME_SECONDS(SPDY_CFG.no_activity_timeout_in));
   }
 
   return 0;

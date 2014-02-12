@@ -47,6 +47,8 @@ struct SpdyConfig {
 struct Config {
   SpdyConfig spdy;
   int nr_accept_threads;
+  int accept_no_activity_timeout;
+  int no_activity_timeout_in;
 };
 
 // Spdy Name/Value pairs

@@ -18,6 +18,8 @@ int
 spdy_config_load()
 {
   SPDY_CFG.nr_accept_threads = 1;
+  SPDY_CFG.accept_no_activity_timeout = 30;
+  SPDY_CFG.no_activity_timeout_in = 30;
   SPDY_CFG.spdy.verbose = false;
   SPDY_CFG.spdy.enable_tls = false;
   SPDY_CFG.spdy.keep_host_port = false;
