@@ -66,6 +66,7 @@
 #include "ink_memory.h"
 #include "ink_memory_pool.h"
 #include "ink_mutex.h"
+#include "ink_spinlock.h"
 #include "ink_queue.h"
 #include "ink_rand.h"
 #include "ink_rbtree.h"
