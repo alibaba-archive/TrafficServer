@@ -4723,10 +4723,18 @@ HttpTransact::handle_no_cache_operation_on_forward_server_response(State* s)
  */
 void HttpTransact::mark_owner_left_time_header(State *s)
 {
+  HTTPHdr *hdr;
   INK_MD5 url_md5;
+  MIMEField *field;
   ClusterMachine *m = NULL;
+
+  // Need not to mark?
+  if (!cache_clustering_enabled || !this_cluster()->default_configuration)
+    return;
+
   Cache::generate_key(&url_md5, s->state_machine->get_cache_sm_lookup_url());
   m = cluster_machine_by_default(cache_hash(url_md5));
+  hdr = s->cache_info.object_store.response_get();
 
   char hexStr[33];
   unsigned int ip = m ? m->ip : 0;
@@ -4744,8 +4752,7 @@ void HttpTransact::mark_owner_left_time_header(State *s)
                                   (InkHashTableKey)m->ip,
                                   (InkHashTableValue *)&left_time);
 
-    MIMEField *field;
-    HTTPHdr *hdr = s->cache_info.object_store.response_get();
+    hdr = s->cache_info.object_store.response_get();
     if (!(field= hdr->field_find(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME))) {
       field = hdr->field_create(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME);
       hdr->field_attach(field);
@@ -4754,6 +4761,12 @@ void HttpTransact::mark_owner_left_time_header(State *s)
     len = snprintf(value, sizeof(value), "%u:%"PRId64"", m->ip, left_time);
     hdr->field_value_set(field, value, len);
     DUMP_HEADER("http_hdrs", hdr, s->state_machine_id, "Mark Owner-Left-Time");
+  } else {
+    // After removing one or more IP from default_cluster.config,
+    // all Owner-Left-Time headers containing these IP would become
+    // outdated. We must clear outdated Owner-Left-Time header to
+    // prevent it polluting cache data.
+    hdr->field_delete(MIME_FIELD_OWNER_LEFT_TIME, MIME_LEN_OWNER_LEFT_TIME);
   }
 }
 
