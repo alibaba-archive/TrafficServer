@@ -812,6 +812,8 @@ RecordElement RecordsConfig[] = {
   //##############################################################################
   {RECT_CONFIG, "proxy.config.cluster.threads", RECD_INT, "1", RECU_RESTART_TS, RR_NULL, RECC_INT, "[0-512]", RECA_NULL}
   ,
+  {RECT_CONFIG, "proxy.config.cluster.connections", RECD_INT, "0", RECU_RESTART_TS, RR_NULL, RECC_INT, "[2-512]", RECA_NULL}
+  ,
   {RECT_CONFIG, "proxy.config.cluster.cluster_port", RECD_INT, "8086", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.cluster.flow_ctrl.min_bps", RECD_INT, "804857600", RECU_RESTART_TS, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
@@ -860,7 +862,9 @@ RecordElement RecordsConfig[] = {
   //# load monitor_enabled: -1 = compute only, 0 = disable, 1 = compute and act
   {RECT_CONFIG, "proxy.config.cluster.load_monitor_enabled", RECD_INT, "1", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
-  {RECT_CONFIG, "proxy.config.cluster.ping_send_interval_msecs", RECD_INT, "100", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  {RECT_CONFIG, "proxy.config.cluster.ping_send_interval_msecs", RECD_INT, "1000", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CONFIG, "proxy.config.cluster.ping_retries", RECD_INT, "3", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.cluster.ping_response_buckets", RECD_INT, "100", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
