@@ -1056,7 +1056,7 @@ static int deal_message(MsgHeader *pHeader, SocketContext *
   if (pHeader->func_id == FUNC_ID_CLUSTER_PING_REQUEST) {
       time_used = CURRENT_TIME() - pHeader->session_id.fields.timestamp;
       if (time_used > 1) {
-        Warning("cluster recv client %s ping, sock: #%d, time pass: %d s",
+        Debug(CLUSTER_DEBUG_TAG, "cluster recv client %s ping, sock: #%d, time pass: %d s",
             pSockContext->machine->hostname, pSockContext->sock,
             (int)time_used);
       }
