@@ -525,7 +525,7 @@ HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ink_time_t now, i
   if (len == 0) { // all failed
     result = &info[current++ % good];
   } else if (weight == 0) { // srv weight is 0
-    result = &info[current++ % len];
+    result = infos[current++ % len];
   } else {
     uint32_t xx = rand->random() % weight;
     for (i = 0; i < len && xx >= infos[i]->data.srv.srv_weight; ++i)
@@ -541,6 +541,19 @@ HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ink_time_t now, i
   return NULL;
 }
 
+inline void
+HostDBRoundRobin::set_all_down(ink_time_t now)
+{
+  bool bad = (n <= 0 || n > HOST_DB_MAX_ROUND_ROBIN_INFO || good <= 0 || good > HOST_DB_MAX_ROUND_ROBIN_INFO);
+
+  if (bad) {
+    ink_assert(!"bad round robin size");
+    return;
+  }
+
+  for (int i = 0; i < good; ++i)
+    info[i].app.http_data.last_failure = (uint32_t) now;
+}
 //
 // Types
 //

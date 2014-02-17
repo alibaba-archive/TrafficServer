@@ -47,6 +47,7 @@
 #include "HCUtil.h"
 #include "HCSM.h"
 #include "HotUrlStats.h"
+#include "HttpConnectionCount.h"
 
 #define DEFAULT_RESPONSE_BUFFER_SIZE_INDEX    6 // 8K
 #define DEFAULT_REQUEST_BUFFER_SIZE_INDEX    6  // 8K
@@ -2045,8 +2046,21 @@ HttpSM::process_srv_info(HostDBInfo * r)
             rr->info[i].app = t_state.dns_info.srv_app;
         }
       }
+      ink_time_t now = ink_cluster_time();
+      if (is_os_connections_high())
+      {
+        if (r->app.http_data.last_failure == 0 ||
+            ((uint32_t) (now - (int) t_state.txn_conf->down_server_timeout) >= r->app.http_data.last_failure))
+        {
+          r->app.http_data.last_failure = (uint32_t) now;
+          rr->set_all_down(now);
+        }
+      } else {
+        if (r->app.http_data.last_failure)
+          r->app.http_data.last_failure = 0;
+      }
       srv = rr->select_best_srv(t_state.dns_info.srv_hostname, &mutex.m_ptr->thread_holding->generator,
-            ink_cluster_time(), (int) t_state.txn_conf->down_server_timeout);
+            now, (int) t_state.txn_conf->down_server_timeout);
     }
     if (!srv) {
       t_state.dns_info.srv_lookup_sucess = false;
@@ -4012,16 +4026,23 @@ HttpSM::do_hostdb_update_if_necessary()
   }
 
   if (issue_update) {
-    hostDBProcessor.setby(t_state.current.server->name,
-      strlen(t_state.current.server->name),
-      &t_state.current.server->addr.sa,
-      &t_state.host_db_info.app
-    );
+    if (t_state.dns_info.srv_lookup_sucess) {
+      hostDBProcessor.setby(t_state.dns_info.srv_hostname,
+        strlen(t_state.dns_info.srv_hostname), &t_state.current.server->addr.sa,
+        &t_state.host_db_info.app);
+
+    } else {
+      hostDBProcessor.setby(t_state.current.server->name,
+        strlen(t_state.current.server->name), &t_state.current.server->addr.sa,
+        &t_state.host_db_info.app);
+    }
     if (t_state.dns_info.update_srv ||
         (t_state.dns_info.srv_lookup_sucess && t_state.dns_info.srv_app.http_data.last_failure != 0)) {
       t_state.dns_info.srv_app.http_data.last_failure = t_state.host_db_info.app.http_data.last_failure;
-      hostDBProcessor.setby(t_state.current.server->name,
-          strlen(t_state.current.server->name), &t_state.current.server->addr.sa,
+      char d[MAXDNAME];
+      memcpy(d, "_http._tcp.", 11); // don't copy '\0'
+      ink_strlcpy(d + 11, t_state.current.server->name, sizeof(d) - 11 ); // all in the name of performance!
+      hostDBProcessor.setby(d, strlen(d), &t_state.current.server->addr.sa,
           &t_state.dns_info.srv_app, t_state.dns_info.srv_hostname);
       DebugSM("http_srv", "set srv target %s as failed!", t_state.dns_info.srv_hostname);
     }
@@ -7437,3 +7458,13 @@ HttpSM::is_private()
    return ss ? ss->private_session : false;
 }
 
+bool
+HttpSM::is_os_connections_high()
+{
+  const char *host_name = t_state.server_info.name;
+  int host_len = strlen(host_name);
+
+  int os_conns = ConnectionCount::getInstance()->getCount(host_name, host_len);
+
+  return (os_conns * 4 > t_state.txn_conf->origin_max_connections * 3);
+}

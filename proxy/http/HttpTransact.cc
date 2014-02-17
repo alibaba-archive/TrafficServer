@@ -3623,6 +3623,15 @@ HttpTransact::handle_response_from_server(State* s)
     } else {
       DebugTxn("http_trans", "[handle_response_from_server] Error. No more retries.");
       SET_VIA_STRING(VIA_DETAIL_SERVER_CONNECT, VIA_DETAIL_SERVER_FAILURE);
+      // mark the srv target as down
+      if (s->dns_info.srv_lookup_sucess) {
+        char d[MAXDNAME];
+        memcpy(d, "_http._tcp.", 11); // don't copy '\0'
+        ink_strlcpy(d + 11, s->current.server->name, sizeof(d) - 11); // all in the name of performance!
+        s->dns_info.srv_app.http_data.last_failure = s->request_sent_time;
+        hostDBProcessor.setby(d, strlen(d), &s->current.server->addr.sa,
+            &s->dns_info.srv_app, s->dns_info.srv_hostname);
+      }
       handle_server_connection_not_open(s);
     }
     break;

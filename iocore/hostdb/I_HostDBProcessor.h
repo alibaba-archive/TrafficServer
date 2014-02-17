@@ -438,6 +438,7 @@ struct HostDBRoundRobin
   uint32_t get_earliest_failure_time();
 
   HostDBInfo *select_best_srv(char *target, InkRand *rand, ink_time_t now, int32_t fail_window);
+  void set_all_down(ink_time_t now);
 
   HostDBInfo *increment_round_robin()
   {

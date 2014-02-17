@@ -1092,8 +1092,12 @@ HostDBContinuation::setbyEvent(int event, Event * e)
   NOWARN_UNUSED(e);
   HostDBInfo *r = probe(mutex, md5, name, namelen, &ip.sa, 0, false, is_srv_lookup);
 
-  if (r)
-    do_setby(r, &app, name, &ip.sa, is_srv_lookup);
+  if (r) {
+    if (is_srv_lookup)
+      do_setby(r, &app, target, &ip.sa, is_srv_lookup);
+    else
+      do_setby(r, &app, name, &ip.sa, is_srv_lookup);
+  }
   hostdb_cont_free(this);
   return EVENT_DONE;
 }
