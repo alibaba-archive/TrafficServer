@@ -9,7 +9,7 @@ SchemeParams::SchemeParams(const int rank, const char *filename, const int lineN
 {
 }
 
-int SchemeParams::parse(const char *blockStart, const char *blockEnd)
+int SchemeParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   _host = _params[0];
   return 0;

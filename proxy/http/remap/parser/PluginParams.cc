@@ -10,7 +10,7 @@ PluginParams::PluginParams(const int rank, const char *filename, const int lineN
 {
 }
 
-int PluginParams::parse(const char *blockStart, const char *blockEnd)
+int PluginParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   _pluginInfo.filename = _params[0];
   _pluginInfo.paramCount = _paramCount - 1;
