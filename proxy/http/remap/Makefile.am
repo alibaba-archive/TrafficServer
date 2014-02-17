@@ -16,6 +16,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+# SUBDIRS = acl parser
+
 AM_CPPFLAGS = \
   $(iocore_include_dirs) \
   -I$(top_srcdir)/lib \
@@ -28,22 +30,81 @@ AM_CPPFLAGS = \
   -I$(top_srcdir)/mgmt/preparse \
   -I$(top_srcdir)/mgmt/utils \
   -I$(top_srcdir)/proxy/hdrs \
-  -I$(top_srcdir)/proxy/http
+  -I$(top_srcdir)/proxy/http \
+  -I$(top_srcdir)/proxy/http/healthcheck \
+  -I$(top_srcdir)/proxy/http/remap/acl   \
+  -I$(top_srcdir)/proxy/http/remap/parser
 
 noinst_LIBRARIES = libhttp_remap.a
 
 libhttp_remap_a_SOURCES = \
-  AclFiltering.cc \
-  AclFiltering.h \
   RemapPluginInfo.cc \
-  RemapPluginInfo.h \
+  RemapPluginInfo.h  \
   RemapPlugins.cc \
-  RemapPlugins.h \
+  RemapPlugins.h  \
   RemapProcessor.cc \
-  RemapProcessor.h \
+  RemapProcessor.h  \
   UrlMapping.cc \
-  UrlMapping.h \
+  UrlMapping.h  \
   UrlRewrite.cc \
-  UrlRewrite.h \
-  UrlMappingPathIndex.h \
-  UrlMappingPathIndex.cc
+  UrlRewrite.h  \
+  UrlMappingPathIndex.h  \
+  UrlMappingPathIndex.cc \
+	MappingTypes.h  \
+  HostnameTrie.h  \
+  HostnameTrie.cc \
+	UrlMappingRegexMatcher.cc \
+	UrlMappingPathContainer.cc \
+  acl/ACLChecker.h    \
+  acl/ACLChecker.cc   \
+  acl/ACLCheckList.h  \
+  acl/ACLCheckList.cc \
+  acl/ACLDefineChecker.h  \
+  acl/ACLDefineChecker.cc \
+  acl/ACLDefineManager.h  \
+  acl/ACLDefineManager.cc \
+	acl/ACLMethodIpCheckList.h  \
+  acl/ACLMethodIpCheckList.cc \
+  acl/ACLRefererCheckList.h   \
+  acl/ACLRefererCheckList.cc  \
+	parser/ACLDirective.h   \
+	parser/ACLDirective.cc  \
+	parser/ACLParams.h   \
+	parser/ACLParams.cc  \
+	parser/ConfigDirective.h   \
+	parser/ConfigDirective.cc  \
+	parser/ConfigParams.h      \
+	parser/ConfigParams.cc     \
+	parser/DirectiveParams.h   \
+	parser/DirectiveParams.cc  \
+	parser/MappingDirective.h  \
+	parser/MappingDirective.cc \
+	parser/MappingEntry.h    \
+	parser/MappingEntry.cc   \
+	parser/MappingManager.h  \
+	parser/MappingManager.cc \
+	parser/MappingParams.h   \
+	parser/MappingParams.cc  \
+	parser/PluginDirective.h \
+	parser/PluginDirective.cc\
+	parser/PluginParams.h    \
+	parser/PluginParams.cc   \
+	parser/RemapDirective.h  \
+	parser/RemapDirective.cc \
+	parser/RemapParser.h     \
+	parser/RemapParser.cc    \
+	parser/SchemeDirective.h \
+	parser/SchemeDirective.cc\
+	parser/SchemeParams.h    \
+	parser/SchemeParams.cc   \
+	parser/IncludeDirective.h  \
+	parser/IncludeDirective.cc \
+	parser/IncludeParams.h   \
+	parser/IncludeParams.cc
+
+if STATIC_LIBTS
+   which_libts = $(top_builddir)/lib/ts/.libs/libtsutil.a
+else
+   which_libts = $(top_builddir)/lib/ts/libtsutil.la
+endif
+

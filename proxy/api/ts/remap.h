@@ -21,12 +21,8 @@
   limitations under the License.
  */
 
-#ifndef __TS_REMAP_H__
-#define __TS_REMAP_H__
-
-#ifndef tsapi
-#define tsapi
-#endif
+#ifndef H_REMAPAPI_H
+#define H_REMAPAPI_H
 
 #ifdef __cplusplus
 extern "C"
@@ -82,7 +78,22 @@ extern "C"
     TSREMAP_ERROR = -1		/* Some error, that should generate an error page */
   } TSRemapStatus;
 
+#define URL_CONVERT_FLAG_MUST_USE_PURGE       1  //must send PURGE request
+#define URL_CONVERT_FLAG_CLUSTER_CACHE_LOCAL  2  //the URL cache in local
 
+  typedef struct {
+    char *str;   //buffer
+    int length;  //string length
+    int size;    //the buffer size
+  } RemapStringBuffer;
+
+  typedef struct {
+    RemapStringBuffer scheme;  //http or https etc
+    RemapStringBuffer host;
+    int port;
+    RemapStringBuffer path;   //TS style url path
+    RemapStringBuffer query; //url query such as: key=value&login=foo
+  } RemapUrlInfo;
 
   /* ----------------------------------------------------------------------------------
      These are the entry points a plugin can implement. Note that TSRemapInit() and
@@ -95,7 +106,7 @@ extern "C"
      Return: TS_SUCCESS
              TS_ERROR - error, errbuf can include error message from plugin
   */
-  tsapi TSReturnCode TSRemapInit(TSRemapInterface* api_info, char* errbuf, int errbuf_size);
+  TSReturnCode TSRemapInit(TSRemapInterface* api_info, char* errbuf, int errbuf_size);
 
 
   /* Remap new request
@@ -106,12 +117,20 @@ extern "C"
              TSREMAP_NO_REMAP_STOP - No remapping was done, and stop plugin chain evaluation
              TSREMAP_DID_REMAP_STOP -  Remapping was done, but stop plugin chain evaluation
   */
-  tsapi TSRemapStatus TSRemapDoRemap(void* ih, TSHttpTxn rh, TSRemapRequestInfo* rri);
+  TSRemapStatus TSRemapDoRemap(void* ih, TSHttpTxn rh, TSRemapRequestInfo* rri);
+
+  /* Remap convert cache url, you can change any member of url_info
+     return: TSREMAP_NO_REMAP - No remaping was done, continue with next in chain
+             TSREMAP_DID_REMAP - Remapping was done, continue with next in chain
+             TSREMAP_NO_REMAP_STOP - No remapping was done, and stop plugin chain evaluation
+             TSREMAP_DID_REMAP_STOP -  Remapping was done, but stop plugin chain evaluation
+  */
+  TSRemapStatus TSRemapConvertCacheUrl(void* ih, RemapUrlInfo *url_info, int *flags);
 
 
   /* Plugin shutdown, called when plugin is unloaded.
      Optional function. */
-  tsapi void TSRemapDone(void);
+  void TSRemapDone(void);
 
 
   /* Plugin new instance. Create new plugin processing entry for unique remap record.
@@ -120,8 +139,8 @@ extern "C"
      Return: TS_SUCESS
              TS_ERROR - instance creation error
   */
-  tsapi TSReturnCode TSRemapNewInstance(int argc, char* argv[], void** ih, char* errbuf, int errbuf_size);
-  tsapi void TSRemapDeleteInstance(void*);
+  TSReturnCode TSRemapNewInstance(int argc, char* argv[], void** ih, char* errbuf, int errbuf_size);
+  void TSRemapDeleteInstance(void*);
 
 
   /* Check response code from Origin Server
@@ -129,9 +148,9 @@ extern "C"
      Remap API plugin can use InkAPI function calls inside TSRemapDoRemap()
      Return: none
   */
-  tsapi void TSRemapOSResponse(void* ih, TSHttpTxn rh, int os_response_type);
+  void TSRemapOSResponse(void* ih, TSHttpTxn rh, int os_response_type);
 
 #ifdef __cplusplus
 }
 #endif                          /* __cplusplus */
-#endif                          /* #ifndef __TS_REMAP_H__ */
+#endif                          /* #ifndef H_REMAPAPI_H */

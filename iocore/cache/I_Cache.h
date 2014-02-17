@@ -133,6 +133,7 @@ struct CacheProcessor:public Processor
   Action *deref(Continuation *cont, CacheKey *key, bool cluster_cache_local,
                 CacheFragType frag_type = CACHE_FRAG_TYPE_HTTP, char *hostname = 0, int host_len = 0);
   static int IsCacheEnabled();
+  static int IsCacheClustering();
 
   static unsigned int IsCacheReady(CacheFragType type);
 

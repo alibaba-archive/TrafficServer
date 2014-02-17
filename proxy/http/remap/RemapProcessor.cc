@@ -21,6 +21,7 @@
   limitations under the License.
  */
 
+#include "MappingTypes.h"
 #include "RemapProcessor.h"
 
 RemapProcessor remapProcessor;
@@ -49,7 +50,6 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
   URL *request_url = NULL;
   bool mapping_found = false;
   HTTPHdr *request_header = &s->hdr_info.client_request;
-  char **redirect_url = &s->remap_redirect;
   const char *request_host;
   int request_host_len;
   int request_port;
@@ -57,8 +57,6 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
 
   s->reverse_proxy = rewrite_table->reverse_proxy;
   s->url_map.set(s->hdr_info.client_request.m_heap);
-
-  ink_assert(redirect_url != NULL);
 
   if (unlikely((rewrite_table->num_rules_forward == 0) &&
                (rewrite_table->num_rules_forward_with_recv_port == 0))) {
@@ -90,8 +88,8 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
 
   if (rewrite_table->num_rules_forward_with_recv_port) {
     Debug("url_rewrite", "[lookup] forward mappings with recv port found; Using recv port %d",
-          s->client_info.port);
-    if (rewrite_table->forwardMappingWithRecvPortLookup(request_url, s->client_info.port,
+          ats_ip_port_host_order(&s->client_info.addr));
+    if (rewrite_table->forwardMappingWithRecvPortLookup(request_url, ats_ip_port_host_order(&s->client_info.addr),
                                                          request_host, request_host_len, s->url_map)) {
       Debug("url_rewrite", "Found forward mapping with recv port");
       mapping_found = true;
@@ -133,6 +131,24 @@ RemapProcessor::setup_for_remap(HttpTransact::State *s)
 
   if (mapping_found) {
     request_header->mark_target_dirty();
+
+    url_mapping *map = s->url_map.getMapping();
+    if ((map != NULL) && (map->overridableHttpConfig != NULL) &&
+        (s->txn_conf != &s->my_txn_conf))
+    {
+      s->txn_conf = map->overridableHttpConfig;
+      Debug("url_rewrite", "use mapping's overridableHttpConfig");
+    }
+
+    if (map->cacheControlConfig != NULL) {
+      s->cacheControlByRemap = true;
+      s->cache_control.revalidate_after = map->cacheControlConfig->revalidate_after;
+      s->cache_control.pin_in_cache_for = map->cacheControlConfig->pin_in_cache_for;
+      s->cache_control.ttl_in_cache = map->cacheControlConfig->ttl_in_cache;
+      s->cache_control.never_cache = map->cacheControlConfig->never_cache;
+
+      Debug("url_rewrite", "cache control use mapping's config");
+    }
   } else {
     Debug("url_rewrite", "RemapProcessor::setup_for_remap did not find a mapping");
   }
@@ -152,75 +168,139 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
   int remapped_host_len, remapped_port, tmp;
   int from_len;
   bool remap_found = false;
-  referer_info *ri;
 
   map = s->url_map.getMapping();
   if (!map) {
     return false;
   }
+
   // Do fast ACL filtering (it is safe to check map here)
-  rewrite_table->PerformACLFiltering(s, map);
+  if (rewrite_table->PerformACLFiltering(s, map) == ACL_ACTION_DENY_INT) {
+    return false;
+  }
 
   // Check referer filtering rules
-  if ((s->filter_mask & URL_REMAP_FILTER_REFERER) != 0 && (ri = map->referer_list) != 0) {
-    const char *referer_hdr = 0;
-    int referer_len = 0;
-    bool enabled_flag = map->optional_referer ? true : false;
+  if (map->needCheckReferer()) {
+    const char *referer_str;
+    ACLContext aclContext;
 
     if (request_header->presence(MIME_PRESENCE_REFERER) &&
-        (referer_hdr = request_header->value_get(MIME_FIELD_REFERER, MIME_LEN_REFERER, &referer_len)) != NULL) {
-      if (referer_len >= (int) sizeof(tmp_referer_buf))
-        referer_len = (int) (sizeof(tmp_referer_buf) - 1);
-      memcpy(tmp_referer_buf, referer_hdr, referer_len);
-      tmp_referer_buf[referer_len] = 0;
-      for (enabled_flag = false; ri; ri = ri->next) {
-        if (ri->any) {
-          enabled_flag = true;
-          if (!map->negative_referer)
-            break;
-        } else if (ri->regx_valid && (pcre_exec(ri->regx, NULL, tmp_referer_buf, referer_len, 0, 0, NULL, 0) != -1)) {
-          enabled_flag = ri->negative ? false : true;
-          break;
+        (referer_str=request_header->
+         value_get(MIME_FIELD_REFERER, MIME_LEN_REFERER,
+           &aclContext.refererUrl.length)) != NULL) {
+      if (aclContext.refererUrl.length >= (int)sizeof(tmp_referer_buf)) {
+        aclContext.refererUrl.length = sizeof(tmp_referer_buf) - 1;
+      }
+
+      if (aclContext.refererUrl.length > 0) {
+        memcpy(tmp_referer_buf, referer_str, aclContext.refererUrl.length);
+        *(tmp_referer_buf + aclContext.refererUrl.length) = '\0';
+
+        if (map->needCheckRefererHost() && aclContext.refererUrl.length > 7) {
+          do {
+            if (strncasecmp(tmp_referer_buf, "http://", 7) == 0) {
+              aclContext.refererHostname.str = tmp_referer_buf + 7;
+            }
+            else if (strncasecmp(tmp_referer_buf, "https://", 8) == 0) {
+              aclContext.refererHostname.str = tmp_referer_buf + 8;
+            }
+            else {
+              break;
+            }
+
+            const char *hostname_end = (const char *)memchr(
+                aclContext.refererHostname.str, '/',
+                (tmp_referer_buf + aclContext.refererUrl.length) -
+                aclContext.refererHostname.str);
+            if (hostname_end != NULL) {
+              aclContext.refererHostname.length = hostname_end -
+                aclContext.refererHostname.str;
+            }
+            else {
+              aclContext.refererHostname.length = (tmp_referer_buf +
+                  aclContext.refererUrl.length) - aclContext.refererHostname.str;
+            }
+
+            const char *colon = (const char *)memchr(
+                aclContext.refererHostname.str, ':',
+                aclContext.refererHostname.length);
+            if (colon != NULL) {
+              aclContext.refererHostname.length = colon -
+                aclContext.refererHostname.str;
+            }
+
+            /*
+            Debug("url_rewrite", "referer host: %.*s(%d)",
+                aclContext.refererHostname.length, aclContext.refererHostname.str,
+                aclContext.refererHostname.length);
+            */
+          } while (0);
         }
       }
+      else {
+        *tmp_referer_buf = '\0';
+      }
     }
+    else {
+      *tmp_referer_buf = '\0';
+    }
+    aclContext.refererUrl.str = tmp_referer_buf;
 
-    if (!enabled_flag) {
+    if (map->checkReferer(aclContext) == ACL_ACTION_DENY_INT) {
+      Debug("url_rewrite", "ACL referer check denied, referer url: %.*s",
+        aclContext.refererUrl.length, aclContext.refererUrl.str);
+
       if (!map->default_redirect_url) {
         if ((s->filter_mask & URL_REMAP_FILTER_REDIRECT_FMT) != 0 && map->redir_chunk_list) {
           redirect_tag_str *rc;
-          tmp_redirect_buf[(tmp = 0)] = 0;
+          int len;
+
+          len = 0;
+          *tmp_redirect_buf = '\0';
           for (rc = map->redir_chunk_list; rc; rc = rc->next) {
-            c = 0;
             switch (rc->type) {
-            case 's':
-              c = rc->chunk_str;
-              break;
-            case 'r':
-              c = (referer_len && referer_hdr) ? &tmp_referer_buf[0] : 0;
-              break;
-            case 'f':
-            case 't':
-              remapped_host = (rc->type == 'f') ?
-                map->fromURL.string_get_buf(tmp_buf, (int) sizeof(tmp_buf), &from_len) :
-                ((s->url_map).getToURL())->string_get_buf(tmp_buf, (int)sizeof(tmp_buf), &from_len);
-              if (remapped_host && from_len > 0) {
-                c = &tmp_buf[0];
-              }
-              break;
-            case 'o':
-              c = s->pristine_url.string_get_ref(NULL);
-              break;
+              case 's':
+                c = rc->chunk_str;
+                break;
+              case 'r':
+                c = (aclContext.refererUrl.length > 0) ? tmp_referer_buf : NULL;
+                break;
+              case 'f':
+              case 't':
+                remapped_host = (rc->type == 'f') ?
+                  map->fromURL.string_get_buf(tmp_buf, (int)sizeof(tmp_buf), &from_len) :
+                  ((s->url_map).getToURL())->string_get_buf(tmp_buf,
+                  (int)sizeof(tmp_buf), &from_len);
+                if (remapped_host && from_len > 0) {
+                  c = tmp_buf;
+                }
+                else {
+                  c = NULL;
+                }
+                break;
+              case 'o':
+                c = s->pristine_url.string_get_ref(NULL);
+                break;
+              default:
+                c = NULL;
+                break;
             };
 
-            if (c && tmp < (int) (sizeof(tmp_redirect_buf) - 1)) {
-              tmp += snprintf(&tmp_redirect_buf[tmp], sizeof(tmp_redirect_buf) - tmp, "%s", c);
+            if (c != NULL && len < (int)(sizeof(tmp_redirect_buf) - 1)) {
+              len += snprintf(tmp_redirect_buf + len,
+                  sizeof(tmp_redirect_buf) - len, "%s", c);
             }
           }
-          tmp_redirect_buf[sizeof(tmp_redirect_buf) - 1] = 0;
+
+          if (*redirect_url != NULL) {
+            ats_free(*redirect_url);
+          }
           *redirect_url = ats_strdup(tmp_redirect_buf);
         }
       } else {
+        if (*redirect_url != NULL) {
+          ats_free(*redirect_url);
+        }
         *redirect_url = ats_strdup(rewrite_table->http_default_redirect_url);
       }
 
@@ -332,3 +412,230 @@ RemapProcessor::perform_remap(Continuation *cont, HttpTransact::State *s)
     return ACTION_RESULT_DONE;
   }
 }
+
+bool RemapProcessor::findMapping(URL *request_url, UrlMappingContainer &url_map)
+{
+  bool mapping_found = false;
+
+  if (unlikely(rewrite_table->num_rules_forward == 0)) {
+    return false;
+  }
+
+  const char *host;
+  int host_len;
+  host = request_url->host_get(&host_len);
+  if (host_len == 0) {
+    return false;
+  }
+
+  mapping_found = rewrite_table->forwardMappingLookup(request_url, request_url->port_get_raw(),
+      host, host_len, url_map);
+
+  if (!mapping_found && rewrite_table->reverse_proxy) { // do extra checks on a server request
+    // If no rules match and we have a host, check empty host rules since
+    // they function as default rules for server requests.
+    // If there's no host, we've already done this.
+    if (rewrite_table->nohost_rules && host_len > 0) {
+      mapping_found = rewrite_table->forwardMappingLookup(request_url, 0, "", 0, url_map);
+    }
+  }
+
+  return mapping_found;
+}
+
+struct URLPartsBuffer {
+  char scheme[8];  //http or https etc
+  char host[256];
+  char path[1024];  //NOT start with /
+  char query[4096]; //url parameters such as: key=value&login=foo
+};
+
+void RemapProcessor::bindUrlBuffer(struct URLPartsBuffer *urlBuffer, RemapUrlInfo *urlInfo)
+{
+  urlInfo->scheme.str = urlBuffer->scheme;
+  urlInfo->scheme.size = sizeof(urlBuffer->scheme);
+  urlInfo->scheme.length = 0;
+
+  urlInfo->host.str = urlBuffer->host;
+  urlInfo->host.size = sizeof(urlBuffer->host);
+  urlInfo->host.length = 0;
+
+  urlInfo->path.str = urlBuffer->path;
+  urlInfo->path.size = sizeof(urlBuffer->path);
+  urlInfo->path.length = 0;
+
+  urlInfo->query.str = urlBuffer->query;
+  urlInfo->query.size = sizeof(urlBuffer->query);
+  urlInfo->query.length = 0;
+}
+
+bool RemapProcessor::copyFromUrl(URL *srcUrl, RemapUrlInfo *destUrl)
+{
+  const char *value;
+  int length;
+
+  value = srcUrl->scheme_get(&length);
+  if (length >= destUrl->scheme.size) {
+    return false;
+  }
+  memcpy(destUrl->scheme.str, value, length);
+  destUrl->scheme.length = length;
+
+  value = srcUrl->host_get(&length);
+  if (length >= destUrl->host.size) {
+    return false;
+  }
+  memcpy(destUrl->host.str, value, length);
+  destUrl->host.length = length;
+
+  value = srcUrl->path_get(&length);
+  if (length >= destUrl->path.size) {
+    return false;
+  }
+  if (length > 0) {
+    memcpy(destUrl->path.str, value, length);
+  }
+  destUrl->path.length = length;
+
+  value = srcUrl->query_get(&length);
+  if (length >= destUrl->query.size) {
+    return false;
+  }
+  if (length > 0) {
+    memcpy(destUrl->query.str, value, length);
+  }
+  destUrl->query.length = length;
+
+  destUrl->port = srcUrl->port_get_raw();
+  return true;
+}
+
+bool RemapProcessor::convert_cache_url(const char *in_url, const int in_url_len,
+      char *out_url, const int out_url_size, int *out_url_len, int *flags)
+{
+  bool found;
+  bool maintain_pristine_host_hdr;
+  URL *newURL;
+  HdrHeap *hdrHeap = new_HdrHeap();
+  UrlMappingContainer url_map(hdrHeap);
+  URL old_url;
+  int tmp_flags;
+
+  *flags = 0;
+  old_url.create(hdrHeap);
+  do {
+    if (old_url.parse(in_url, in_url_len) == PARSE_ERROR) {
+      found = false;
+      break;
+    }
+
+    found = findMapping(&old_url, url_map);
+    if (!found) {
+      break;
+    }
+
+    url_mapping *mapping = url_map.getMapping();
+    if (mapping->overridableHttpConfig == NULL) {
+      maintain_pristine_host_hdr = HttpConfig::m_master.oride.maintain_pristine_host_hdr;
+    }
+    else {
+      maintain_pristine_host_hdr = mapping->overridableHttpConfig->maintain_pristine_host_hdr;
+    }
+
+    if (mapping->overridableHttpConfig) {
+      if (mapping->overridableHttpConfig->cache_cluster_cache_local) {
+        *flags = URL_CONVERT_FLAG_CLUSTER_CACHE_LOCAL;
+      }
+    }
+    else if (CacheProcessor::IsCacheClustering()) {
+      HttpConfigParams *httpConfig = HttpConfig::acquire();
+      if (httpConfig != NULL) {
+        if (httpConfig->oride.cache_cluster_cache_local) {
+          *flags = URL_CONVERT_FLAG_CLUSTER_CACHE_LOCAL;
+        }
+        HttpConfig::release(httpConfig);
+      }
+    }
+
+    newURL = &old_url;
+    rewrite_table->doRemap(url_map, newURL, maintain_pristine_host_hdr);
+    if (mapping->cache_url_convert_plugin_count == 0) {
+      newURL->string_get_buf(out_url, out_url_size, out_url_len);
+      if (*out_url_len == out_url_size) {
+        *out_url_len = out_url_size - 1;
+      }
+      *(out_url + *out_url_len) = '\0';
+      break;
+    }
+
+    URLPartsBuffer parts;
+    RemapUrlInfo url;
+    RemapUrlInfo *inURL = &url;
+    TSRemapStatus status;
+
+    bindUrlBuffer(&parts, inURL);
+    if (!copyFromUrl(newURL, inURL)) {
+      found = false;
+      break;
+    }
+
+    remap_plugin_info **plugins = mapping->get_plugins();
+    for (unsigned int i=0; i<mapping->plugin_count; i++) {
+       if (plugins[i]->fp_tsremap_convert_cache_url != NULL) {
+         tmp_flags = 0;
+         status = plugins[i]->fp_tsremap_convert_cache_url(mapping->get_instance(i), inURL, &tmp_flags);
+         if (status != TSREMAP_ERROR && tmp_flags != 0) {
+           *flags |= tmp_flags;
+         }
+         if (status == TSREMAP_NO_REMAP_STOP || status == TSREMAP_DID_REMAP_STOP || status == TSREMAP_ERROR) {
+           break;
+         }
+       }
+    }
+
+    char port_str[16];
+    if (inURL->port > 0) {
+      int default_port;
+      if (inURL->scheme.length == 4 && memcmp(inURL->scheme.str, "http", 4) == 0) {
+        default_port = 80;
+      }
+      else if (inURL->scheme.length == 5 && memcmp(inURL->scheme.str, "https", 5) == 0) {
+        default_port = 443;
+      }
+      else {
+        default_port = 0;
+      }
+
+      if (inURL->port == default_port) {
+        *port_str = '\0';
+      }
+      else {
+        snprintf(port_str, sizeof(port_str), ":%d", inURL->port);
+      }
+    }
+    else {
+      *port_str = '\0';
+    }
+
+    *out_url_len = snprintf(out_url, out_url_size, "%.*s://%.*s%s/%.*s",
+        inURL->scheme.length, inURL->scheme.str,
+        inURL->host.length, inURL->host.str, port_str,
+        inURL->path.length, inURL->path.str);
+    if (inURL->query.length > 0) {
+      *out_url_len += snprintf(out_url + *out_url_len,
+          out_url_size - *out_url_len, "?%.*s",
+          inURL->query.length, inURL->query.str);
+    }
+  } while (0);
+
+  old_url.clear();
+  hdrHeap->destroy();
+
+  if (!found) {
+    *out_url = '\0';
+    *out_url_len = 0;
+  }
+
+  return found;
+}
+

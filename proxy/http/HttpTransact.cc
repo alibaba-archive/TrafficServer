@@ -175,7 +175,9 @@ is_port_in_range(int port, HttpConfigPortRange *pr)
 inline static void
 update_cache_control_information_from_config(HttpTransact::State* s)
 {
-  getCacheControl(&s->cache_control, &s->request_data, s->txn_conf);
+  if (!s->cacheControlByRemap) {
+    getCacheControl(&s->cache_control, &s->request_data, s->txn_conf);
+  }
 
   s->cache_info.directives.does_config_permit_lookup &= (s->cache_control.never_cache == false);
   s->cache_info.directives.does_config_permit_storing &= (s->cache_control.never_cache == false);
@@ -803,10 +805,8 @@ HttpTransact::StartRemapRequest(State* s)
   }
 
   if (url_remap_mode == URL_REMAP_DEFAULT || url_remap_mode == URL_REMAP_ALL) {
-    if (s->http_config_param->referer_filter_enabled) {
-      s->filter_mask = URL_REMAP_FILTER_REFERER;
-      if (s->http_config_param->referer_format_redirect)
-        s->filter_mask |= URL_REMAP_FILTER_REDIRECT_FMT;
+    if (s->http_config_param->referer_format_redirect) {
+      s->filter_mask |= URL_REMAP_FILTER_REDIRECT_FMT;
     }
   }
 

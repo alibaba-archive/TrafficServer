@@ -23,9 +23,9 @@
 
 #include "RemapPluginInfo.h"
 
-remap_plugin_info::remap_plugin_info(char *_path)
+remap_plugin_info::remap_plugin_info(const char *_path)
   :  next(0), path(NULL), path_size(0), dlh(NULL), fp_tsremap_init(NULL), fp_tsremap_done(NULL), fp_tsremap_new_instance(NULL),
-     fp_tsremap_delete_instance(NULL), fp_tsremap_do_remap(NULL), fp_tsremap_os_response(NULL) 
+     fp_tsremap_delete_instance(NULL), fp_tsremap_do_remap(NULL), fp_tsremap_os_response(NULL), fp_tsremap_convert_cache_url(NULL)
 {
   // coverity did not see ats_free
   // coverity[ctor_dtor_leak]
@@ -45,7 +45,7 @@ remap_plugin_info::~remap_plugin_info()
 // Find a plugin by path from our linked list
 //
 remap_plugin_info *
-remap_plugin_info::find_by_path(char *_path)
+remap_plugin_info::find_by_path(const char *_path)
 {
   int _path_size = 0;
   remap_plugin_info *pi = 0;

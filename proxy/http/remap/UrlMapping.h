@@ -24,7 +24,6 @@
 #ifndef _URL_MAPPING_H_
 #define _URL_MAPPING_H_
 
-#include "AclFiltering.h"
 #include "Main.h"
 #include "Error.h"
 #include "URL.h"
@@ -38,23 +37,12 @@
 
 static const unsigned int MAX_REMAP_PLUGIN_CHAIN = 10;
 
+#define MAX_ACL_CHECKLIST_COUNT   2
 
-/**
- * Used to store http referer strings (and/or regexp)
-**/
-class referer_info
-{
-public:
-  referer_info(char *_ref, bool * error_flag = NULL, char *errmsgbuf = NULL, int errmsgbuf_size = 0);
-   ~referer_info();
-  referer_info *next;
-  char *referer;
-  int referer_size;
-  bool any;                     /* any flag '*' */
-  bool negative;                /* negative referer '~' */
-  bool regx_valid;
-  pcre* regx;
-};
+#define REGEX_TYPE_NONE  0
+#define REGEX_TYPE_HOST  1
+#define REGEX_TYPE_PATH  2
+#define REGEX_TYPE_FULL  4
 
 /**
  *
@@ -81,6 +69,33 @@ public:
   static redirect_tag_str *parse_format_redirect_url(char *url);
 };
 
+struct ACLContext;
+class ACLMethodIpCheckList;
+class ACLRefererCheckList;
+struct OverridableHttpConfigParams;
+
+
+class CacheControlConfig
+{
+  public:
+    CacheControlConfig() : revalidate_after(-1),
+    pin_in_cache_for(-1),
+    ttl_in_cache(-1),
+    never_cache(false)
+  {
+  }
+
+  public:
+    // Data for external use
+    //
+    //   Describes the cache-control for a specific URL
+    //
+    int revalidate_after;
+    int pin_in_cache_for;
+    int ttl_in_cache;
+    bool never_cache;
+};
+
 /**
  * Used to store the mapping for class UrlRewrite
 **/
@@ -93,59 +108,128 @@ public:
   bool add_plugin(remap_plugin_info *i, void* ih);
   remap_plugin_info *get_plugin(unsigned int) const;
 
-  void* get_instance(unsigned int index) const { return _instance_data[index]; };
+  inline void* get_instance(unsigned int index) const { return _instance_data[index]; };
   void delete_instance(unsigned int index);
   void Print();
 
-  int from_path_len;
+  inline remap_plugin_info **get_plugins() {
+    return _plugin_list;
+  }
+
+  inline int getRank() const {
+    return _rank;
+  }
+
+  inline bool needCheckMethodIp() const {
+    return _aclMethodIpCheckListCount > 0;
+  }
+
+  inline bool needCheckReferer() const {
+    return _aclRefererCheckListCount > 0;
+  }
+
+  inline bool needCheckRefererHost() const {
+    return _needCheckRefererHost;
+  }
+
+  inline bool needConvertPath() const {
+    return !(isFullRegex() || ((regex_type & REGEX_TYPE_PATH)
+          == REGEX_TYPE_PATH));
+  }
+
+  inline bool isFullRegex() const {
+    return ((regex_type & REGEX_TYPE_FULL) == REGEX_TYPE_FULL);
+  }
+
+  int checkMethodIp(const ACLContext & context);
+  int checkReferer(const ACLContext & context);
+
+  int setMethodIpCheckLists(ACLMethodIpCheckList **checkLists,
+      const int count);
+
+  int setRefererCheckLists(ACLRefererCheckList **checkLists,
+      const int count);
+
+  void setFromUrl(const char *url_str, const int url_len);
+
+  void setToUrl(const char *url_str, const int url_len);
+
+  inline const char *getRawFromUrl(int *length) {
+    *length = _rawFromUrlLen;
+    return _rawFromUrlStr;
+  }
+
+  inline const char *getRawToUrl(int *length) {
+    *length = _rawToUrlLen;
+    return _rawToUrlStr;
+  }
+
+  inline void setRawFromUrl(const char *url_str, const int url_len) {
+    ats_free(_rawFromUrlStr);
+    _rawFromUrlLen = url_len;
+    _rawFromUrlStr = (char *)ats_malloc(url_len + 1);
+    memcpy(_rawFromUrlStr, url_str, url_len);
+    *(_rawFromUrlStr + url_len) = '\0';
+  }
+
+  inline void setRawToUrl(const char *url_str, const int url_len) {
+    ats_free(_rawToUrlStr);
+    _rawToUrlLen = url_len;
+    _rawToUrlStr = (char *)ats_malloc(url_len + 1);
+    memcpy(_rawToUrlStr, url_str, url_len);
+    *(_rawToUrlStr + url_len) = '\0';
+  }
+
   URL fromURL;
   URL toUrl; // Default TO-URL (from remap.config)
   bool homePageRedirect;
   bool unique;                  // INKqa11970 - unique mapping
   bool default_redirect_url;
-  bool optional_referer;
-  bool negative_referer;
   bool wildcard_from_scheme;    // from url is '/foo', only http or https for now
-  char *tag;                    // tag
   char *filter_redirect_url;    // redirect url when referer filtering enabled
-  unsigned int map_id;
-  referer_info *referer_list;
   redirect_tag_str *redir_chunk_list;
-  acl_filter_rule *filter;      // acl filtering (list of rules)
-  unsigned int _plugin_count;
+  unsigned int plugin_count;
+  unsigned int cache_url_convert_plugin_count;
+  int regex_type;
   LINK(url_mapping, link); // For use with the main Queue linked list holding all the mapping
-
-  int getRank() const { return _rank; };
+  OverridableHttpConfigParams *overridableHttpConfig;
+  CacheControlConfig *cacheControlConfig;
 
 private:
+  int urlWhack(char *toWhack, const int url_len);
+
+  bool _needCheckRefererHost;
+  int _aclMethodIpCheckListCount;
+  int _aclRefererCheckListCount;
+  ACLMethodIpCheckList *_aclMethodIpCheckLists[MAX_ACL_CHECKLIST_COUNT];
+  ACLRefererCheckList *_aclRefererCheckLists[MAX_ACL_CHECKLIST_COUNT];
+
   remap_plugin_info* _plugin_list[MAX_REMAP_PLUGIN_CHAIN];
   void* _instance_data[MAX_REMAP_PLUGIN_CHAIN];
+  char *_rawFromUrlStr;
+  char *_rawToUrlStr;
+  int _rawFromUrlLen;
+  int _rawToUrlLen;
   int _rank;
 };
 
-
-/**
- * UrlMappingContainer wraps a url_mapping object and allows a caller to rewrite the target URL.
- * This is used while evaluating remap rules.
-**/
 class UrlMappingContainer {
 public:
  UrlMappingContainer()
    : _mapping(NULL), _toURLPtr(NULL), _heap(NULL)
     { }
 
-  explicit UrlMappingContainer(HdrHeap *heap)
+  UrlMappingContainer(HdrHeap *heap)
     : _mapping(NULL), _toURLPtr(NULL), _heap(heap)
   { }
 
+
   ~UrlMappingContainer() { deleteToURL(); }
-  
-  URL * getToURL() const { return _toURLPtr; };
-  URL * getFromURL() const { return _mapping ? &(_mapping->fromURL) : NULL; };
 
-  url_mapping *getMapping() const { return _mapping; };
+  inline URL *getToURL() const { return _toURLPtr; };
+  inline url_mapping *getMapping() const { return _mapping; };
 
-  void set(url_mapping *m) { 
+  void set(url_mapping *m) {
     deleteToURL();
     _mapping = m;
     _toURLPtr = m ? &(m->toUrl) : NULL;
@@ -160,7 +244,7 @@ public:
     deleteToURL();
     _toURL.create(_heap);
     _toURLPtr = &_toURL;
-    return _toURLPtr; 
+    return _toURLPtr;
   }
 
   void deleteToURL() {
@@ -181,7 +265,7 @@ private:
   URL *_toURLPtr;
   URL _toURL;
   HdrHeap *_heap;
-  
+
   // non-copyable, non-assignable
   UrlMappingContainer(const UrlMappingContainer &orig);
   UrlMappingContainer &operator =(const UrlMappingContainer &rhs);

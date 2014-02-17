@@ -31,8 +31,8 @@ RemapPlugins::run_plugin(remap_plugin_info* plugin)
   TSRemapStatus plugin_retcode;
   TSRemapRequestInfo rri;
   url_mapping *map = _s->url_map.getMapping();
-  URL * map_from = _s->url_map.getFromURL();
-  URL * map_to = _s->url_map.getToURL();
+  URL *map_from = &(map->fromURL);
+  URL *map_to = _s->url_map.getToURL();
 
   // This is the equivalent of TSHttpTxnClientReqGet(), which every remap plugin would
   // have to call.
@@ -74,12 +74,17 @@ RemapPlugins::run_plugin(remap_plugin_info* plugin)
 
   plugin_retcode = plugin->fp_tsremap_do_remap(ih, _s ? reinterpret_cast<TSHttpTxn>(_s->state_machine) : NULL, &rri);
   // TODO: Deal with negative return codes here
-  if (plugin_retcode < 0)
+  if (plugin_retcode < 0) {
     plugin_retcode = TSREMAP_NO_REMAP;
+  }
 
   // First step after plugin remap must be "redirect url" check
-  if ((TSREMAP_DID_REMAP == plugin_retcode || TSREMAP_DID_REMAP_STOP == plugin_retcode) && rri.redirect)
+  if ((TSREMAP_DID_REMAP == plugin_retcode || TSREMAP_DID_REMAP_STOP == plugin_retcode) && rri.redirect) {
+    if (_s->remap_redirect != NULL) {
+      ats_free(_s->remap_redirect);
+    }
     _s->remap_redirect = _request_url->string_get(NULL);
+  }
 
   return plugin_retcode;
 }
@@ -88,7 +93,7 @@ RemapPlugins::run_plugin(remap_plugin_info* plugin)
   This is the equivalent of the old DoRemap().
 
   @return 1 when you are done doing crap (otherwise, you get re-called
-    with schedule_imm and i hope you have something more to do), else
+    with scheudle_imm and i hope you have something more to do), else
     0 if you have something more do do (this isnt strict and we check
     there actually *is* something to do).
 
@@ -96,57 +101,63 @@ RemapPlugins::run_plugin(remap_plugin_info* plugin)
 int
 RemapPlugins::run_single_remap()
 {
+  // I should patent this
+  Debug("url_rewrite", "Running single remap rule for the %d%s time", _cur, _cur == 1 ? "st" : _cur == 2 ? "nd" : _cur == 3 ? "rd" : "th");
 
-  url_mapping *       map = _s->url_map.getMapping();
-  remap_plugin_info * plugin = map->get_plugin(_cur);    //get the nth plugin in our list of plugins
-  TSRemapStatus       plugin_retcode = TSREMAP_NO_REMAP;
+  remap_plugin_info *plugin;
+  TSRemapStatus plugin_retcode;
+  url_mapping *map = _s->url_map.getMapping();
 
-  Debug("url_rewrite", "running single remap rule id %d for the %d%s time",
-      map->map_id, _cur, _cur == 1 ? "st" : _cur == 2 ? "nd" : _cur == 3 ? "rd" : "th");
+  if (_request_header) {
+    plugin = map->get_plugin(_cur);    //get the nth plugin in our list of plugins
+  }
+  else {
+    plugin = NULL;
+  }
 
-  // There might not be a plugin if we are a regular non-plugin map rule. In that case, we will fall through
-  // and do the default mapping and then stop.
   if (plugin) {
+    Debug("url_rewrite", "Remapping rule id: %d matched; running it now", map->getRank());
     plugin_retcode = run_plugin(plugin);
+  } else if (_cur > 0) {
+    _cur++;
+    Debug("url_rewrite", "There wasn't a plugin available for us to run. Completing all remap processing immediately");
+    return 1;
+  }
+  else {
+    plugin_retcode = TSREMAP_NO_REMAP;
   }
 
   _cur++;
-
-  // If the plugin redirected, we need to end the remap chain now.
-  if (_s->remap_redirect) {
+  if (_s->remap_redirect) {    //if redirect was set, we need to use that.
     return 1;
   }
 
   if (TSREMAP_NO_REMAP == plugin_retcode || TSREMAP_NO_REMAP_STOP == plugin_retcode) {
-    // After running the first plugin, rewrite the request URL. This is doing the default rewrite rule
-    // to handle the case where no plugin ever rewrites.
-    //
-    // XXX we could probably optimize this a bit more by keeping a flag and only rewriting the request URL
-    // if no plugin has rewritten it already.
-    if (_cur == 1) {
+    if (_cur == 1) {  //first time
       Debug("url_rewrite", "plugin did not change host, port or path, copying from mapping rule");
-      url_rewrite_remap_request(_s->url_map, _request_url);
+      rewrite_table->doRemap(_s->url_map, _request_url, false);
     }
   }
 
   if (TSREMAP_NO_REMAP_STOP == plugin_retcode || TSREMAP_DID_REMAP_STOP == plugin_retcode) {
-      Debug("url_rewrite", "breaking remap plugin chain since last plugin said we should stop");
-      return 1;
+    Debug("url_rewrite", "breaking remap plugin chain since last plugin said we should stop");
+    return 1;
   }
 
   if (_cur > MAX_REMAP_PLUGIN_CHAIN) {
-    Error("called %s more than %u times; stopping this remap insanity now", __func__, MAX_REMAP_PLUGIN_CHAIN);
+    Error("Called run_single_remap more than 10 times. Stopping this remapping insanity now");
+    Debug("url_rewrite", "Called run_single_remap more than 10 times. Stopping this remapping insanity now");
     return 1;
   }
 
-  if (_cur >= map->_plugin_count) {
-    // Normally, we would callback into this function but we dont have anything more to do!
-    Debug("url_rewrite", "completed all remap plugins for rule id %d", map->map_id);
+  if (_cur >= map->plugin_count) {
+    //normally, we would callback into this function but we dont have anything more to do!
+    Debug("url_rewrite", "We completed all remap plugins for this rule");
     return 1;
+  } else {
+    Debug("url_rewrite", "Completed single remap. Attempting another via immediate callback");
+    return 0;
   }
-
-  Debug("url_rewrite", "completed single remap, attempting another via immediate callback");
-  return 0;
 }
 
 int

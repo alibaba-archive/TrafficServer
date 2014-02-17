@@ -399,8 +399,9 @@ struct HttpConfigPortRange
 // and State (txn) structure. It allows for certain configs
 // to be overridable per transaction more easily.
 struct OverridableHttpConfigParams {
-  OverridableHttpConfigParams()
-    : maintain_pristine_host_hdr(1), chunking_enabled(1),
+  OverridableHttpConfigParams(const bool needFreeProxyResponseServerString = false)
+    : need_free_proxy_response_server_string(needFreeProxyResponseServerString),
+      maintain_pristine_host_hdr(1), chunking_enabled(1),
       negative_caching_enabled(0), negative_revalidating_enabled(0), cache_when_to_revalidate(0),
       keep_alive_enabled_in(1), keep_alive_enabled_out(1), keep_alive_post_out(0),
       share_server_sessions(2), fwd_proxy_auth_to_parent(0), insert_age_in_response(1),
@@ -434,6 +435,15 @@ struct OverridableHttpConfigParams {
       cache_heuristic_lm_factor(0.10), freshness_fuzz_prob(0.005),
       background_fill_threshold(0.5)
   { }
+
+  ~OverridableHttpConfigParams() {
+    if (need_free_proxy_response_server_string && proxy_response_server_string != NULL) {
+      ats_free(proxy_response_server_string);
+      proxy_response_server_string = NULL;
+    }    
+  }
+
+  bool need_free_proxy_response_server_string;
 
   // A few rules here:
   //   1. Place all MgmtByte configs before all other configs

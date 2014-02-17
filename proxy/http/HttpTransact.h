@@ -1002,6 +1002,8 @@ public:
     OverridableHttpConfigParams my_txn_conf; // Storage for plugins, to avoid malloc
 
     bool transparent_passthrough;
+
+    bool cacheControlByRemap;  //if cache control config by remap.config
     
     // Methods
     void
@@ -1094,7 +1096,8 @@ public:
         range_output_cl(0),
         ranges(NULL),
         txn_conf(NULL),
-        transparent_passthrough(false)
+        transparent_passthrough(false),
+        cacheControlByRemap(false)
     {
       int i;
       char *via_ptr = via_string;
