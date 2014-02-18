@@ -71,11 +71,11 @@ class ACLAllChecker : public ACLChecker {
   public:
     ACLAllChecker(const int action) : ACLChecker(action) {}
 
-    bool match(const ACLContext & context) {
+    bool match(const ACLContext & /*context*/) {
       return true;
     }
 
-    void print(const char *prefix) {
+    void print(const char * /*prefix*/) {
       printf("\t%s %s %s\n", DIRECTVIE_NAME_ACL,
           this->getActionCaption(), ACL_STR_ALL);
     }

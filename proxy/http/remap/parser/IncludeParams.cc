@@ -22,7 +22,7 @@ IncludeParams::~IncludeParams()
   }
 }
 
-int IncludeParams::parse(const char *blockStart, const char *blockEnd)
+int IncludeParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   snprintf(_rawFilename, sizeof(_rawFilename), "%.*s",
       _params[0].length, _params[0].str);

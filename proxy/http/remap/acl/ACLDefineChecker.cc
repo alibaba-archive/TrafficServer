@@ -27,7 +27,7 @@ ACLDefineChecker::~ACLDefineChecker()
   }
 }
 
-void ACLDefineChecker::print(const char *prefix)
+void ACLDefineChecker::print(const char * /*prefix*/)
 {
   printf("\tacl %s %s %s {\n", ACL_SECOND_DIRECTIVE_DEFINE_STR, _aclName,
      (_action == ACL_ACTION_ALLOW_INT ? ACL_ACTION_ALLOW_STR :

@@ -52,8 +52,8 @@ private:
 
   // make copy-constructor and assignment operator private
   // till we properly implement them
-  UrlMappingPathIndex(const UrlMappingPathIndex &rhs) { NOWARN_UNUSED(rhs); };
-  UrlMappingPathIndex &operator =(const UrlMappingPathIndex &rhs) { NOWARN_UNUSED(rhs); return *this; }
+  UrlMappingPathIndex(const UrlMappingPathIndex &/*rhs*/) { };
+  UrlMappingPathIndex &operator =(const UrlMappingPathIndex & /*rhs*/) { return *this; }
 };
 
 #endif // _URL_MAPPING_PATH_INDEX_H

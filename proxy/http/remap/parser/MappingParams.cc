@@ -38,7 +38,7 @@ MapParams::MapParams(const int rank, const char *filename, const int lineNo,
   _type = MAPPING_TYPE_MAP;
 }
 
-int MapParams::parse(const char *blockStart, const char *blockEnd)
+int MapParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   int startIndex;
   if (_params[0].equals(MAP_OPTION_WITH_RECV_PORT,
@@ -95,7 +95,7 @@ RedirectParams::RedirectParams(const int rank, const char *filename, const int l
   _type = MAPPING_TYPE_REDIRECT;
 }
 
-int RedirectParams::parse(const char *blockStart, const char *blockEnd)
+int RedirectParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   int startIndex;
   if (_params[0].equals(REDIRECT_OPTION_TEMPORARY,

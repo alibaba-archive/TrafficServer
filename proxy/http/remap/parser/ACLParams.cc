@@ -36,7 +36,7 @@ int ACLMethodParams::getMethodFlag(const StringValue *sv)
   return ACL_METHOD_FLAG_NONE;
 }
 
-int ACLMethodParams::parse(const char *blockStart, const char *blockEnd)
+int ACLMethodParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   int methodCount;
   StringValue methods[ACL_METHOD_MAX_NUM];
@@ -125,7 +125,7 @@ ACLSrcIpParams::ACLSrcIpParams(const int rank, const char *filename, const int l
 {
 }
 
-int ACLSrcIpParams::parse(const char *blockStart, const char *blockEnd)
+int ACLSrcIpParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   if (_paramCount != 1) {
     fprintf(stderr, "config file: %s, " \
@@ -156,7 +156,7 @@ ACLRedirectUrlParams::ACLRedirectUrlParams(const int rank, const char *filename,
   _primaryDirective = primaryDirective;
 }
 
-int ACLRedirectUrlParams::parse(const char *blockStart, const char *blockEnd)
+int ACLRedirectUrlParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   if (_parent->getParent() == NULL) {
     fprintf(stderr, "config file: %s, " \
@@ -202,7 +202,7 @@ ACLRefererParams::ACLRefererParams(const int rank, const char *filename, const i
 {
 }
 
-int ACLRefererParams::parse(const char *blockStart, const char *blockEnd)
+int ACLRefererParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   if (_paramCount == 0) {
     fprintf(stderr, "config file: %s, " \
@@ -327,7 +327,7 @@ ACLDefineParams::ACLDefineParams(const int rank, const char *filename, const int
 {
 }
 
-int ACLDefineParams::parse(const char *blockStart, const char *blockEnd)
+int ACLDefineParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   if (_parent->getParent() != NULL) {
     fprintf(stderr, "config file: %s, " \
@@ -392,7 +392,7 @@ ACLCheckParams::ACLCheckParams(const int rank, const char *filename, const int l
 {
 }
 
-int ACLCheckParams::parse(const char *blockStart, const char *blockEnd)
+int ACLCheckParams::parse(const char * /*blockStart*/, const char * /*blockEnd*/)
 {
   if (_parent->getParent() == NULL) {
     fprintf(stderr, "config file: %s, " \
@@ -441,7 +441,7 @@ ACLActionParams::ACLActionParams(const int rank, const char *filename, const int
 {
 }
 
-int ACLActionParams::parse(const char *blockStart, const char *blockEnd)
+int ACLActionParams::parse(const char * blockStart, const char * blockEnd)
 {
   if (_parent->getParent() == NULL) {
     fprintf(stderr, "config file: %s, " \
