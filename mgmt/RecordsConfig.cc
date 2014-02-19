@@ -933,7 +933,7 @@ RecordElement RecordsConfig[] = {
   //# load monitor_enabled: -1 = compute only, 0 = disable, 1 = compute and act
   {RECT_CONFIG, "proxy.config.cluster.load_monitor_enabled", RECD_INT, "1", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
-  {RECT_CONFIG, "proxy.config.cluster.ping_send_interval_msecs", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  {RECT_CONFIG, "proxy.config.cluster.ping_send_interval_msecs", RECD_INT, "1000", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.cluster.ping_latency_threshold_msecs", RECD_INT, "200", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
