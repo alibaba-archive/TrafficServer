@@ -2037,15 +2037,6 @@ HttpSM::process_srv_info(HostDBInfo * r)
     HostDBRoundRobin *rr = r->rr();
     HostDBInfo *srv = NULL;
     if (rr) {
-      if (t_state.dns_info.update_srv) {
-        uint32_t key = makeHostHash(t_state.dns_info.srv_hostname);
-        for (int i = 0; i < rr->n; i++) {
-          if (key == rr->info[i].data.srv.key
-              && !strcmp(t_state.dns_info.srv_hostname,
-                  rr->info[i].srvname(rr)))
-            rr->info[i].app = t_state.dns_info.srv_app;
-        }
-      }
       ink_time_t now = ink_cluster_time();
       if (is_os_connections_high())
       {
@@ -4023,6 +4014,10 @@ HttpSM::do_hostdb_update_if_necessary()
             sm_id,
             ats_ip_nptop(&t_state.current.server->addr.sa, addrbuf, sizeof(addrbuf)));
     }
+    if (t_state.dns_info.srv_lookup_sucess &&
+        t_state.dns_info.srv_app.http_data.last_failure != 0) {
+      t_state.dns_info.update_srv = true;
+    }
   }
 
   if (issue_update) {
@@ -4036,16 +4031,16 @@ HttpSM::do_hostdb_update_if_necessary()
         strlen(t_state.current.server->name), &t_state.current.server->addr.sa,
         &t_state.host_db_info.app);
     }
-    if (t_state.dns_info.update_srv ||
-        (t_state.dns_info.srv_lookup_sucess && t_state.dns_info.srv_app.http_data.last_failure != 0)) {
-      t_state.dns_info.srv_app.http_data.last_failure = t_state.host_db_info.app.http_data.last_failure;
-      char d[MAXDNAME];
-      memcpy(d, "_http._tcp.", 11); // don't copy '\0'
-      ink_strlcpy(d + 11, t_state.current.server->name, sizeof(d) - 11 ); // all in the name of performance!
-      hostDBProcessor.setby(d, strlen(d), &t_state.current.server->addr.sa,
-          &t_state.dns_info.srv_app, t_state.dns_info.srv_hostname);
-      DebugSM("http_srv", "set srv target %s as failed!", t_state.dns_info.srv_hostname);
-    }
+  }
+
+  if (t_state.dns_info.update_srv) {
+    t_state.dns_info.srv_app.http_data.last_failure = t_state.host_db_info.app.http_data.last_failure;
+    char d[MAXDNAME];
+    memcpy(d, "_http._tcp.", 11); // don't copy '\0'
+    ink_strlcpy(d + 11, t_state.current.server->name, sizeof(d) - 11 ); // all in the name of performance!
+    hostDBProcessor.setby(d, strlen(d), &t_state.current.server->addr.sa,
+        &t_state.dns_info.srv_app, t_state.dns_info.srv_hostname);
+    DebugSM("http_srv", "set srv target %s as failed!", t_state.dns_info.srv_hostname);
   }
 
   char addrbuf[INET6_ADDRPORTSTRLEN];

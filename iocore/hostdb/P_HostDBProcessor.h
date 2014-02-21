@@ -240,17 +240,9 @@ HostDBRoundRobin::select_best_http(sockaddr const* client_ip, ink_time_t now, in
     Debug("hostdb", "Using strict round robin");
     for (int i = 0; i < good; i++) {
       best_up = current++ % good;
-      if (info[best_up].app.http_data.last_failure == 0 ||(unsigned int) (now - fail_window) > info[best_up].app.http_data.last_failure) {
-        if (info[best_up].app.http_data.os_down == 1)
-          info[best_up].app.http_data.os_down = 0;
-        if ((unsigned int) (now - fail_window) > info[best_up].app.http_data.last_failure)
-          info[best_up].app.http_data.last_failure = 0;
+      if (info[best_up].app.http_data.last_failure == 0 ||
+          (unsigned int) (now - fail_window) > info[best_up].app.http_data.last_failure)
         break;
-      }
-      else {
-        if (info[best_up].app.http_data.os_down == 0)
-          info[best_up].app.http_data.os_down = 1;
-      }
     }
   } else if (HostDBProcessor::hostdb_timed_round_robin > 0) {
     Debug("hostdb", "Using timed round-robin for HTTP");
@@ -304,13 +296,15 @@ HostDBRoundRobin::select_best_http(sockaddr const* client_ip, ink_time_t now, in
     }
   }
 
-  if (best_up != -1) {
-    ink_assert(best_up >= 0 && best_up < good);
-    return &info[best_up];
-  } else {
-    ink_assert(best_any >= 0 && best_any < good);
-    return &info[best_any];
-  }
+  if (best_up == -1)
+    best_up = best_any;
+
+  ink_assert(best_up >= 0 && best_up < good);
+
+  if (info[best_up].app.http_data.last_failure)
+    info[best_up].app.http_data.last_failure = now;
+
+  return &info[best_up];
 }
 
 inline HostDBInfo *
@@ -511,9 +505,6 @@ HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ink_time_t now, i
       continue;
     }
 
-    if (info[i].app.http_data.last_failure)
-      info[i].app.http_data.last_failure = 0;
-
     if (info[i].data.srv.srv_priority <= p) {
       p = info[i].data.srv.srv_priority;
       weight += info[i].data.srv.srv_weight;
@@ -535,6 +526,9 @@ HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ink_time_t now, i
   }
 
   if (result) {
+    if (result->app.http_data.last_failure)
+      result->app.http_data.last_failure = now;
+
     strcpy(target, result->srvname(this));
     return result;
   }

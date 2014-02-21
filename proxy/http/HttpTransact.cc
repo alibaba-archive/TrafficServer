@@ -3611,7 +3611,6 @@ HttpTransact::handle_response_from_server(State* s)
             (s->txn_conf->connect_attempts_rr_retries > 0) &&
             s->current.attempts % s->txn_conf->connect_attempts_rr_retries == 0) {
           // mark the target as failed
-          s->dns_info.update_srv = true;
           delete_server_rr_entry(s, max_connect_retries);
           return;
         }
