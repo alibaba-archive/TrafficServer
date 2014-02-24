@@ -373,14 +373,14 @@ Server::listen(bool non_blocking, int recv_bufsize, int send_bufsize, bool trans
 #endif
   }
 
-  timeout = 5; // seconds
-#if TS_HAS_SPDY
   if (NetProcessor::accept_mss > 0)
     if ((res = safe_setsockopt(fd, IPPROTO_TCP, TCP_MAXSEG, (char *) &NetProcessor::accept_mss, sizeof(int))) < 0)
       goto Lerror;
 
-  if (NetProcessor::accept_mss > 0) {
-    timeout = NetProcessor::accept_mss;
+  timeout = 5; // seconds
+#if TS_HAS_SPDY
+  if (NetProcessor::tcp_accept_defer_timeout > 0) {
+    timeout = NetProcessor::tcp_accept_defer_timeout;
   }
   if ((res = safe_setsockopt(fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, (char *) &timeout, sizeof(int))) < 0)
     goto Lerror;

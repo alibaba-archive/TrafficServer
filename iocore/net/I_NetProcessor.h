@@ -307,6 +307,8 @@ public:
   /** This is MSS for connections we accept (client connections). */
   static int accept_mss;
 
+  static int tcp_accept_defer_timeout;
+
   //
   // The following are required by the SOCKS protocol:
   //

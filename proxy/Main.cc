@@ -170,6 +170,7 @@ int diags_init = 0;             // used by process manager
 char vingid_flag[255] = "";
 
 static int accept_mss = 0;
+static int tcp_accept_defer_timeout = 0;
 static int cmd_line_dprintf_level = 0;  // default debug output level fro ink_dprintf function
 
 AppVersionInfo appVersionInfo;  // Build info for this application
@@ -260,6 +261,8 @@ ArgumentDescription argument_descriptions[] = {
 #endif
 
   {"accept_mss", ' ', "MSS for client connections", "I", &accept_mss,
+   NULL, NULL},
+  {"tcp_accept_defer_timeout", ' ', "TCP_ACCEPT_DEFER_TIMEOUT", "I", &tcp_accept_defer_timeout,
    NULL, NULL},
   {"poll_timeout", 'm', "poll timeout in milliseconds", "I", &net_config_poll_timeout,
    NULL, NULL},
@@ -1668,7 +1671,11 @@ main(int argc, char **argv)
     if (!accept_mss)
       TS_ReadConfigInteger(accept_mss, "proxy.config.net.sock_mss_in");
 
+    if (!tcp_accept_defer_timeout)
+      TS_ReadConfigInteger(tcp_accept_defer_timeout, "proxy.config.net.tcp_accept_defer_timeout");
+
     NetProcessor::accept_mss = accept_mss;
+    NetProcessor::tcp_accept_defer_timeout = tcp_accept_defer_timeout;
     netProcessor.start();
 #ifndef INK_NO_HOSTDB
     dnsProcessor.start();

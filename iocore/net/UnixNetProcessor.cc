@@ -505,6 +505,7 @@ UnixNetProcessor::createNetAccept()
 struct socks_conf_struct *
 NetProcessor::socks_conf_stuff = NULL;
 int NetProcessor::accept_mss = 0;
+int NetProcessor::tcp_accept_defer_timeout = 0;
 
 UnixNetProcessor unix_netProcessor;
 NetProcessor & netProcessor = unix_netProcessor;
