@@ -54,7 +54,7 @@ ProtocolNetAccept::createSuitableVC(EThread *t, Connection &con)
     if (n <= 0) {
       char str[INET6_ADDRSTRLEN];
       ats_ip_nptop(&con.addr, str, INET6_ADDRSTRLEN);
-      Debug("spdy", "Can't read the first byte, client ip:%s, n:%d, errno:%d", str, n, (n==0)?0:errno);
+      Debug("spdy-accept", "Can't read the first byte, client ip:%s, n:%d, errno:%d", str, n, (n==0)?0:errno);
       return NULL;
     }
 
