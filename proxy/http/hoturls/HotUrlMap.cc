@@ -22,11 +22,18 @@
  */
 
 #include "HotUrlMap.h"
+#include "HotUrlStats.h"
 
 #define CLEAR_INTERVAL (100 * HRTIME_MSECOND)
 
+inline int64_t HotUrlMap::UrlMapEntry::getOrderBy()
+{
+  return (HotUrlStats::getDetecType() & HOT_URLS_DETECT_TYPE_BYTES) ?
+    _bytes : _count;
+}
+
 HotUrlMap::PriorityQueue::PriorityQueue()
-  : _maxCount(0), _count(0), _head(NULL), _tail(NULL), _minBytes(0)
+  : _maxCount(0), _count(0), _head(NULL), _tail(NULL), _min(0)
 {
   ink_mutex_init(&_mutex, "HotUrlPriorityQueue");
 }
@@ -38,13 +45,13 @@ HotUrlMap::PriorityQueue::~PriorityQueue()
 
 void HotUrlMap::PriorityQueue::add(UrlMapEntry *entry)
 {
-  if (entry->_bytes <= _minBytes) {
+  if (entry->getOrderBy() <= _min) {
     return;
   }
 
   ink_mutex_acquire(&_mutex);
   do {
-    if (entry->_bytes <= _minBytes) {
+    if (entry->getOrderBy() <= _min) {
       break;
     }
 
@@ -75,12 +82,12 @@ void HotUrlMap::PriorityQueue::add(UrlMapEntry *entry)
       }
 
       _tail = entry;
-      _minBytes = entry->_bytes;
+      _min = entry->getOrderBy();
     }
     else
     {
       if (entry->_next == NULL) {  //i am the tail node
-        _minBytes = entry->_bytes;
+        _min = entry->getOrderBy();
       }
     }
 
@@ -88,7 +95,7 @@ void HotUrlMap::PriorityQueue::add(UrlMapEntry *entry)
       break;
     }
 
-    if (entry->_bytes <= entry->_prev->_bytes) { //order is OK
+    if (entry->getOrderBy() <= entry->_prev->getOrderBy()) { //order is OK
       break;
     }
 
@@ -96,7 +103,7 @@ void HotUrlMap::PriorityQueue::add(UrlMapEntry *entry)
     if (entry->_next == NULL) { //i am the tail node
       _tail = entry->_prev;
       _tail->_next = NULL;
-      _minBytes = _tail->_bytes;
+      _min = _tail->getOrderBy();
     }
     else {
       entry->_next->_prev = entry->_prev;
@@ -105,7 +112,7 @@ void HotUrlMap::PriorityQueue::add(UrlMapEntry *entry)
 
     //then insert this entry
     UrlMapEntry *prev = entry->_prev->_prev;
-    while (prev != NULL && entry->_bytes > prev->_bytes) {
+    while (prev != NULL && entry->getOrderBy() > prev->getOrderBy()) {
       prev = prev->_prev;
     }
     if (prev == NULL) {
@@ -143,18 +150,16 @@ HotUrlMap::HotUrlMap()
   }
 }
 
-int64_t HotUrlMap::getBytes(const char *url, const int url_len)
+const HotUrlMap::UrlMapEntry *HotUrlMap::get(const char *url, const int url_len)
 {
   unsigned int index;
   UrlMapEntry *found;
-  int64_t bytes;
 
   index = time33Hash(url, url_len) % URL_HASH_TABLE_SIZE;
   ink_mutex_acquire(&(_urlTable._buckets[index]._mutex));
   found = find(index, url, url_len);
-  bytes = found != NULL ? found->_bytes: 0;
   ink_mutex_release(&(_urlTable._buckets[index]._mutex));
-  return bytes;
+  return found;
 }
 
 void HotUrlMap::incrementBytes(const char *url, const int url_len, const int64_t bytes)

@@ -54,6 +54,8 @@ class HotUrlMap
         *(_url.url + url_len) = '\0';
         _url.length = url_len;
       }
+
+      inline int64_t getOrderBy();
     };
 
     class PriorityQueue {
@@ -70,7 +72,7 @@ class HotUrlMap
           _count = 0;
           _head = NULL;
           _tail = NULL;
-          _minBytes = 0;
+          _min = 0;
           ink_mutex_release(&_mutex);
         }
 
@@ -80,12 +82,13 @@ class HotUrlMap
 
         void add(UrlMapEntry *entry);
 
+
       private:
         uint32_t _maxCount;
         uint32_t _count;
         UrlMapEntry *_head;  //the largest
         UrlMapEntry *_tail;  //the smallest
-        int64_t _minBytes;
+        int64_t _min;
         ink_mutex _mutex;
     };
 
@@ -113,12 +116,12 @@ class HotUrlMap
 
 
     /**
-     * Gets the send bytes for the url
+     * Gets the entry for the url
      * @param url the url
      * @param url_len the url length
-     * @return send bytes
+     * @return the url entry
      */
-    int64_t getBytes(const char *url, const int url_len);
+    const UrlMapEntry *get(const char *url, const int url_len);
 
     /**
      * Change (increment/decrement) the send bytes
