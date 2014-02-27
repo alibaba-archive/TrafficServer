@@ -82,7 +82,7 @@ struct CacheProcessor:public Processor
   inkcoreapi Action *lookup(Continuation *cont, CacheKey *key, bool cluster_cache_local,
                             bool local_only = false,
                             CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
-  inkcoreapi Action *open_read(Continuation *cont, CacheKey *key, bool cluster_cache_local,
+  inkcoreapi Action *open_read(Continuation *cont, CacheKey *key, int cluster_cache_local,
                                CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
   Action *open_read_buffer(Continuation *cont, MIOBuffer *buf, CacheKey *key,
                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
@@ -111,7 +111,7 @@ struct CacheProcessor:public Processor
   Action *lookup(Continuation *cont, URL *url, bool cluster_cache_local, bool local_only = false,
                  CacheFragType frag_type = CACHE_FRAG_TYPE_HTTP);
   inkcoreapi Action *open_read(Continuation *cont, URL *url,
-                               bool cluster_cache_local,
+                               int cluster_cache_local,
                                CacheHTTPHdr *request,
                                CacheLookupHttpConfig *params,
                                time_t pin_in_cache = (time_t) 0, CacheFragType frag_type = CACHE_FRAG_TYPE_HTTP);

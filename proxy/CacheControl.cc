@@ -186,7 +186,7 @@ getCacheControl(CacheControlResult *result, HttpRequestData *rdata, char *tag)
   CacheControlTable->Match(rdata, result);
 }
 
-bool 
+int
 getClusterCacheLocal(URL *url, char *hostname)
 {
   HttpRequestData rdata;
@@ -465,7 +465,7 @@ CacheControlRecord::UpdateMatch(CacheControlResult * result, RD * rdata)
     break;
   case CC_CLUSTER_CACHE_LOCAL:
     if (this->CheckForMatch(h_rdata, result->cluster_cache_local_line) == true) {
-      result->cluster_cache_local = true;
+      result->cluster_cache_local = CACHE_CONTROL_LOCAL;
       result->cluster_cache_local_line = this->line_num;
       match = true;
     }

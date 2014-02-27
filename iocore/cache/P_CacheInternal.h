@@ -1482,7 +1482,7 @@ CacheProcessor::belong_to_me(CacheKey *key)
 }
 
 TS_INLINE inkcoreapi Action *
-CacheProcessor::open_read(Continuation *cont, CacheKey *key, bool cluster_cache_local, CacheFragType frag_type, char *hostname, int host_len)
+CacheProcessor::open_read(Continuation *cont, CacheKey *key, int cluster_cache_local, CacheFragType frag_type, char *hostname, int host_len)
 {
 #ifdef CLUSTER_CACHE
   if (cache_clustering_enabled > 0 && !cluster_cache_local) {

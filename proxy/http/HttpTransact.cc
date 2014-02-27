@@ -184,7 +184,7 @@ update_cache_control_information_from_config(HttpTransact::State* s)
   }
 
   if (s->txn_conf->cache_cluster_cache_local) {
-   s->cache_control.cluster_cache_local = true;
+   s->cache_control.cluster_cache_local = CACHE_CONTROL_LOCAL;
   }
 
   if (s->txn_conf->cache_ignore_client_no_cache) {

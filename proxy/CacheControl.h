@@ -40,6 +40,10 @@ typedef RequestData RD;
 
 const int CC_UNSET_TIME = -1;
 
+#define CACHE_CONTROL_LOCAL    1
+#define CACHE_CONTROL_CLUSTER  0
+#define CACHE_CONTROL_MIGRATE -1
+
 #define CACHE_CONTROL_TIMEOUT            (HRTIME_HOUR*1)
 
 //   Use 10 second time for purify testing under low
@@ -79,9 +83,9 @@ public:
   int revalidate_after;
   int pin_in_cache_for;
   int ttl_in_cache;
+  int cluster_cache_local;
   bool never_cache;
   bool force_in_ram;
-  bool cluster_cache_local;
   bool ignore_client_no_cache;
   bool ignore_server_no_cache;
   bool ignore_client_cc_max_age;
@@ -111,9 +115,9 @@ CacheControlResult::CacheControlResult()
   : revalidate_after(CC_UNSET_TIME),
     pin_in_cache_for(CC_UNSET_TIME),
     ttl_in_cache(CC_UNSET_TIME),
+    cluster_cache_local(CACHE_CONTROL_CLUSTER),
     never_cache(false),
     force_in_ram(false),
-    cluster_cache_local(false),
     ignore_client_no_cache(false),
     ignore_server_no_cache(false),
     ignore_client_cc_max_age(true),
@@ -156,7 +160,7 @@ struct OverridableHttpConfigParams;
 
 inkcoreapi void getCacheControl(CacheControlResult *result,
     HttpRequestData * rdata, char *tag = NULL);
-inkcoreapi bool getClusterCacheLocal(URL *url, char *hostname);
+inkcoreapi int getClusterCacheLocal(URL *url, char *hostname);
 inkcoreapi bool host_rule_in_CacheControlTable();
 inkcoreapi bool ip_rule_in_CacheControlTable();
 
