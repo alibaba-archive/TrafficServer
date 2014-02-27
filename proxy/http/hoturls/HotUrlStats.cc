@@ -1,6 +1,5 @@
 #include "HotUrlProcessor.h"
 #include "HotUrlManager.h"
-#include "HotUrlHistory.h"
 #include "HotUrlStats.h"
 
 extern volatile int64_t cluster_current_out_bps;
@@ -221,14 +220,6 @@ void HotUrlStats::doCalcHotUrls()
   }
   else {
     HotUrlManager::getHotUrlArray()->replace(urlQueue->head(), lastMatchEntry);
-
-    time_t createTime  = (time_t)(current_time / HRTIME_SECOND);
-    const HotUrlMap::UrlMapEntry *eof = lastMatchEntry->_next;
-    head = urlQueue->head();
-    while (head != eof) {
-      HotUrlHistory::add(&head->_url, createTime);
-      head = head->_next;
-    }
   }
 }
 

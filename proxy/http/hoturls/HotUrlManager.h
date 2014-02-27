@@ -9,6 +9,7 @@ class HotUrlManager
 
   struct HotUrlEntry : public UrlEntry {
     unsigned int generation;
+    int cache_flag;
   };
 
   class UrlArray
@@ -64,8 +65,9 @@ class HotUrlManager
   public:
     ~HotUrlManager() {}
 
-    static inline bool isHotUrl(const char *url, const int length) {
-      return instance->_currentHotUrls.contains(url, length);
+    static inline int getCacheControl(const char *url, const int length) {
+      HotUrlEntry *entry = instance->_currentHotUrls.find(url, length);
+      return entry == NULL ? CACHE_CONTROL_CLUSTER : entry->cache_flag;
     }
 
     static inline int getHotUrlCount() {
@@ -75,6 +77,8 @@ class HotUrlManager
     static inline UrlArray *getHotUrlArray() {
       return &instance->_currentHotUrls;
     }
+
+    static void migrateFinish(const char *url, const int length);
 
   private:
     HotUrlManager() {}

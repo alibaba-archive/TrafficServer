@@ -6,84 +6,90 @@
 
 class HotUrlHistory
 {
-  struct HotUrlEntry : public UrlEntry {
-    time_t createTime;
+  public:
+    struct HotUrlEntry : public UrlEntry {
+      time_t createTime;
 
-    static int compare(const void *p1, const void *p2) {
-      HotUrlEntry *entry1 = (HotUrlEntry *)p1;
-      HotUrlEntry *entry2 = (HotUrlEntry *)p2;
+      static int compare(const void *p1, const void *p2) {
+        HotUrlEntry *entry1 = (HotUrlEntry *)p1;
+        HotUrlEntry *entry2 = (HotUrlEntry *)p2;
 
-      if (entry1->length > entry2->length) {
-        return 1;
+        if (entry1->length > entry2->length) {
+          return 1;
+        }
+        else if (entry1->length < entry2->length) {
+          return -1;
+        }
+        else {
+          return memcmp(entry1->url, entry2->url, entry1->length);
+        }
       }
-      else if (entry1->length < entry2->length) {
-        return -1;
-      }
-      else {
-        return memcmp(entry1->url, entry2->url, entry1->length);
-      }
-    }
-  };
+    };
 
-  class UrlArray
-  {
-    public:
-      UrlArray();
-      ~UrlArray();
+  protected:
+    class UrlArray
+    {
+      public:
+        UrlArray();
+        ~UrlArray();
 
-      inline int add(const UrlEntry *entry, const time_t createTime) {
-        return add(entry->url, entry->length, createTime);
-      }
-
-      int add(const char *url, const int length, const time_t createTime);
-
-      inline bool contains(const UrlEntry *entry) {
-        return contains(entry->url, entry->length);
-      }
-
-      inline bool contains(const char *url, const int length) {
-        return find(url, length) != NULL;
-      }
-
-      HotUrlEntry *equalLarge(HotUrlEntry *target, bool *bEqual);
-
-      inline HotUrlEntry *find(const UrlEntry *entry) {
-        return find(entry->url, entry->length);
-      }
-
-      HotUrlEntry *find(const char *url, const int length);
-
-      inline void clear() {
-        _count = 0;
-      }
-
-      inline void sort() {
-        if (_count <= 1) {
-          return;
+        inline int add(const UrlEntry *entry, const time_t createTime) {
+          return add(entry->url, entry->length, createTime);
         }
 
-        qsort(_urls, _count, sizeof(HotUrlEntry), HotUrlEntry::compare);
-      }
+        int add(const char *url, const int length, const time_t createTime);
 
-      inline int getCount() {
-        return _count;
-      }
+        inline bool contains(const UrlEntry *entry) {
+          return contains(entry->url, entry->length);
+        }
 
-      inline HotUrlEntry *getUrls() {
-        return _urls;
-      }
+        inline bool contains(const char *url, const int length) {
+          return find(url, length) != NULL;
+        }
 
-    private:
-      HotUrlEntry *_urls;  //sorted
-      int _allocSize;
-      int _count;
-  };
+        HotUrlEntry *equalLarge(HotUrlEntry *target, bool *bEqual);
+
+        inline HotUrlEntry *find(const UrlEntry *entry) {
+          return find(entry->url, entry->length);
+        }
+
+        HotUrlEntry *find(const char *url, const int length);
+
+        inline void clear() {
+          _count = 0;
+        }
+
+        inline void sort() {
+          if (_count <= 1) {
+            return;
+          }
+
+          qsort(_urls, _count, sizeof(HotUrlEntry), HotUrlEntry::compare);
+        }
+
+        inline int getCount() {
+          return _count;
+        }
+
+        inline HotUrlEntry *getUrls() {
+          return _urls;
+        }
+
+      private:
+        HotUrlEntry *_urls;  //sorted
+        int _allocSize;
+        int _count;
+    };
 
   public:
     ~HotUrlHistory() {}
 
     static inline bool isHotUrl(const char *url, const int length) {
       return instance->_currentHotUrls.contains(url, length);
+    }
+
+    static inline HotUrlEntry *getHotUrl(const char *url, const int length) {
+      return instance->_currentHotUrls.find(url, length);
     }
 
     static inline int getHotUrlCount() {

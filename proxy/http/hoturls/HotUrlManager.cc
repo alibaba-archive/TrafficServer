@@ -1,5 +1,6 @@
 #include "HotUrlStats.h"
 #include "HotUrlManager.h"
+#include "HotUrlHistory.h"
 
 HotUrlManager::UrlArray::UrlArray()
   : _urls(NULL),
@@ -33,7 +34,7 @@ int HotUrlManager::UrlArray::add(const char *url, const int length, const bool c
 
   if (_count >= _allocSize) {
     int bytes;
-    int allocSize = _allocSize == 0 ? 8 : 2 *_allocSize;
+    int allocSize = _allocSize == 0 ? 32 : 2 *_allocSize;
     bytes = sizeof(HotUrlEntry) * allocSize;
     HotUrlEntry *urls = (HotUrlEntry *)ats_realloc(_urls, bytes);
     if (urls == NULL) {
@@ -49,8 +50,20 @@ int HotUrlManager::UrlArray::add(const char *url, const int length, const bool c
   entry->length = length;
   entry->generation = _generation;
 
-  Debug(HOT_URLS_DEBUG_TAG, "[generation=%u] %d. new hot url: %.*s",
-        _generation, _count, length, url);
+  HotUrlHistory::HotUrlEntry *historyEntry = HotUrlHistory::getHotUrl(url, length);
+  if (historyEntry != NULL) {
+    entry->cache_flag = CACHE_CONTROL_LOCAL;
+    time_t createTime  = (time_t)(ink_get_hrtime() / HRTIME_SECOND);
+    if (historyEntry->createTime < createTime) {
+      historyEntry->createTime = createTime;
+    }
+  }
+  else {
+    entry->cache_flag = CACHE_CONTROL_MIGRATE;
+  }
+
+  Debug(HOT_URLS_DEBUG_TAG, "[generation=%u] %d. new hot url: %.*s, cache_flag: %d",
+        _generation, _count, length, url, entry->cache_flag);
   return 0;
 }
 
@@ -82,7 +95,9 @@ void HotUrlManager::UrlArray::clearOldEntries()
   dest = _urls;
   entryEnd = _urls + _count;
   for (entry=_urls; entry<entryEnd; entry++) {
-    if (entry->generation == _generation) {
+    if (entry->generation == _generation ||
+        entry->cache_flag == CACHE_CONTROL_MIGRATE)
+    {
       if (dest != entry) {
         memcpy(dest->url, entry->url, entry->length);
         dest->length = entry->length;
@@ -131,6 +146,24 @@ int HotUrlManager::UrlArray::replace(const HotUrlMap::UrlMapEntry *head,
 
   clearOldEntries();
   return 0;
+}
+
+void HotUrlManager::migrateFinish(const char *url, const int length)
+{
+  HotUrlEntry *entry;
+  int old_cache_flag;
+  entry = instance->_currentHotUrls.find(url, length);
+  if (entry != NULL) {
+    old_cache_flag = entry->cache_flag;
+    entry->cache_flag = CACHE_CONTROL_LOCAL;
+  }
+  else {
+    old_cache_flag = CACHE_CONTROL_CLUSTER;
+  }
+
+  time_t createTime  = (time_t)(ink_get_hrtime() / HRTIME_SECOND);
+  HotUrlHistory::add(url, length, createTime);
+  Debug(HOT_URLS_DEBUG_TAG, "migrateFinish, url: %.*s, old cache flag: %d", length, url, old_cache_flag);
 }
 
 HotUrlManager *HotUrlManager::instance = new HotUrlManager;
