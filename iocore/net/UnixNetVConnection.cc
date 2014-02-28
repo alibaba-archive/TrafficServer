@@ -73,7 +73,8 @@ free_SpdyProberCont(SpdyProberCont *c)
 inline int
 SpdyProberCont::mainEvent(int event, void *e) {
   UnixNetVConnection *vc = (UnixNetVConnection *) ((VIO *) e)->vc_server;
-  vc->pt = END_SPDY_PROBE;
+  ProbeType probe_type = vc->pt;
+  vc->pt = PROBE_END;
 
   switch (event) {
   case VC_EVENT_EOS:
@@ -86,7 +87,13 @@ SpdyProberCont::mainEvent(int event, void *e) {
   case VC_EVENT_READ_COMPLETE:
     if ((data & 0x80) != 0) {
       free_SpdyProberCont(this);
-      spdy_accept(NET_EVENT_ACCEPT, vc);
+      vc->proto_type = NET_PROTO_HTTP_SPDY;
+      if (probe_type == PROBE_SPDY_FOR_CORE) {
+        vc->action_.continuation->handleEvent(NET_EVENT_ACCEPT, vc);
+      } else {
+        ink_assert(probe_type == PROBE_SPDY_FOR_PLUGIN);
+        spdy_accept(NET_EVENT_ACCEPT, vc);
+      }
       return EVENT_DONE;
     } else {
       // normal http request
@@ -99,10 +106,11 @@ SpdyProberCont::mainEvent(int event, void *e) {
   }
   return EVENT_CONT;
 }
-static inline
+
 int SpdyProbe(UnixNetVConnection *vc)
 {
   SpdyProberCont *spdyProber = new_SpdyProberCont(vc);
+  vc->set_inactivity_timeout(HRTIME_SECONDS(30));
   vc->do_io_read(spdyProber, 1, &spdyProber->buf);
   return EVENT_CONT;
 }
@@ -329,9 +337,9 @@ read_from_net(NetHandler *nh, UnixNetVConnection *vc, EThread *thread)
         }
         b = b->next;
       }
-      ink_assert(vc->pt != BEGIN_SPDY_PROBE || niov == 1);
+      ink_assert(vc->pt != PROBE_SPDY_FOR_CORE || vc->pt != PROBE_SPDY_FOR_PLUGIN || niov == 1);
       if (niov == 1) {
-        if (vc->pt == BEGIN_SPDY_PROBE) {
+        if (vc->pt == PROBE_SPDY_FOR_CORE || vc->pt == PROBE_SPDY_FOR_PLUGIN) {
           r = recv(vc->con.fd, tiovec[0].iov_base, tiovec[0].iov_len, MSG_PEEK);
         } else
           r = socketManager.read(vc->con.fd, tiovec[0].iov_base, tiovec[0].iov_len);
@@ -886,7 +894,7 @@ UnixNetVConnection::UnixNetVConnection()
 #endif
     active_timeout(NULL), nh(NULL),
     id(0), flags(0), recursion(0), submit_time(0), oob_ptr(0),
-    from_accept_thread(false), pt(NONE_SPDY_PROBE)
+    from_accept_thread(false), pt(PROBE_NONE)
 {
   memset(&local_addr, 0, sizeof local_addr);
   memset(&server_addr, 0, sizeof server_addr);
@@ -1071,10 +1079,10 @@ UnixNetVConnection::acceptEvent(int event, Event *e)
     UnixNetVConnection::set_inactivity_timeout(inactivity_timeout_in);
   if (active_timeout_in)
     UnixNetVConnection::set_active_timeout(active_timeout_in);
-  if (pt == NONE_SPDY_PROBE)
+  if (pt == PROBE_NONE)
     action_.continuation->handleEvent(NET_EVENT_ACCEPT, this);
   else {
-    ink_assert(pt == BEGIN_SPDY_PROBE);
+    ink_assert(pt == PROBE_SPDY_FOR_PLUGIN || pt == PROBE_SPDY_FOR_CORE);
     SpdyProbe(this);
   }
 

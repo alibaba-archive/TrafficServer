@@ -36,47 +36,21 @@ ProtocolNetAccept::createSuitableVC(EThread *t, Connection &con)
       vc = (UnixNetVConnection *)sslNetVCAllocator.alloc();
     vc->proto_type = NET_PROTO_HTTP_SSL;
   } else {
+    if (t)
+      vc = THREAD_ALLOC(netVCAllocator, t);
+    else
+      vc = netVCAllocator.alloc();
 #if TS_HAS_SPDY
-    //
-    // To detect SPDY or HTTP protocol by
-    // reading the first byte.
-    //
-    int n;
-    unsigned char c;
-
-    do {
-      n = recv(con.fd, &c, 1, MSG_PEEK);
-    } while(n < 0 && errno == EINTR);
-
-    //
-    // Connection shutdown or other errors.
-    //
-    if (n <= 0) {
-      char str[INET6_ADDRSTRLEN];
-      ats_ip_nptop(&con.addr, str, INET6_ADDRSTRLEN);
-      Debug("spdy-accept", "Can't read the first byte, client ip:%s, n:%d, errno:%d", str, n, (n==0)?0:errno);
-      return NULL;
-    }
-
-    Debug("spdy", "the first byte:%x", c);
-    if (c == 0x80 || c == 0x00) {
-      // SPDY protocol
-      if (t)
-        vc = THREAD_ALLOC(netVCAllocator, t);
-      else
-        vc = netVCAllocator.alloc();
-      vc->proto_type = NET_PROTO_HTTP_SPDY;
-    } else {
+    vc->pt = PROBE_SPDY_FOR_CORE;
 #else
-    {
+    vc->pt = spdy_accept ? PROBE_SPDY_FOR_PLUGIN : PROBE_NONE;
 #endif
-      // HTTP protocol
-      if (t)
-        vc = THREAD_ALLOC(netVCAllocator, t);
-      else
-        vc = netVCAllocator.alloc();
-      vc->proto_type = NET_PROTO_HTTP;
-    }
+
+    //
+    // Protocol type may be changed by
+    // following call of SpdyProbe()
+    //
+    vc->proto_type = NET_PROTO_HTTP;
   }
 
   vc->con = con;

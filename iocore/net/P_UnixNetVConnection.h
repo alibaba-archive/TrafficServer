@@ -43,9 +43,10 @@ struct PollDescriptor;
 
 enum ProbeType
 {
-  NONE_SPDY_PROBE,
-  BEGIN_SPDY_PROBE,
-  END_SPDY_PROBE
+  PROBE_NONE,
+  PROBE_SPDY_FOR_CORE,
+  PROBE_SPDY_FOR_PLUGIN,
+  PROBE_END
 };
 
 struct FlowControl
@@ -426,5 +427,6 @@ UnixNetVConnection::get_socket() {
 void close_UnixNetVConnection(UnixNetVConnection * vc, EThread * t);
 void write_to_net(NetHandler * nh, UnixNetVConnection * vc, PollDescriptor * pd, EThread * thread);
 void write_to_net_io(NetHandler * nh, UnixNetVConnection * vc, EThread * thread);
+int SpdyProbe(UnixNetVConnection *vc);
 
 #endif

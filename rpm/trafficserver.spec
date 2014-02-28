@@ -46,6 +46,7 @@ export PKG_CONFIG_PATH="/home/a/lib64/pkgconfig"
 	    --with-user=ats \
 	    --with-group=ats \
 	    --enable-reclaimable-freelist \
+	    --enable-spdy \
 	    --with-openssl=/home/a
 make %{?_smp_mflags}
 
