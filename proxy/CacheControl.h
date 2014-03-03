@@ -33,16 +33,13 @@
 
 #include "Main.h"
 #include "P_EventSystem.h"
+#include "I_Cache.h"
 #include "ControlBase.h"
 
 struct RequestData;
 typedef RequestData RD;
 
 const int CC_UNSET_TIME = -1;
-
-#define CACHE_CONTROL_LOCAL    1
-#define CACHE_CONTROL_CLUSTER  0
-#define CACHE_CONTROL_MIGRATE -1
 
 #define CACHE_CONTROL_TIMEOUT            (HRTIME_HOUR*1)
 

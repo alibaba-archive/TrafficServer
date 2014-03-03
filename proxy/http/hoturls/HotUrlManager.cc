@@ -168,3 +168,9 @@ void HotUrlManager::migrateFinish(const char *url, const int length)
 
 HotUrlManager *HotUrlManager::instance = new HotUrlManager;
 
+void cache_migrate_finish(const char *url, const int length)
+{
+  HotUrlManager::migrateFinish(url, length);
+
+}
+

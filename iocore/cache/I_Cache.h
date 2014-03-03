@@ -57,6 +57,10 @@
 
 #define SSD_CACHE	1
 
+#define CACHE_CONTROL_LOCAL    1
+#define CACHE_CONTROL_CLUSTER  0
+#define CACHE_CONTROL_MIGRATE -1
+
 struct CacheVC;
 #ifdef HTTP_CACHE
 class CacheLookupHttpConfig;
@@ -193,5 +197,8 @@ void ink_cache_init(ModuleVersion version);
 extern inkcoreapi CacheProcessor cacheProcessor;
 extern Continuation *cacheRegexDeleteCont;
 extern int cache_config_target_fragment_size;
+
+void cache_migrate_finish(const char *url, const int length);
+
 
 #endif /* _I_CACHE_H__ */
