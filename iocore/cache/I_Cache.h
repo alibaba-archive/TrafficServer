@@ -132,7 +132,7 @@ struct CacheProcessor:public Processor
 
   Action *open_read_internal(int, Continuation *, MIOBuffer *, CacheURL *,
                              CacheHTTPHdr *, CacheLookupHttpConfig *,
-                             CacheKey *, time_t, CacheFragType type, char *hostname, int host_len);
+                             CacheKey *, time_t, CacheFragType type, char *hostname, int host_len, bool migrate = false);
 #endif
   Action *link(Continuation *cont, CacheKey *from, CacheKey *to, bool cluster_cache_local,
                CacheFragType frag_type = CACHE_FRAG_TYPE_HTTP, char *hostname = 0, int host_len = 0);
@@ -198,7 +198,9 @@ extern inkcoreapi CacheProcessor cacheProcessor;
 extern Continuation *cacheRegexDeleteCont;
 extern int cache_config_target_fragment_size;
 
-void cache_migrate_finish(const char *url, const int length);
+typedef void (CacheMigrateHandler) (char *d, int l);
+typedef CacheMigrateHandler *CacheMigrateHandlerPtr;
 
+extern CacheMigrateHandlerPtr cache_migrate;
 
 #endif /* _I_CACHE_H__ */

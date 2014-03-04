@@ -64,7 +64,7 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
              Continuation * cont, MIOBuffer * buf,
              CacheURL * url, CacheHTTPHdr * request,
              CacheLookupHttpConfig * params, CacheKey * key,
-             time_t pin_in_cache, CacheFragType frag_type, char *hostname, int host_len)
+             time_t pin_in_cache, CacheFragType frag_type, char *hostname, int host_len, bool write_local = false)
 {
   (void) params;
   ink_assert(cont);
@@ -72,6 +72,10 @@ Cluster_read(ClusterMachine * owner_machine, int opcode,
   if (cluster_create_session(&session, owner_machine, NULL, 0)) {
     cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, NULL);
     return ACTION_RESULT_DONE;
+  }
+
+  if (write_local) {
+    CacheDiffuser::do_cache_diffuse(owner_machine, opcode, key, url, request, params, frag_type);
   }
 
   int vers = CacheOpMsg_long::protoToVersion(owner_machine->msg_proto_major);

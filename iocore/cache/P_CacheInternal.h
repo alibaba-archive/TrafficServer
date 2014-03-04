@@ -1485,10 +1485,10 @@ TS_INLINE inkcoreapi Action *
 CacheProcessor::open_read(Continuation *cont, CacheKey *key, int cluster_cache_local, CacheFragType frag_type, char *hostname, int host_len)
 {
 #ifdef CLUSTER_CACHE
-  if (cache_clustering_enabled > 0 && !cluster_cache_local) {
+  if (cache_clustering_enabled > 0 && cluster_cache_local != CACHE_CONTROL_LOCAL) {
     return open_read_internal(CACHE_OPEN_READ, cont, (MIOBuffer *) 0,
                               (CacheURL *) 0, (CacheHTTPHdr *) 0,
-                              (CacheLookupHttpConfig *) 0, key, 0, frag_type, hostname, host_len);
+                              (CacheLookupHttpConfig *) 0, key, 0, frag_type, hostname, host_len, (cluster_cache_local == CACHE_CONTROL_MIGRATE));
   }
 #endif
   return caches[frag_type]->open_read(cont, key, frag_type, hostname, host_len);
@@ -1621,7 +1621,7 @@ CacheProcessor::open_read_internal(int opcode,
                                    CacheHTTPHdr *request,
                                    CacheLookupHttpConfig *params,
                                    CacheKey *key,
-                                   time_t pin_in_cache, CacheFragType frag_type, char *hostname, int host_len)
+                                   time_t pin_in_cache, CacheFragType frag_type, char *hostname, int host_len, bool migrate)
 {
   INK_MD5 url_md5;
   if ((opcode == CACHE_OPEN_READ_LONG) || (opcode == CACHE_OPEN_READ_BUFFER_LONG)) {
@@ -1633,13 +1633,13 @@ CacheProcessor::open_read_internal(int opcode,
 
   if (m) {
     return Cluster_read(m, opcode, cont, buf, url,
-                        request, params, key, pin_in_cache, frag_type, hostname, host_len);
+                        request, params, &url_md5, pin_in_cache, frag_type, hostname, host_len, migrate);
   } else {
     if ((opcode == CACHE_OPEN_READ_LONG)
         || (opcode == CACHE_OPEN_READ_BUFFER_LONG)) {
       return caches[frag_type]->open_read(cont, &url_md5, request, params, frag_type, hostname, host_len);
     } else {
-      return caches[frag_type]->open_read(cont, key, frag_type, hostname, host_len);
+      return caches[frag_type]->open_read(cont, &url_md5, frag_type, hostname, host_len);
     }
   }
 }

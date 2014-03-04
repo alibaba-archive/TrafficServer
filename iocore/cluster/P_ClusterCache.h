@@ -1442,6 +1442,100 @@ struct SetResponseMessage: public ClusterMessageHeader
 
 };
 
+
+struct CacheDiffuser : public Continuation
+{
+  INK_MD5 key;
+  MIOBuffer buffer;
+#ifdef HTTP_CACHE
+  CacheHTTPInfo alternate;
+  URL url;
+#endif
+  CacheVConnection *remote_read_vc;
+  CacheVConnection *local_write_vc;
+  VIO *read_vio;
+  VIO *write_vio;
+  char *hostname;
+  int64_t doc_size;
+  int len;
+  CacheFragType frag_type;
+  bool terminate;
+  ContinuationHandler current_handler;
+  ContinuationHandler read_handler;
+  ContinuationHandler write_handler;
+
+  CacheDiffuser():remote_read_vc(0), local_write_vc(0), read_vio(0), write_vio(0),
+      hostname(0), doc_size(-1), len(0), frag_type(CACHE_FRAG_TYPE_NONE),
+      terminate(false), current_handler(0)
+  {
+    SET_HANDLER(&CacheDiffuser::main_handler);
+    read_handler = (ContinuationHandler)&CacheDiffuser::cacheRemoteReadHandler;
+    write_handler = (ContinuationHandler)&CacheDiffuser::cacheLocalWriteHandler;
+  }
+
+  int cacheLocalWriteHandler(int event, void *e);
+  int cacheRemoteReadHandler(int event, void *e);
+  Action *do_cache_remote_read();
+  Action *do_cache_local_write();
+  static Action *do_cache_diffuse(ClusterMachine *m, int opcode, INK_MD5 *key, URL *url, CacheHTTPHdr *request, CacheLookupHttpConfig *params, CacheFragType frag_type);
+  int main_handler(int event, void *e);
+};
+
+extern ClassAllocator<CacheDiffuser> cacheDiffuserAllocator;
+
+CacheDiffuser * new_CacheDiffuser();
+void free_CacheDiffuser(CacheDiffuser *cd);
+
+#define DIFFUSE_BUCKET_SIZE 1021
+
+
+struct DiffuseTable {
+  Que(CacheDiffuser, link) buckts[DIFFUSE_BUCKET_SIZE];
+  ink_spinlock locks[DIFFUSE_BUCKET_SIZE];
+
+  DiffuseTable() {
+    for(int i = 0; i < DIFFUSE_BUCKET_SIZE; ++i)
+      ink_spinlock_init(&locks[i]);
+  }
+
+  ~DiffuseTable() {
+    for (int i = 0; i < DIFFUSE_BUCKET_SIZE; ++i)
+      ink_spinlock_destroy(&locks[i]);
+  }
+  CacheDiffuser* register_diffuser(INK_MD5 *key) {
+    uint32_t indx = ((uint32_t) key->b[0]) % DIFFUSE_BUCKET_SIZE;
+    bool found = false;
+    CacheDiffuser *ret = NULL;
+    ink_spinlock_acquire(&locks[indx]);
+
+    forl_LL(CacheDiffuser, cd, buckts[indx]) {
+      if (cd->key == *key) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      ret = new_CacheDiffuser();
+      ret->key = *key;
+      buckts[indx].enqueue(ret);
+    }
+
+    ink_spinlock_release(&locks[indx]);
+
+    return ret;
+  }
+
+  void unregister_diffuser(CacheDiffuser *cd)
+  {
+    uint32_t indx = ((uint32_t) cd->key.b[0]) % DIFFUSE_BUCKET_SIZE;
+
+    ink_spinlock_acquire(&locks[indx]);
+    buckts[indx].remove(cd);
+    ink_spinlock_release(&locks[indx]);
+  }
+};
+
 inline IOBufferBlock *
 clone_IOBufferBlockList(IOBufferBlock *ab, int64_t offset, int64_t len)
 {

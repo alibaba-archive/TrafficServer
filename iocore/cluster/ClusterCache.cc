@@ -29,6 +29,7 @@
 #include "P_Cluster.h"
 
 //ClassAllocator<ClusterBuffer> clusterBufferAllocator("clusterBufferAllocator");
+ClassAllocator<CacheDiffuser> cacheDiffuserAllocator("cacheDiffuserAllocator");
 
 int CacheContinuation::size_to_init = -1;
 
@@ -211,6 +212,8 @@ static ClassAllocator <
 ClusterVCCacheEntryAlloc("ClusterVConnectionCache::Entry");
 
 ClusterVConnectionCache *GlobalOpenWriteVCcache = 0;
+
+DiffuseTable diffuseTable;
 
 /////////////////////////////////////////////////////////////////
 // Perform periodic purges of ClusterVConnectionCache entries
@@ -4119,4 +4122,185 @@ CacheContinuation::remoteConnectEvent(int event, VConnection * cvc)
 #endif // OMIT
 /***************************************************************************/
 
+int
+CacheDiffuser::main_handler(int event, void *e)
+{
+  if (e && event < VC_EVENT_EVENTS_START + 100) {
+    if (((VIO *) e) == read_vio) {
+      current_handler = read_handler;
+    } else if (((VIO *) e) == write_vio) {
+      current_handler = write_handler;
+    } else {
+      ink_release_assert(!"unexcepted event");
+    }
+  } else {
+    if (event == CACHE_EVENT_OPEN_READ || event == CACHE_EVENT_OPEN_READ_FAILED) {
+      current_handler = read_handler;
+    } else if (event == CACHE_EVENT_OPEN_WRITE || event == CACHE_EVENT_OPEN_WRITE_FAILED) {
+      current_handler = write_handler;
+    } else {
+      ink_release_assert(!"unexcepted event");
+    }
+  }
+
+  (this->*current_handler)(event, e);
+
+  if (terminate) {
+    // free this
+    free_CacheDiffuser(this);
+    return EVENT_DONE;
+  }
+
+  return EVENT_CONT;
+}
+
+int
+CacheDiffuser::cacheRemoteReadHandler(int event, void *e)
+{
+  if (event == CACHE_EVENT_OPEN_READ) {
+    ink_debug_assert(e);
+    remote_read_vc = (CacheVConnection *) e;
+    CacheHTTPInfo *info = NULL;
+    remote_read_vc->get_http_info(&info);
+    alternate.copy(info);
+
+    doc_size = alternate.object_size_get();
+    cacheProcessor.open_write(this, 0, &url, true, NULL, NULL, 0);
+    return EVENT_CONT;
+  } else if (event == CACHE_EVENT_OPEN_READ_FAILED) {
+    Debug("CacheDiffuser", "remote open read failed, %d", (int) (intptr_t) e);
+    // reset
+    terminate = true;
+    return EVENT_DONE;
+  }
+
+  switch (event) {
+  case VC_EVENT_ERROR:
+    goto Lfailed;
+  case VC_EVENT_EOS:
+    if (doc_size == INT64_MAX)
+      doc_size = read_vio->ndone;
+    else
+      goto Lfailed;
+  case VC_EVENT_READ_COMPLETE:
+    ink_debug_assert(doc_size == read_vio->ndone);
+    remote_read_vc->do_io_close();
+    remote_read_vc = NULL;
+  case VC_EVENT_READ_READY:
+    if (local_write_vc) {
+      write_vio->reenable();
+      return EVENT_CONT;
+    } else
+      goto Lfailed;
+  default:
+    ink_release_assert(!"unexcepted event");
+    break;
+  }
+  return EVENT_DONE;
+Lfailed:
+  remote_read_vc->do_io_close(0);
+  remote_read_vc = NULL;
+  terminate = true;
+  return EVENT_DONE;
+}
+
+int
+CacheDiffuser::cacheLocalWriteHandler(int event, void *e)
+{
+  if (event == CACHE_EVENT_OPEN_WRITE) {
+    ink_debug_assert(e);
+    local_write_vc = (CacheVConnection *) e;
+    local_write_vc->set_http_info(&alternate);
+
+    write_vio = local_write_vc->do_io_write(this, doc_size, buffer.alloc_reader());
+    read_vio = remote_read_vc->do_io_read(this, doc_size, &buffer);
+  } else if (event == CACHE_EVENT_OPEN_WRITE_FAILED) {
+    terminate = true;
+    return EVENT_DONE;
+  }
+
+  switch (event) {
+  case VC_EVENT_ERROR:
+  case VC_EVENT_EOS:
+    goto Lfailed;
+  case VC_EVENT_WRITE_COMPLETE:
+    local_write_vc->do_io_close();
+    local_write_vc = NULL;
+    terminate = true;
+    char cache_url[2048];
+    int length;
+    url.string_get_buf(cache_url, sizeof(cache_url), &length);
+    if (cache_migrate)
+      cache_migrate(cache_url, length);
+    return EVENT_DONE;
+  case VC_EVENT_WRITE_READY:
+    if (remote_read_vc) {
+      ink_debug_assert(read_vio->ndone < doc_size);
+      read_vio->reenable();
+      return EVENT_CONT;
+    }
+
+    if (write_vio->ndone >= doc_size) {
+      local_write_vc->do_io_close();
+      local_write_vc = NULL;
+      ink_debug_assert(!remote_read_vc);
+      terminate = true;
+      return EVENT_DONE;
+    }
+    write_vio->reenable();
+    return EVENT_CONT;
+  default:
+    ink_release_assert(!"unexcepted event");
+    break;
+  }
+
+  return EVENT_CONT;
+Lfailed:
+  local_write_vc->do_io_close(0);
+  local_write_vc = NULL;
+  terminate = true;
+  return EVENT_DONE;
+}
+
+Action *
+CacheDiffuser::do_cache_diffuse(ClusterMachine *m, int opcode, INK_MD5 *key, URL *url, CacheHTTPHdr *request, CacheLookupHttpConfig *params, CacheFragType type)
+{
+  CacheDiffuser *cd = diffuseTable.register_diffuser(key);
+  if (cd) {
+    cd->url.create(NULL);
+    cd->url.copy(url);
+    cd->frag_type = type;
+    MUTEX_LOCK(lock, cd->mutex, this_ethread());
+    return Cluster_read(m, opcode, cd, NULL, &cd->url,
+        request, params, &cd->key, 0, type, NULL, 0);
+  }
+  return ACTION_RESULT_DONE;
+}
+
+CacheDiffuser *new_CacheDiffuser()
+{
+  CacheDiffuser *cd = cacheDiffuserAllocator.alloc();
+  cd->mutex = new_ProxyMutex();
+  return cd;
+}
+
+void free_CacheDiffuser(CacheDiffuser *cd)
+{
+  cd->buffer.clear();
+  if (cd->remote_read_vc) {
+    cd->remote_read_vc->do_io_close(0);
+    cd->remote_read_vc = NULL;
+  }
+  if (cd->local_write_vc) {
+    cd->local_write_vc->do_io_close(0);
+    cd->local_write_vc = NULL;
+  }
+
+  cd->alternate.destroy();
+  cd->url.destroy();
+
+  cd->mutex.clear();
+
+  cacheDiffuserAllocator.free(cd);
+}
 // End of ClusterCache.cc

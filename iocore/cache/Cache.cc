@@ -81,6 +81,8 @@ int cache_config_mutex_retry_delay = 2;
 int cache_config_rww_max_delay = 100;
 int cache_rww_max_doc_size = (1 << 21);
 
+CacheMigrateHandlerPtr cache_migrate = NULL;
+
 #ifdef HTTP_CACHE
 int enable_cache_empty_http_doc = 0;
 #endif
@@ -3534,9 +3536,9 @@ CacheProcessor::open_read(Continuation *cont, URL *url, int cluster_cache_local,
                           CacheLookupHttpConfig *params, time_t pin_in_cache, CacheFragType type)
 {
 #ifdef CLUSTER_CACHE
-  if (cache_clustering_enabled > 0 && !cluster_cache_local) {
+  if (cache_clustering_enabled > 0 && cluster_cache_local != CACHE_CONTROL_LOCAL) {
     return open_read_internal(CACHE_OPEN_READ_LONG, cont, (MIOBuffer *) 0,
-                              url, request, params, (CacheKey *) 0, pin_in_cache, type, (char *) 0, 0);
+                              url, request, params, (CacheKey *) 0, pin_in_cache, type, (char *) 0, 0, (cluster_cache_local == CACHE_CONTROL_MIGRATE));
   }
 #endif
   return caches[type]->open_read(cont, url, request, params, type);
