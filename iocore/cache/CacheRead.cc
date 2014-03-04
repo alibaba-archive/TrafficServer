@@ -770,7 +770,7 @@ CacheVC::openReadMain(int event, Event * e)
   IOBufferBlock *b = NULL;
   int i = 0;
 
-  if (seek_to) {
+  if (seek_to && bytes > 0) {
     if (seek_to >= (int64_t)doc_len) {
       vio.ndone = doc_len;
       return calluser(VC_EVENT_EOS);
@@ -785,6 +785,8 @@ CacheVC::openReadMain(int event, Event * e)
           --i;
         }
         seek_to %= frag_len;
+        // mark the current fragment as garbage
+        doc_pos = doc->len;
         goto Lread;
       }
     }
