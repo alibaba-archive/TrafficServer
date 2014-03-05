@@ -4214,6 +4214,7 @@ CacheDiffuser::cacheLocalWriteHandler(int event, void *e)
 
     write_vio = local_write_vc->do_io_write(this, doc_size, buffer.alloc_reader());
     read_vio = remote_read_vc->do_io_read(this, doc_size, &buffer);
+    return EVENT_CONT;
   } else if (event == CACHE_EVENT_OPEN_WRITE_FAILED) {
     terminate = true;
     return EVENT_DONE;
