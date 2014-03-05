@@ -1533,6 +1533,8 @@ struct DiffuseTable {
     ink_spinlock_acquire(&locks[indx]);
     buckts[indx].remove(cd);
     ink_spinlock_release(&locks[indx]);
+
+    free_CacheDiffuser(cd);
   }
 };
 

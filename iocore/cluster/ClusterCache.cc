@@ -4146,8 +4146,8 @@ CacheDiffuser::main_handler(int event, void *e)
   (this->*current_handler)(event, e);
 
   if (terminate) {
-    // free this
-    free_CacheDiffuser(this);
+    // unregister
+    diffuseTable.unregister_diffuser(this);
     return EVENT_DONE;
   }
 
