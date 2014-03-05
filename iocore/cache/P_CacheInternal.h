@@ -1637,6 +1637,12 @@ CacheProcessor::open_read_internal(int opcode,
   } else {
     if ((opcode == CACHE_OPEN_READ_LONG)
         || (opcode == CACHE_OPEN_READ_BUFFER_LONG)) {
+      if (migrate && cache_migrate) {
+        char cache_url[2048];
+        int length;
+        url->string_get_buf(cache_url, sizeof(cache_url), &length);
+        cache_migrate(cache_url, length);
+      }
       return caches[frag_type]->open_read(cont, &url_md5, request, params, frag_type, hostname, host_len);
     } else {
       return caches[frag_type]->open_read(cont, &url_md5, frag_type, hostname, host_len);
