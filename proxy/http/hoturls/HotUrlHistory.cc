@@ -56,7 +56,7 @@ int HotUrlHistory::UrlArray::add(const char *url, const int length,
 
   if (_count >= _allocSize) {
     int bytes;
-    int allocSize = _allocSize == 0 ? 8 : 2 *_allocSize;
+    int allocSize = _allocSize == 0 ? 64 : 2 *_allocSize;
     bytes = sizeof(HotUrlEntry) * allocSize;
     HotUrlEntry *urls = (HotUrlEntry *)ats_realloc(_urls, bytes);
     if (urls == NULL) {
@@ -80,14 +80,17 @@ int HotUrlHistory::UrlArray::add(const char *url, const int length,
     return EEXIST;
   }
 
+  Note("add url: %.*s", length, url);
+
   if (found == entry) { //the last position, do NOT remove others
     entry->createTime = createTime;
     ++_count;
     return 0;
   }
 
-  for (entry = _urls + _count; entry > found; entry--) {
+  while (entry > found) {
     memcpy(entry, entry - 1, sizeof(HotUrlEntry));
+    entry--;
   }
 
   memcpy(entry->url, url, length);

@@ -1,6 +1,7 @@
 #ifndef _HOT_URL_MANAGER_H
 #define _HOT_URL_MANAGER_H
 
+#include "libts.h"
 #include "I_HotUrls.h"
 #include "HotUrlMap.h"
 
@@ -24,7 +25,7 @@ class HotUrlManager
 
       int add(const char *url, const int length, const bool checkDuplicate = true);
 
-      int replace(const HotUrlMap::UrlMapEntry *head,
+      void replace(const HotUrlMap::UrlMapEntry *head,
           const HotUrlMap::UrlMapEntry *tail);
 
       inline void clear() {
@@ -59,36 +60,56 @@ class HotUrlManager
       HotUrlEntry *_urls;
       int _allocSize;
       int _count;
-      unsigned int _generation;
+      static unsigned int _generation;
   };
 
   public:
     ~HotUrlManager() {}
 
     static inline int getCacheControl(const char *url, const int length) {
-      HotUrlEntry *entry = instance->_currentHotUrls.find(url, length);
+      HotUrlEntry *entry = instance->_currentHotUrls->find(url, length);
       return entry == NULL ? CACHE_CONTROL_CLUSTER : entry->cache_flag;
     }
 
     static inline int getHotUrlCount() {
-      return instance->_currentHotUrls.getCount();
+      return instance->_currentHotUrls->getCount();
     }
 
-    static inline UrlArray *getHotUrlArray() {
-      return &instance->_currentHotUrls;
+    static void clear() {
+      if (instance->_currentHotUrls->getCount() > 0) {
+        instance->_currentHotUrls->clear();
+      }
+    }
+
+    static void replace(const HotUrlMap::UrlMapEntry *head,
+        const HotUrlMap::UrlMapEntry *tail)
+    {
+      UrlArray *oldHotUrls = instance->_currentHotUrls;
+      UrlArray *newHotUrls;
+      if (oldHotUrls == instance->_hotUrls) {
+        newHotUrls = instance->_hotUrls + 1;
+      }
+      else {
+        newHotUrls = instance->_hotUrls;
+      }
+      newHotUrls->replace(head, tail);
+      instance->_currentHotUrls = newHotUrls;
+      oldHotUrls->clear();
     }
 
     static void migrateFinish(const char *url, const int length);
 
   private:
-    HotUrlManager() {}
+    HotUrlManager();
 
     // prevent unauthorized copies (Not implemented)
     HotUrlManager(const HotUrlManager &);
     HotUrlManager& operator=(const HotUrlManager &);
 
     static HotUrlManager *instance;
-    UrlArray _currentHotUrls;
+    UrlArray _hotUrls[2];
+    UrlArray *_currentHotUrls;
+    ink_mutex _mutex;
 };
 
 #endif

@@ -1,5 +1,6 @@
 #include "HotUrlProcessor.h"
 #include "HotUrlManager.h"
+#include "I_Cache.h"
 #include "HotUrlStats.h"
 
 extern volatile int64_t cluster_current_out_bps;
@@ -121,9 +122,7 @@ void HotUrlStats::doCalcHotUrls()
   int64_t current_send_bytes = _current_send_bps / 8;
   double current_qps  = _current_qps;
   if (current_send_bytes == 0 || current_qps < 0.0001) {
-    if (HotUrlManager::getHotUrlCount() > 0) {
-      HotUrlManager::getHotUrlArray()->clear();
-    }
+    HotUrlManager::clear();
     last_calc_time = current_time;
     return;
   }
@@ -214,12 +213,10 @@ void HotUrlStats::doCalcHotUrls()
   }
 
   if (lastMatchEntry == NULL) {
-    if (HotUrlManager::getHotUrlCount() > 0) {
-      HotUrlManager::getHotUrlArray()->clear();
-    }
+    HotUrlManager::clear();
   }
   else {
-    HotUrlManager::getHotUrlArray()->replace(urlQueue->head(), lastMatchEntry);
+    HotUrlManager::replace(urlQueue->head(), lastMatchEntry);
   }
 }
 
@@ -227,9 +224,7 @@ void HotUrlStats::setDetect(const bool detect)
 {
   if (_detect != detect) {
     if (_detect) {
-      if (HotUrlManager::getHotUrlCount() > 0) {
-        HotUrlManager::getHotUrlArray()->clear();
-      }
+      HotUrlManager::clear();
       Debug(HOT_URLS_DEBUG_TAG, "disable hot url detect.");
     }
     else {
@@ -258,9 +253,7 @@ void HotUrlStats::setMaxCount(const uint32_t maxCount)
       if (oldMaxCount > 0) {
         setDetect(false);
         hotUrlProcessor.shutdown();
-        if (HotUrlManager::getHotUrlCount() > 0) {
-          HotUrlManager::getHotUrlArray()->clear();
-        }
+        HotUrlManager::clear();
       }
     }
   }
@@ -333,5 +326,7 @@ void HotUrlStats::init()
   uint32_t maxCount = (uint32_t)REC_ConfigReadInteger("proxy.config.http.hoturls.max_count");
   instance->setMaxCount(maxCount);
   REC_RegisterConfigUpdateFunc("proxy.config.http.hoturls.max_count", configChangeCallback, NULL);
+
+  cache_migrate = HotUrlManager::migrateFinish;
 }
 

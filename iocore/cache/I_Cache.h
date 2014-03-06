@@ -198,7 +198,7 @@ extern inkcoreapi CacheProcessor cacheProcessor;
 extern Continuation *cacheRegexDeleteCont;
 extern int cache_config_target_fragment_size;
 
-typedef void (CacheMigrateHandler) (char *d, int l);
+typedef void (CacheMigrateHandler) (const char *d, const int l);
 typedef CacheMigrateHandler *CacheMigrateHandlerPtr;
 
 extern CacheMigrateHandlerPtr cache_migrate;

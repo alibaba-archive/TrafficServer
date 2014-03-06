@@ -2,11 +2,12 @@
 #include "HotUrlManager.h"
 #include "HotUrlHistory.h"
 
+unsigned int HotUrlManager::UrlArray::_generation = 0;
+
 HotUrlManager::UrlArray::UrlArray()
   : _urls(NULL),
   _allocSize(0),
-  _count(0),
-  _generation(0)
+  _count(0)
 {
 }
 
@@ -50,6 +51,7 @@ int HotUrlManager::UrlArray::add(const char *url, const int length, const bool c
   entry->length = length;
   entry->generation = _generation;
 
+  ink_mutex_acquire(&instance->_mutex);
   HotUrlHistory::HotUrlEntry *historyEntry = HotUrlHistory::getHotUrl(url, length);
   if (historyEntry != NULL) {
     entry->cache_flag = CACHE_CONTROL_LOCAL;
@@ -61,6 +63,7 @@ int HotUrlManager::UrlArray::add(const char *url, const int length, const bool c
   else {
     entry->cache_flag = CACHE_CONTROL_MIGRATE;
   }
+  ink_mutex_release(&instance->_mutex);
 
   Debug(HOT_URLS_DEBUG_TAG, "[generation=%u] %d. new hot url: %.*s, cache_flag: %d",
         _generation, _count, length, url, entry->cache_flag);
@@ -110,7 +113,7 @@ void HotUrlManager::UrlArray::clearOldEntries()
   _count = dest - _urls;
 }
 
-int HotUrlManager::UrlArray::replace(const HotUrlMap::UrlMapEntry *head,
+void HotUrlManager::UrlArray::replace(const HotUrlMap::UrlMapEntry *head,
     const HotUrlMap::UrlMapEntry *tail)
 {
   const HotUrlMap::UrlMapEntry *eofEntry = tail->_next;
@@ -121,7 +124,7 @@ int HotUrlManager::UrlArray::replace(const HotUrlMap::UrlMapEntry *head,
       add(&head->_url, false);
       head = head->_next;
     }
-    return 0;
+    return;
   }
 
   int replaceCount = 0;
@@ -141,18 +144,26 @@ int HotUrlManager::UrlArray::replace(const HotUrlMap::UrlMapEntry *head,
   }
 
   if (replaceCount == oldCount) {  //all be replaced
-    return 0;
+    return;
   }
 
   clearOldEntries();
-  return 0;
+  return;
+}
+
+HotUrlManager::HotUrlManager()
+{
+  ink_mutex_init(&_mutex, "HotUrlManager");
+  _currentHotUrls = _hotUrls + 0;
 }
 
 void HotUrlManager::migrateFinish(const char *url, const int length)
 {
   HotUrlEntry *entry;
   int old_cache_flag;
-  entry = instance->_currentHotUrls.find(url, length);
+
+  ink_mutex_acquire(&instance->_mutex);
+  entry = instance->_currentHotUrls->find(url, length);
   if (entry != NULL) {
     old_cache_flag = entry->cache_flag;
     entry->cache_flag = CACHE_CONTROL_LOCAL;
@@ -163,14 +174,10 @@ void HotUrlManager::migrateFinish(const char *url, const int length)
 
   time_t createTime  = (time_t)(ink_get_hrtime() / HRTIME_SECOND);
   HotUrlHistory::add(url, length, createTime);
+  ink_mutex_release(&instance->_mutex);
+
   Debug(HOT_URLS_DEBUG_TAG, "migrateFinish, url: %.*s, old cache flag: %d", length, url, old_cache_flag);
 }
 
 HotUrlManager *HotUrlManager::instance = new HotUrlManager;
-
-void cache_migrate_finish(const char *url, const int length)
-{
-  HotUrlManager::migrateFinish(url, length);
-
-}
 
