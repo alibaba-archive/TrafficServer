@@ -8611,53 +8611,27 @@ HttpTransact::get_error_string(int erno)
 }
 
 
-volatile ink_time_t global_time;
-volatile int32_t cluster_time_delta;
-
 ink_time_t
 ink_cluster_time(void)
 {
-  ink_time_t old;
-  int highest_delta = 0;
+  int highest_delta;
 
 #ifdef DEBUG
   ink_mutex_acquire(&http_time_lock);
-  ink_time_t local_time = time(NULL);
+  ink_time_t local_time = ink_get_hrtime() / HRTIME_SECOND;
   last_http_local_time = local_time;
   ink_mutex_release(&http_time_lock);
 #else
-  ink_time_t local_time = time(NULL);
+  ink_time_t local_time = ink_get_hrtime() / HRTIME_SECOND;
 #endif
 
   highest_delta = (int) HttpConfig::m_master.cluster_time_delta;
-//     highest_delta =
-//      lmgmt->record_data->readInteger("proxy.process.http.cluster_delta",
-//                                      &found);
-//     if (! found) {
-//      ink_debug_assert(!"Highest delta config value not found!");
-//      highest_delta = 0L;
-//     }
-
   Debug("http_trans", "[ink_cluster_time] local: %" PRId64 ", highest_delta: %d, cluster: %" PRId64,
         (int64_t)local_time, highest_delta, (int64_t)(local_time + (ink_time_t) highest_delta));
 
   ink_debug_assert(highest_delta >= 0);
 
-  local_time += (ink_time_t) highest_delta;
-  old = global_time;
-
-  while (local_time > global_time) {
-    if (sizeof(ink_time_t) == 4) {
-      if (ink_atomic_cas((int32_t *) & global_time, *((int32_t *) & old), *((int32_t *) & local_time)))
-        break;
-    } else if (sizeof(ink_time_t) == 8) {
-      if (ink_atomic_cas64((int64_t *) & global_time, *((int64_t *) & old), *((int64_t *) & local_time)))
-        break;
-    }
-    old = global_time;
-  }
-
-  return global_time;
+  return local_time + (ink_time_t) highest_delta;
 }
 
 //
