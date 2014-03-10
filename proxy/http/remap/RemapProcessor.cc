@@ -396,9 +396,11 @@ RemapProcessor::finish_remap(HttpTransact::State *s)
       char cache_url[MAX_URL_SIZE];
       s->cache_info.lookup_url->string_get_buf(cache_url, sizeof(cache_url), &length);
       s->cache_control.cluster_cache_local = HotUrlManager::getCacheControl(cache_url, length);
+      /*
       if (s->cache_control.cluster_cache_local == CACHE_CONTROL_MIGRATE) {
         Note("url: %.*s ==> %d", length, cache_url, s->cache_control.cluster_cache_local);
       }
+      */
     }
   }
 

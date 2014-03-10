@@ -80,8 +80,6 @@ int HotUrlHistory::UrlArray::add(const char *url, const int length,
     return EEXIST;
   }
 
-  Note("add url: %.*s", length, url);
-
   if (found == entry) { //the last position, do NOT remove others
     entry->createTime = createTime;
     ++_count;
