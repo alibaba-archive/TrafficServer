@@ -1749,6 +1749,7 @@ CacheVC::add_entry(CacheWriterTable *table) {
     entry->mutex = mutex;
     entry->key = first_key;
     entry->writer = this;
+    entry->not_rww = !cache_config_read_while_writer;
     entry->r = entry->buffer.alloc_reader();
     table->buckets[indx].writers.push(entry);
     cw = entry;

@@ -3802,7 +3802,7 @@ Lreturn:
 }
 CacheWriterEntry::CacheWriterEntry():
     mutex(0), r(0), writer(0), doc_len(-1), total_len(0),
-    writer_closed(0), header_only_update(false), not_rww(!cache_config_read_while_writer) {
+    writer_closed(0), header_only_update(false), not_rww(true) {
   key = zero_key;
 }
 
