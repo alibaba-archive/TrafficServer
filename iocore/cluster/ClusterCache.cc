@@ -1195,7 +1195,7 @@ init_from_long(CacheContinuation * cont, CacheOpMsg_long * msg)
     cont->pin_in_cache = 0;
   }
   cont->token = msg->token;
-  cont->nbytes = (((int) msg->nbytes < 0) ? 0 : msg->nbytes);
+//  cont->nbytes = (((int) msg->nbytes < 0) ? 0 : msg->nbytes);
 
 //  if (cont->request_opcode == CACHE_OPEN_READ_LONG) {
 //    cont->caller_buf_freebytes = msg->buffer_size;
@@ -1214,7 +1214,7 @@ init_from_short(CacheContinuation * cont, CacheOpMsg_short * msg)
   cont->url_md5 = msg->md5;
 //  cont->cluster_vc_channel = msg->channel;
   cont->token = msg->token;
-  cont->nbytes = (((int) msg->nbytes < 0) ? 0 : msg->nbytes);
+//  cont->nbytes = (((int) msg->nbytes < 0) ? 0 : msg->nbytes);
   cont->frag_type = (CacheFragType) msg->frag_type;
 
   if (cont->request_opcode == CACHE_OPEN_WRITE) {
@@ -2241,7 +2241,8 @@ CacheContinuation::VCdataRead(int event, void *data)
     SetIOReadMessage *msg = (SetIOReadMessage *) cc->data->start();
     mbuf = new_empty_MIOBuffer();
     reader = mbuf->alloc_reader();
-    vio = cache_vc->do_io_pread(this, msg->nbytes, mbuf, msg->offset);
+    nbytes = msg->nbytes;
+    vio = cache_vc->do_io_pread(this, nbytes, mbuf, msg->offset);
     ink_assert(expect_next);
     expect_next = false;
     return EVENT_CONT;
@@ -2250,6 +2251,10 @@ CacheContinuation::VCdataRead(int event, void *data)
   {
     ink_assert(expect_next);
     expect_next = false;
+
+    if (cache_vc)
+      vio->reenable();
+
     if (reader->read_avail()) {
       int64_t read_bytes = reader->read_avail();
 
@@ -2264,20 +2269,19 @@ CacheContinuation::VCdataRead(int event, void *data)
       }
 
       Debug("data_send", "current read %"PRId64", total_read %"PRId64"", read_bytes, total_length);
-      if (total_length >= vio->nbytes)
+      if (total_length >= nbytes)
         goto free_exit;
 
       expect_next = true;
       cluster_set_events(cs, RESPONSE_EVENT_NOTIFY_DEALER);
-    }
 
-    if (cache_vc) {
-      vio->reenable();
       return EVENT_CONT;
     }
 
-    ink_assert(result == VC_EVENT_EOS || result == VC_EVENT_ERROR);
-    cluster_send_message(cs, -CLUSTER_CACHE_DATA_ERROR, &result, sizeof result, PRIORITY_HIGH);
+    if (!cache_vc) {
+      ink_assert(result == VC_EVENT_EOS || result == VC_EVENT_ERROR);
+      cluster_send_message(cs, -CLUSTER_CACHE_DATA_ERROR, &result, sizeof result, PRIORITY_HIGH);
+    }
     goto free_exit;
 
   }
@@ -2287,6 +2291,7 @@ CacheContinuation::VCdataRead(int event, void *data)
     result = event;
     cache_vc->do_io_close();
     cache_vc = NULL;
+    vio = NULL;
   case VC_EVENT_READ_READY:
   {
     if (!expect_next) {
@@ -2302,7 +2307,7 @@ CacheContinuation::VCdataRead(int event, void *data)
           goto free_exit;
         }
         Debug("data_send", "current read %"PRId64", total_read %"PRId64"", read_bytes, total_length);
-        if (total_length >= vio->nbytes)
+        if (total_length >= nbytes)
           goto free_exit;
 
         expect_next = true;
@@ -2342,7 +2347,7 @@ CacheContinuation::VCdataWrite(int event, void *data)
       // copy
       Ptr<IOBufferData> buf = cc->copy_data();
       SetIOWriteMessage *msg = (SetIOWriteMessage *) buf->data();
-      int64_t nbytes = msg->nbytes;
+      nbytes = msg->nbytes;
       int hdr_len = msg->hdr_len;
 
       if (frag_type == CACHE_FRAG_TYPE_HTTP) {

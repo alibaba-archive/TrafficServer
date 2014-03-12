@@ -616,7 +616,7 @@ struct CacheWriterEntry: public RefCountObj
   void set_writer_close(int close);
   bool in_and_remove(CacheVC *vc) {
     ink_debug_assert(this == vc->cw.m_ptr && vc->mutex->thread_holding == this_ethread());
-    ink_assert(!vc->is_io_in_progress());
+    ink_assert(vc->is_io_in_progress());
 
     bool result;
     ink_mutex_acquire(mutex);

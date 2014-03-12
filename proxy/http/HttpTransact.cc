@@ -2248,7 +2248,7 @@ HttpTransact::issue_revalidate(State* s)
   case HTTP_STATUS_OK:         // 200
     // don't conditionalize if we are configured to repeat the clients
     //   conditionals
-    if (s->txn_conf->cache_when_to_revalidate == 4 || s->range_setup == RANGE_NOT_HANDLED)
+    if (s->txn_conf->cache_when_to_revalidate == 4)
       break;
     // ok, request is either a conditional or does not have a no-cache.
     //   (or is method that we don't conditionalize but lookup the
@@ -2920,6 +2920,18 @@ HttpTransact::handle_cache_write_lock(State* s)
       int len;
       const char *value = c_ims->value_get(&len);
       s->hdr_info.server_request.value_set(MIME_FIELD_IF_MODIFIED_SINCE, MIME_LEN_IF_MODIFIED_SINCE, value, len);
+    }
+
+    // remove the IF-NONE-MATCH
+    if (s->hdr_info.server_request.presence(MIME_PRESENCE_IF_NONE_MATCH)) {
+      s->hdr_info.server_request.field_delete(MIME_FIELD_IF_NONE_MATCH, MIME_LEN_IF_NONE_MATCH);
+      MIMEField *c_inm = s->hdr_info.client_request.field_find(MIME_FIELD_IF_NONE_MATCH, MIME_LEN_IF_NONE_MATCH);
+
+      if (c_inm) {
+        int len;
+        const char *value = c_inm->value_get(&len);
+        s->hdr_info.server_request.value_set(MIME_FIELD_IF_NONE_MATCH, MIME_LEN_IF_NONE_MATCH, value, len);
+      }
     }
 
     // special case for range elimination

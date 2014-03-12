@@ -252,7 +252,7 @@ struct CacheContinuation:public Continuation
 
   unsigned int seq_number;
   CacheFragType frag_type;
-  int nbytes;       // the msg nbyts
+
   unsigned int target_ip;
   int request_opcode;
   int header_len;
@@ -261,6 +261,8 @@ struct CacheContinuation:public Continuation
   time_t pin_in_cache;
   int64_t doc_size;
   int64_t total_length;
+  int64_t nbytes;
+
   VIO *vio;                  //
   IOBufferReader *reader;    // for normal read
   CacheLookupHttpConfig *ic_params;

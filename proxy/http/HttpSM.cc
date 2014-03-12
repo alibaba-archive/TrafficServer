@@ -4102,7 +4102,7 @@ HttpSM::do_range_setup_if_necessary(bool from_server)
       }
 
       if (!HttpTransactCache::do_strings_match_strongly(raw_etags, raw_len, if_value, comma_sep_list_len)) {
-        t_state.range_setup = HttpTransact::RANGE_NOT_HANDLED;
+        t_state.range_setup = HttpTransact::RANGE_NONE;
         return;
       }
     }
