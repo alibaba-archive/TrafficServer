@@ -2281,9 +2281,10 @@ CacheContinuation::VCdataRead(int event, void *data)
     if (!cache_vc) {
       ink_assert(result == VC_EVENT_EOS || result == VC_EVENT_ERROR);
       cluster_send_message(cs, -CLUSTER_CACHE_DATA_ERROR, &result, sizeof result, PRIORITY_HIGH);
+      goto free_exit;
     }
-    goto free_exit;
 
+    return EVENT_CONT;
   }
   case VC_EVENT_EOS:
   case VC_EVENT_ERROR:
