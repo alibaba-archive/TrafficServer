@@ -228,7 +228,6 @@ int HotUrlHistory::doLoad()
   char line[MAX_URL_SIZE + 32];
   UrlEntry urlEntry;
   int createTime;
-  time_t currentTime;
 
   result = 0;
   do {
@@ -250,7 +249,6 @@ int HotUrlHistory::doLoad()
       return result;
     }
 
-    currentTime = (time_t)(ink_get_hrtime() / HRTIME_SECOND);
     while (fgets(line, sizeof(line), fp) != NULL) {
       if (sscanf(line, "%d %s\n", &createTime, urlEntry.url) != 2) {
         Warning("read file %s fail, line: %s", _filename, line);
@@ -280,7 +278,7 @@ int HotUrlHistory::doDump()
   char tmpFilename[sizeof(_filename) + 32];
   int result;
   FILE *fp;
-  uint32_t keepTime;
+  int32_t keepTime;
   time_t currentTime;
 
   sprintf(tmpFilename, "%s.tmp", _filename);

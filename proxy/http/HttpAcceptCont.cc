@@ -92,6 +92,6 @@ HttpAcceptCont::mainEvent(int event, void *data)
     HTTP_SUM_DYN_STAT(http_ua_msecs_counts_errors_pre_accept_hangups_stat, 0);
   }
 
-  MachineFatal("HTTP accept received fatal error: errno = %d", -((int)(intptr_t)data));
+  Error("HTTP accept received fatal error: errno = %d", -((int)(intptr_t)data));
   return EVENT_CONT;
 }

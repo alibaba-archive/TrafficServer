@@ -24,8 +24,8 @@
 #include "I_AcceptCont.h"
 #include "P_Net.h"
 
-AcceptCont::AcceptCont(ProxyMutex *amutex)
-    : Continuation(amutex)
+AcceptCont::AcceptCont()
+    : Continuation(new_ProxyMutex())
 {
   SET_HANDLER(&AcceptCont::mainEvent);
 }

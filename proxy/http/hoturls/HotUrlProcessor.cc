@@ -6,7 +6,6 @@ HotUrlProcessor hotUrlProcessor;
 
 HotUrlsHandler::HotUrlsHandler()
 {
-  mutex = new_ProxyMutex();
   SET_HANDLER(&HotUrlsHandler::main_event);
 }
 
@@ -52,6 +51,7 @@ int HotUrlProcessor::init()
 {
   int result;
   char filename[256];
+  _handler.mutex = new_ProxyMutex();
   snprintf(filename, sizeof(filename), "%s/hoturl.binlog",
       system_runtime_dir);
   result = HotUrlHistory::load(filename);

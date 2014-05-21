@@ -12,7 +12,7 @@
 
 struct HotUrlConfig {
   int detect_type;
-  uint32_t keep_time;   //for purge
+  int keep_time;   //for purge
   uint32_t max_count;
   uint64_t detect_interval;
   int64_t detect_on_bps;
@@ -63,7 +63,7 @@ class HotUrlStats {
       return instance->_config.detect_interval;
     }
 
-    static uint32_t getKeepTime();
+    static int32_t getKeepTime();
 
     static inline uint32_t getMaxCount() {
       return instance->_config.max_count;

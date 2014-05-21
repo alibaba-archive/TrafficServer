@@ -148,7 +148,7 @@ public:
   typedef detail::HttpAcceptContOptions Options;
 
   HttpAcceptCont(Options const& opt = DEFAULT_OPTIONS) :
-    AcceptCont(NULL), detail::HttpAcceptContOptions(opt) // copy these.
+    AcceptCont(), detail::HttpAcceptContOptions(opt) // copy these.
   {
     SET_HANDLER(&HttpAcceptCont::mainEvent);
     return;

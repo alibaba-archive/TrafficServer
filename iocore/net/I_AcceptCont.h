@@ -29,7 +29,7 @@
 class AcceptCont: public Continuation
 {
 public:
-  AcceptCont(ProxyMutex *amutex);
+  AcceptCont();
   ~AcceptCont();
 
   //

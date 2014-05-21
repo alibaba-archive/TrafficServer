@@ -168,7 +168,7 @@ SSLNextProtocolAccept::unregisterEndpoint(
 }
 
 SSLNextProtocolAccept::SSLNextProtocolAccept(Continuation * ep)
-    : AcceptCont(NULL), buffer(new_empty_MIOBuffer()), endpoint(ep)
+    : AcceptCont(), buffer(new_empty_MIOBuffer()), endpoint(ep)
 {
   SET_HANDLER(&SSLNextProtocolAccept::mainEvent);
 }

@@ -29,7 +29,7 @@
 class ProtocolAcceptCont: public AcceptCont
 {
 public:
-  ProtocolAcceptCont(): AcceptCont(NULL)
+  ProtocolAcceptCont(): AcceptCont()
   {
     memset(endpoint, 0, NET_PROTO_MAX * sizeof(AcceptCont *));
     SET_HANDLER(&ProtocolAcceptCont::mainEvent);

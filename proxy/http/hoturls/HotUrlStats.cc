@@ -156,7 +156,7 @@ void HotUrlStats::doCalcHotUrls()
       {
         lastMatchEntry = head;
         matched = true;
-        Debug(HOT_URLS_DEBUG_TAG, "single %d. %.*s, bytes=%ld, "
+        Debug(HOT_URLS_DEBUG_TAG, "single %d. %.*s, bytes=%"PRId64", "
             "ratio=%.2f, qps=%.2f", i + 1, head->_url.length, head->_url.url,
             head->_bytes, ((double)head->_bytes / delta_time) /
             (double)current_send_bytes, (double)head->_count / delta_time);
@@ -192,7 +192,7 @@ void HotUrlStats::doCalcHotUrls()
         if ((double)bytes_sum / delta_time / (double)current_send_bytes >=
             _config.multi_url_select_ratio) {
           lastMatchEntry = head;
-          Debug(HOT_URLS_DEBUG_TAG, "multi %d. %.*s: %ld", i + 1,
+          Debug(HOT_URLS_DEBUG_TAG, "multi %d. %.*s: %"PRId64"", i + 1,
               head->_url.length, head->_url.url, head->_bytes);
           break;
         }
@@ -294,7 +294,7 @@ int HotUrlStats::configChangeCallback(const char *name, RecDataT data_type,
   return 0;
 }
 
-uint32_t HotUrlStats::getKeepTime()
+int32_t HotUrlStats::getKeepTime()
 {
   if (instance->_config.keep_time == 0) {
     int keep_days = (int)REC_ConfigReadInteger("proxy.config.http.hoturls.keep_days");
@@ -318,7 +318,7 @@ void HotUrlStats::init()
   REC_EstablishStaticConfigFloat(instance->_config.single_url_select_ratio, "proxy.config.http.hoturls.single_url_select_ratio");
   REC_EstablishStaticConfigFloat(instance->_config.multi_url_select_ratio, "proxy.config.http.hoturls.multi_url_select_ratio");
 
-  Debug(HOT_URLS_DEBUG_TAG, "hot url detect_type: %d, detect_on_bps: %ld, detect_on_bps_ratio: %.4f",
+  Debug(HOT_URLS_DEBUG_TAG, "hot url detect_type: %d, detect_on_bps: %"PRId64", detect_on_bps_ratio: %.4f",
       instance->_config.detect_type, instance->_config.detect_on_bps, instance->_config.detect_on_bps_ratio);
   Debug(HOT_URLS_DEBUG_TAG, "hot url single_url_select_ratio: %.4f, multi_url_select_ratio: %.4f",
       instance->_config.single_url_select_ratio, instance->_config.multi_url_select_ratio);
