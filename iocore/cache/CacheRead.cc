@@ -855,6 +855,7 @@ Lread:
     {
       dir = earliest_dir;
 #if TS_USE_INTERIM_CACHE == 1
+      // it may cause loop when the number of request fragment is less than 2.
       if (dir_ininterim(&dir) && alternate.get_frag_offset_count() > 1) {
         dir_delete(&key, vol, &dir);
         last_collision = NULL;
