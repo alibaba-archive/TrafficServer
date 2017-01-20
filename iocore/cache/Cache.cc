@@ -2056,7 +2056,7 @@ CacheVC::is_pread_capable()
   return !f.read_from_writer_called;
 }
 
-#define STORE_COLLISION 1
+#define STORE_COLLISION 0 
 
 #ifdef HTTP_CACHE
 static void unmarshal_helper(Doc *doc, Ptr<IOBufferData> &buf, int &okay) {

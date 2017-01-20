@@ -855,6 +855,7 @@ Lread:
     {
       dir = earliest_dir;
 #if TS_USE_INTERIM_CACHE == 1
+      // I think the earliest the fragment should not be written in ssd.
       if (dir_ininterim(&dir) && alternate.get_frag_offset_count() > 1) {
         dir_delete(&key, vol, &dir);
         last_collision = NULL;
